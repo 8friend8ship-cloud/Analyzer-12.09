@@ -101,7 +101,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
         Biz: appSettings.plans.biz.analyses 
     };
     
-    const hasApiKey = !!(user.isAdmin ? appSettings.apiKeys.youtube : (user.apiKeyYoutube || appSettings.apiKeys.youtube));
+    const planLimit = user.isAdmin ? Infinity : planLimits[user.plan];
+
+    const hasYoutubeKey = !!(user.isAdmin ? appSettings.apiKeys.youtube : (user.apiKeyYoutube || appSettings.apiKeys.youtube));
+    const hasGeminiKey = !!(user.isAdmin ? appSettings.apiKeys.gemini : (user.apiKeyGemini || appSettings.apiKeys.gemini));
+    const hasAllApiKeys = hasYoutubeKey && hasGeminiKey;
 
     useEffect(() => {
         pruneQueries(); 
@@ -109,7 +113,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
         const preFetchData = async () => {
             console.log("Pre-fetching data to warm up the cache...");
             try {
-                if (hasApiKey) {
+                if (hasAllApiKeys) {
                     const apiKey = user.isAdmin ? appSettings.apiKeys.youtube : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
                     // 1. Pre-fetch default rankings
                     const rankingFilters = { limit: 50, country: 'KR', category: 'all', metric: 'mostPopular', excludedCategories: new Set<string>() };
@@ -187,8 +191,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
 
 
     const handleAnalysis = useCallback(async (searchQuery: string) => {
-        const currentPlanLimit = planLimits[user.plan];
-        if (user.usage >= currentPlanLimit) {
+        if (user.usage >= planLimit) {
             setIsUpgradeModalOpen(true);
             return;
         }
@@ -208,9 +211,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                 return;
             }
             
-            if (!hasApiKey) {
-                const adminError = "관리자님, 시스템 YouTube API 키가 설정되지 않았습니다. [관리자 대시보드]에서 시스템 API 키를 설정해주세요.";
-                const userError = "YouTube API 키가 설정되지 않았습니다. [계정 설정]에서 개인 키를 추가하거나 관리자에게 시스템 키 설정을 요청하세요.";
+            if (!hasAllApiKeys) {
+                const adminError = "API 키가 모두 설정되지 않았습니다. [관리자 대시보드]에서 YouTube 및 Gemini 키를 설정해주세요.";
+                const userError = "API 키가 모두 설정되지 않았습니다. [계정 설정]에서 개인 YouTube 및 Gemini 키를 추가해주세요.";
                 setError(user.isAdmin ? adminError : userError);
                 setIsLoading(false);
                 return;
@@ -227,7 +230,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
         } finally {
             setIsLoading(false);
         }
-    }, [user, onUpdateUser, appSettings, mode, filters, hasApiKey]);
+    }, [user, onUpdateUser, appSettings, mode, filters, hasAllApiKeys, planLimit]);
     
     const sortedVideos = useMemo(() => {
         if (videos.length === 0) return [];
@@ -462,7 +465,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
             <div className="sticky top-0 z-50">
                 <Header 
                     user={user}
-                    planLimit={planLimits[user.plan]}
+                    planLimit={planLimit}
                     onLogout={onLogout} 
                     onOpenHelpModal={handleOpenHelpModal} 
                     onShowAdmin={() => navigateTo('admin')} 
@@ -472,7 +475,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                     onShowWorkflow={() => navigateTo('workflow')}
                     onShowMyChannel={() => navigateTo('myChannel')}
                     currentView={view}
-                    hasApiKey={hasApiKey}
+                    hasApiKey={hasAllApiKeys}
                 />
             </div>
             

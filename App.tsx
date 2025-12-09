@@ -1,33 +1,16 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import LandingPage from './components/LandingPage';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Registration from './components/Registration';
 import AccountSettings from './components/AccountSettings';
-// FIX: Centralized types in types.ts
 import { clearCache } from './services/cacheService';
 import type { User, AppSettings } from './types';
-import { setGeminiApiKey } from './services/apiKeyService';
-
-// Raw user data
-const mockUserData = {
-  id: 'au_12345',
-  name: 'Admin User',
-  email: 'admin@corp.com',
-  plan: 'Biz' as const,
-  usage: 5,
-  apiKeyYoutube: '',
-  apiKeyAnalytics: '',
-  apiKeyReporting: '',
-};
-
-// Create the final user object, dynamically setting isAdmin based on email
-const mockUser: User = {
-  ...mockUserData,
-  isAdmin: mockUserData.email === process.env.ADMIN_EMAIL,
-};
+import { setSystemGeminiApiKey, setUserGeminiApiKey } from './services/apiKeyService';
+import Spinner from './components/common/Spinner';
 
 const initialAppSettings: AppSettings = {
-    freePlanLimit: 10,
+    freePlanLimit: 30, // Updated from 10 to 30
     plans: {
         pro: { name: 'Pro', analyses: 100, price: 19000 },
         biz: { name: 'Biz', analyses: 200, price: 29000 },
@@ -43,48 +26,107 @@ const initialAppSettings: AppSettings = {
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [view, setView] = useState<'login' | 'register' | 'dashboard' | 'account'>('login');
+  const [view, setView] = useState<'landing' | 'login' | 'register' | 'dashboard' | 'account'>('landing');
   const [appSettings, setAppSettings] = useState<AppSettings>(initialAppSettings);
-
-  useEffect(() => {
-    // Set the Gemini API key for all service calls.
-    // This is a global setter to avoid prop-drilling the key everywhere.
-    if (appSettings.apiKeys.gemini) {
-      setGeminiApiKey(appSettings.apiKeys.gemini);
-    }
-  }, [appSettings.apiKeys.gemini]);
-
-  const handleLogin = useCallback((googleUser?: {name: string, email: string}) => {
-    let userToSet: User;
-    if (googleUser) {
-        // Login via Google
-        userToSet = {
-            id: 'gu_' + googleUser.email.replace(/@.*/, ''),
-            name: googleUser.name,
-            email: googleUser.email,
-            isAdmin: googleUser.email === process.env.ADMIN_EMAIL,
-            plan: 'Free' as const,
-            usage: 0,
-            apiKeyYoutube: '',
-            apiKeyAnalytics: '',
-            apiKeyReporting: '',
-        };
-    } else {
-        // Existing mock login for email/password form
-        userToSet = mockUser;
-    }
-    setUser(userToSet);
-    setView('dashboard');
-  }, []);
+  const [initializing, setInitializing] = useState(true); // Forcing a clean start
 
   const handleLogout = useCallback(() => {
     clearCache();
     setUser(null);
-    setView('login');
+    setView('landing');
   }, []);
   
+  // This effect runs only once on mount to ensure a clean state for development.
+  useEffect(() => {
+    handleLogout();
+    const timer = setTimeout(() => setInitializing(false), 250);
+    return () => clearTimeout(timer);
+  }, [handleLogout]);
+
+  useEffect(() => {
+    // Set the SYSTEM Gemini API key when app settings change.
+    setSystemGeminiApiKey(appSettings.apiKeys.gemini);
+  }, [appSettings.apiKeys.gemini]);
+
+  useEffect(() => {
+    // Set or clear the USER-specific Gemini API key when the user logs in/out or updates their key.
+    setUserGeminiApiKey(user?.apiKeyGemini || null);
+  }, [user?.apiKeyGemini]);
+
+
+  const handleLogin = useCallback((credentials: { googleUser?: { name: string; email: string }; email?: string; password?: string }) => {
+    let userToSet: User | null = null;
+    const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '8friend8ship@hanmail.net';
+    
+    if (credentials.googleUser) {
+        const { name, email } = credentials.googleUser;
+        const userId = 'gu_' + email.replace(/@.*/, '');
+        const isAdmin = email === ADMIN_EMAIL;
+        const plan = isAdmin ? 'Biz' : 'Free';
+        const expirationDate = new Date();
+        expirationDate.setMonth(expirationDate.getMonth() + 1);
+
+        userToSet = {
+            id: userId,
+            name: name,
+            email: email,
+            isAdmin: isAdmin,
+            plan: plan,
+            usage: 0,
+            apiKeyYoutube: '',
+            apiKeyGemini: '',
+            planExpirationDate: (plan !== 'Free') ? expirationDate.toISOString().split('T')[0] : undefined,
+        };
+        // Restore API keys from localStorage
+        const storedKeys = localStorage.getItem(`user_api_keys_${userId}`);
+        if (storedKeys) {
+            const { apiKeyYoutube, apiKeyGemini } = JSON.parse(storedKeys);
+            if(apiKeyYoutube) userToSet.apiKeyYoutube = apiKeyYoutube;
+            if(apiKeyGemini) userToSet.apiKeyGemini = apiKeyGemini;
+        }
+
+    } else if (credentials.email && credentials.password) {
+        const { email, password } = credentials;
+        const isAdmin = email === 'admin@corp.com' || email === ADMIN_EMAIL;
+        const plan = isAdmin ? 'Biz' : 'Free';
+        const expirationDate = new Date();
+        expirationDate.setMonth(expirationDate.getMonth() + 1);
+
+        userToSet = {
+            id: 'form_' + email.replace(/@.*/, ''),
+            name: email.split('@')[0],
+            email: email,
+            password: password, // Store password for display
+            isAdmin: isAdmin,
+            plan: plan,
+            usage: 0,
+            apiKeyYoutube: '',
+            apiKeyGemini: '',
+            planExpirationDate: (plan !== 'Free') ? expirationDate.toISOString().split('T')[0] : undefined,
+        };
+    }
+    
+    if (userToSet) {
+        setUser(userToSet);
+        setView('dashboard');
+    }
+  }, []);
+
   const handleUpdateUser = useCallback((updatedUser: Partial<User>) => {
-      setUser(prev => prev ? { ...prev, ...updatedUser } : null);
+      setUser(prevUser => {
+          if (!prevUser) return null;
+          const newUser = { ...prevUser, ...updatedUser };
+
+          // Persist API keys for Google users
+          if (newUser.id.startsWith('gu_')) {
+              const keysToStore = {
+                  apiKeyYoutube: newUser.apiKeyYoutube,
+                  apiKeyGemini: newUser.apiKeyGemini,
+              };
+              localStorage.setItem(`user_api_keys_${newUser.id}`, JSON.stringify(keysToStore));
+          }
+          return newUser;
+      });
   }, []);
 
   const handleUpdateAppSettings = useCallback((updatedSettings: Partial<AppSettings>) => {
@@ -93,6 +135,14 @@ function App() {
 
   const navigateTo = (targetView: 'login' | 'register' | 'dashboard' | 'account') => {
     setView(targetView);
+  }
+
+  if (initializing) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-900">
+        <Spinner message="Initializing..." />
+      </div>
+    );
   }
 
   const renderContent = () => {
@@ -110,7 +160,7 @@ function App() {
             case 'account':
                 return <AccountSettings user={user} onNavigate={navigateTo} onUpdateUser={handleUpdateUser} />;
             default:
-                 // If logged in but view is login/register, redirect to dashboard
+                 // If logged in but view is something else, redirect to dashboard
                 setView('dashboard');
                 return <Dashboard 
                             user={user} 
@@ -123,14 +173,16 @@ function App() {
         }
     } else {
         switch (view) {
+            case 'landing':
+                return <LandingPage onStart={() => setView('login')} />;
             case 'login':
                 return <Login onLogin={handleLogin} onNavigate={navigateTo} />;
             case 'register':
-                return <Registration onRegister={handleLogin} onNavigate={navigateTo} />;
+                return <Registration onRegister={() => handleLogin({email: 'new@user.com', password: 'password'})} onNavigate={navigateTo} />;
             default:
-                 // If not logged in, always show login
-                setView('login');
-                return <Login onLogin={handleLogin} onNavigate={navigateTo} />;
+                 // If not logged in, always show landing
+                setView('landing');
+                return <LandingPage onStart={() => setView('login')} />;
         }
     }
   }

@@ -1,9 +1,7 @@
 
-
 import React, { useState, useEffect } from 'react';
 // FIX: Centralized types in types.ts
 import type { User } from '../types';
-import SubscriptionPlans from './SubscriptionPlans';
 
 interface AccountSettingsProps {
     user: User;
@@ -11,36 +9,65 @@ interface AccountSettingsProps {
     onUpdateUser: (updatedUser: Partial<User>) => void;
 }
 
+const CheckIcon = () => (
+    <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+    </svg>
+);
+
+const PlanCard: React.FC<{ plan: any, isCurrent?: boolean, isRecommended?: boolean }> = ({ plan, isCurrent = false, isRecommended = false }) => (
+    <div className={`relative rounded-xl border p-6 text-center h-full flex flex-col ${isCurrent ? 'border-blue-500 bg-gray-800/50 ring-2 ring-blue-500' : isRecommended ? 'border-gray-600 bg-gray-800' : 'border-gray-700 bg-gray-800/60'}`}>
+        {isRecommended && !isCurrent && <div className="absolute top-0 right-6 -mt-3 inline-block rounded-full bg-blue-500 px-4 py-1 text-xs font-semibold uppercase tracking-wider text-white">추천</div>}
+        {isCurrent && <div className="absolute top-0 right-6 -mt-3 inline-block rounded-full bg-green-500 px-4 py-1 text-xs font-semibold uppercase tracking-wider text-white">현재 요금제</div>}
+        <h3 className="text-2xl font-semibold">{plan.name}</h3>
+        <p className="mt-2 text-gray-400 text-sm flex-grow">{plan.description}</p>
+        <div className="mt-6">
+            <span className="text-4xl font-bold">₩{plan.price.toLocaleString()}</span>
+            <span className="text-base font-medium text-gray-400">/월</span>
+        </div>
+        <button disabled={isCurrent} className={`mt-6 w-full rounded-lg px-4 py-2.5 text-sm font-semibold ${isCurrent ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : isRecommended ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}>
+            {isCurrent ? '현재 사용 중' : plan.buttonText}
+        </button>
+        <ul className="mt-6 space-y-3 text-left text-sm">
+            {plan.features.map((feature: string, index: number) => (
+                <li key={index} className="flex items-start">
+                    <CheckIcon />
+                    <span className="ml-3 text-gray-300">{feature}</span>
+                </li>
+            ))}
+        </ul>
+    </div>
+);
+
+
 const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onNavigate, onUpdateUser }) => {
     const [apiKeyYoutube, setApiKeyYoutube] = useState(user.apiKeyYoutube || '');
-    const [apiKeyAnalytics, setApiKeyAnalytics] = useState(user.apiKeyAnalytics || '');
-    const [apiKeyReporting, setApiKeyReporting] = useState(user.apiKeyReporting || '');
-    const [showPlans, setShowPlans] = useState(false);
+    const [apiKeyGemini, setApiKeyGemini] = useState(user.apiKeyGemini || '');
     
-    // Sync local state with user prop when it changes
     useEffect(() => {
         setApiKeyYoutube(user.apiKeyYoutube || '');
-        setApiKeyAnalytics(user.apiKeyAnalytics || '');
-        setApiKeyReporting(user.apiKeyReporting || '');
+        setApiKeyGemini(user.apiKeyGemini || '');
     }, [user]);
 
     const handleSaveApiKeys = () => {
-        onUpdateUser({ apiKeyYoutube, apiKeyAnalytics, apiKeyReporting });
+        onUpdateUser({ apiKeyYoutube, apiKeyGemini });
         alert('API 키가 저장되었습니다!');
     };
-
-    if (showPlans) {
-        return <SubscriptionPlans onBack={() => setShowPlans(false)} />;
-    }
     
     const planLimits = { Free: 10, Pro: 100, Biz: 200 };
-    const usagePercentage = Math.round((user.usage / planLimits[user.plan]) * 100);
+    const planLimit = user.isAdmin ? Infinity : planLimits[user.plan];
+    const usagePercentage = planLimit === Infinity ? 0 : Math.round((user.usage / planLimit) * 100);
+
+    const plans = [
+        { name: 'Free', description: '기본 기능을 체험해보세요.', price: 0, buttonText: '다운그레이드', features: ['월 10회 분석', '기본 데이터 조회'] },
+        { name: 'Pro', description: '개인 크리에이터에게 적합합니다.', price: 19000, buttonText: 'Pro 플랜 시작', features: ['월 100회 분석', 'AI 인사이트', '채널 비교 분석'] },
+        { name: 'Biz', description: '전문가 및 팀을 위한 플랜입니다.', price: 29000, buttonText: 'Biz 플랜 시작', features: ['월 200회 분석', 'Pro 플랜 모든 기능', '상세 시청자 분석'] }
+    ];
 
     return (
         <div className="min-h-screen bg-gray-900 p-4 md:p-6 lg:p-8 text-gray-200">
-            <div className="max-w-4xl mx-auto">
-                {/* Header */}
-                <div className="flex justify-between items-center mb-6">
+            <div className="max-w-6xl mx-auto">
+                <div className="flex justify-between items-center mb-8">
                     <h1 className="text-3xl font-bold">계정 설정</h1>
                     <button onClick={() => onNavigate('dashboard')} className="px-4 py-2 text-sm font-semibold rounded-md bg-gray-600 hover:bg-gray-500">
                         ← 대시보드로 돌아가기
@@ -48,43 +75,39 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onNavigate, onU
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left Column - Profile & Subscription */}
                     <div className="lg:col-span-1 space-y-6">
-                        <div className="bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
-                             <h2 className="text-xl font-semibold mb-4">프로필</h2>
-                             <div className="space-y-3">
+                         <div className="bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
+                             <h2 className="text-xl font-semibold mb-4">가입자 정보</h2>
+                             <div className="space-y-4">
+                                <div>
+                                    <label className="text-sm text-gray-400">이름</label>
+                                    <p className="font-semibold">{user.name}</p>
+                                </div>
                                 <div>
                                     <label className="text-sm text-gray-400">이메일</label>
                                     <p className="font-semibold">{user.email}</p>
                                 </div>
-                                <div>
-                                    <label className="text-sm text-gray-400">비밀번호</label>
-                                    <p><button className="text-sm text-blue-400 hover:underline">비밀번호 변경</button></p>
-                                </div>
-                             </div>
-                        </div>
-                        <div className="bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
-                             <h2 className="text-xl font-semibold mb-4">요금제 및 사용량</h2>
-                             <div className="space-y-4">
-                                <div>
+                                 <div>
                                     <label className="text-sm text-gray-400">현재 요금제</label>
-                                    <p className={`font-bold text-lg ${user.plan === 'Biz' ? 'text-blue-400' : 'text-green-400'}`}>{user.plan}</p>
+                                    <p className={`font-bold text-lg ${user.plan === 'Biz' ? 'text-blue-400' : user.plan === 'Pro' ? 'text-green-400' : 'text-gray-300'}`}>{user.plan}</p>
                                 </div>
+                                {user.planExpirationDate && (
+                                    <div>
+                                        <label className="text-sm text-gray-400">요금제 만료일</label>
+                                        <p className="font-semibold">{user.planExpirationDate}</p>
+                                    </div>
+                                )}
                                 <div>
                                     <label className="text-sm text-gray-400">월간 분석 사용량</label>
                                     <div className="w-full bg-gray-700 rounded-full h-2.5 mt-1">
                                         <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${usagePercentage}%` }}></div>
                                     </div>
-                                    <p className="text-right text-sm mt-1">{user.usage} / {planLimits[user.plan]} 회</p>
+                                    <p className="text-right text-sm mt-1">{user.usage} / {planLimit === Infinity ? '무제한' : `${planLimit} 회`}</p>
                                 </div>
-                                <button onClick={() => setShowPlans(true)} className="w-full px-4 py-2 text-sm font-semibold rounded-md bg-blue-600 hover:bg-blue-700">
-                                    요금제 변경 또는 업그레이드
-                                </button>
                              </div>
                         </div>
                     </div>
 
-                    {/* Right Column - API Keys */}
                     <div className="lg:col-span-2 bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
                         <h2 className="text-xl font-semibold mb-2">개인 API 키 관리</h2>
                         <p className="text-sm text-gray-400 mb-6">
@@ -103,41 +126,19 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onNavigate, onU
                                     className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                                     placeholder="개인 YouTube Data API 키를 입력하세요"
                                 />
-                                <p className="mt-1 text-xs text-gray-500">
-                                    데이터 수집에 필요합니다.
-                                </p>
                             </div>
                              <div>
-                                <label htmlFor="analytics-api-key" className="block text-sm font-medium text-gray-300">
-                                    YouTube Analytics API Key
+                                <label htmlFor="gemini-api-key" className="block text-sm font-medium text-gray-300">
+                                    Gemini API Key
                                 </label>
                                 <input
                                     type="password"
-                                    id="analytics-api-key"
-                                    value={apiKeyAnalytics}
-                                    onChange={e => setApiKeyAnalytics(e.target.value)}
+                                    id="gemini-api-key"
+                                    value={apiKeyGemini}
+                                    onChange={e => setApiKeyGemini(e.target.value)}
                                     className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    placeholder="개인 YouTube Analytics API 키를 입력하세요"
+                                    placeholder="개인 Gemini API 키를 입력하세요"
                                 />
-                                <p className="mt-1 text-xs text-gray-500">
-                                    '내 채널 분석' 등 심층 분석 기능에 사용됩니다.
-                                </p>
-                            </div>
-                             <div>
-                                <label htmlFor="reporting-api-key" className="block text-sm font-medium text-gray-300">
-                                    YouTube Reporting API Key
-                                </label>
-                                <input
-                                    type="password"
-                                    id="reporting-api-key"
-                                    value={apiKeyReporting}
-                                    onChange={e => setApiKeyReporting(e.target.value)}
-                                    className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                                    placeholder="개인 YouTube Reporting API 키를 입력하세요"
-                                />
-                                <p className="mt-1 text-xs text-gray-500">
-                                    대규모 데이터 자동 리포팅 기능에 사용됩니다.
-                                </p>
                             </div>
                             <div className="text-right">
                                 <button onClick={handleSaveApiKeys} className="px-5 py-2.5 text-sm font-semibold rounded-md bg-green-600 hover:bg-green-700">
@@ -145,6 +146,25 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onNavigate, onU
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+                
+                <div className="mt-12">
+                     <div className="text-center mb-8">
+                        <h1 className="text-2xl font-bold tracking-tight text-white">요금제 변경</h1>
+                        <p className="mt-2 max-w-2xl mx-auto text-md text-gray-400">
+                            당신의 채널 성장을 위한 최고의 플랜을 선택하세요.
+                        </p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+                       {plans.map(plan => (
+                            <PlanCard 
+                                key={plan.name}
+                                plan={plan} 
+                                isCurrent={user.plan === plan.name}
+                                isRecommended={plan.name === 'Pro'}
+                            />
+                       ))}
                     </div>
                 </div>
             </div>

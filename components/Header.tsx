@@ -112,12 +112,12 @@ const Header: React.FC<HeaderProps> = ({ user, planLimit, onLogout, onOpenHelpMo
                     <div className="hidden md:flex items-center space-x-2">
                         <div className="px-3 py-1.5 text-sm bg-[#2C2F3B] rounded-lg">
                             <span className="font-semibold text-cyan-400">{user.plan}</span>
-                            {user.plan !== 'Free' && <span className="text-gray-400 text-xs ml-1.5">(만료: 2025. 12. 31.)</span>}
+                            {user.plan !== 'Free' && user.planExpirationDate && <span className="text-gray-400 text-xs ml-1.5">(만료: {user.planExpirationDate})</span>}
                         </div>
 
                         <div className="px-3 py-1.5 text-sm bg-[#2C2F3B] rounded-lg">
                             <span className="text-gray-400">오늘 사용량: </span>
-                            <span className="font-semibold text-white">{user.usage} / {planLimit}</span>
+                            <span className="font-semibold text-white">{user.usage} / {planLimit === Infinity ? '무제한' : planLimit}</span>
                         </div>
                     </div>
                     

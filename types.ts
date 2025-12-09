@@ -149,7 +149,7 @@ export interface ChannelAnalysisData {
   performanceTrend: PerformanceTrendData;
   audienceProfile: AudienceProfile;
   estimatedTotalRevenue: number; // Lifetime
-  estimatedMonthlyRevenue: number; // Monthly projection
+  estimatedMonthlyRevenue: number; // Monthly
 }
 
 // FIX: Add missing AIInsights type definition.
@@ -265,8 +265,9 @@ export interface User {
   plan: 'Free' | 'Pro' | 'Biz';
   usage: number; // monthly analyses used
   apiKeyYoutube?: string;
-  apiKeyAnalytics?: string;
-  apiKeyReporting?: string;
+  apiKeyGemini?: string;
+  password?: string;
+  planExpirationDate?: string;
 }
 
 export interface AnalyticsConnection {

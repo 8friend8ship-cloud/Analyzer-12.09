@@ -1,5 +1,5 @@
 
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 
 // FIX: Add global type declaration for window.google to fix TypeScript errors.
 // The Google Identity Services script is loaded externally and attaches the `google` object to the window.
@@ -30,11 +30,13 @@ declare global {
 const GOOGLE_CLIENT_ID = "42793942510-6i4s5u15npqeh676ih7bhdg91g23rl7j.apps.googleusercontent.com";
 
 interface LoginProps {
-  onLogin: (userData?: { name: string, email: string }) => void;
+  onLogin: (credentials: { googleUser?: { name: string; email: string }; email?: string; password?: string }) => void;
   onNavigate: (view: 'register') => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   const handleGoogleLogin = useCallback((response: any) => {
     try {
@@ -43,13 +45,23 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
         const userObject = JSON.parse(atob(token.split('.')[1]));
         const { name, email } = userObject;
         if(name && email) {
-            onLogin({ name, email });
+            onLogin({ googleUser: { name, email } });
         }
     } catch (e) {
         console.error("Error decoding Google token", e);
         alert("Google 로그인에 실패했습니다. 다시 시도해주세요.");
     }
   }, [onLogin]);
+  
+  const handleFormLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      alert('이메일과 비밀번호를 입력해주세요.');
+      return;
+    }
+    onLogin({ email, password });
+  };
+
 
   useEffect(() => {
     // Google's script is loaded async, so we poll for its availability.
@@ -91,16 +103,20 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
             </p>
         </div>
 
-        <form className="space-y-4">
+        <form className="space-y-4" onSubmit={handleFormLogin}>
             <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-300 text-left">이메일 주소</label>
                 <input id="email" name="email" type="email" autoComplete="email" required 
+                       value={email}
+                       onChange={(e) => setEmail(e.target.value)}
                        className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 />
             </div>
             <div>
                 <label htmlFor="password"className="block text-sm font-medium text-gray-300 text-left">비밀번호</label>
                 <input id="password" name="password" type="password" autoComplete="current-password" required 
+                       value={password}
+                       onChange={(e) => setPassword(e.target.value)}
                        className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 />
             </div>
@@ -109,8 +125,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
             </div>
             <div>
                  <button
-                    type="button"
-                    onClick={() => onLogin()}
+                    type="submit"
                     className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
                 >
                     로그인

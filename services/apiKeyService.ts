@@ -1,25 +1,36 @@
 
 // This service provides a global way to set and get the Gemini API key.
-// It's a workaround to avoid passing the key down through every component and function.
-let geminiApiKey: string | null = null;
+// It manages a system-wide key and a user-specific key, prioritizing the user's key.
+
+let systemGeminiKey: string | null = null;
+let userGeminiKey: string | null = null;
 
 /**
- * Sets the Gemini API key from a high-level component like App.tsx.
- * This should be called whenever the app settings for the key change.
- * @param key The Gemini API key string.
+ * Sets the system-wide (admin) Gemini API key.
+ * @param key The Gemini API key string. Can be null to clear.
  */
-export function setGeminiApiKey(key: string) {
-    if (key) {
-        geminiApiKey = key;
-    }
+export function setSystemGeminiApiKey(key: string | null) {
+    systemGeminiKey = key || null;
 }
 
 /**
- * Gets the currently configured Gemini API key for use in service calls.
- * It prioritizes the key set via `setGeminiApiKey` and falls back to the
- * environment variable if no key has been set dynamically.
+ * Sets the user-specific Gemini API key.
+ * @param key The Gemini API key string. Can be null to clear.
+ */
+export function setUserGeminiApiKey(key: string | null) {
+    userGeminiKey = key || null;
+}
+
+/**
+ * Gets the currently active Gemini API key, prioritizing user key > system key > environment variable.
  * @returns The Gemini API key string.
+ * @throws {Error} if no key is configured anywhere.
  */
 export function getGeminiApiKey(): string {
-    return geminiApiKey || process.env.API_KEY;
+    const key = userGeminiKey || systemGeminiKey || process.env.API_KEY;
+    if (!key) {
+        console.error("Gemini API Key is not configured. Please set it in admin settings or user account settings.");
+        throw new Error("Gemini API Key is not configured.");
+    }
+    return key;
 }

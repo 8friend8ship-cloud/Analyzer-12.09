@@ -12,7 +12,9 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "@google/genai": "^1.28.0",
-    "recharts": "^3.3.0"
+    "recharts": "^3.3.0",
+    "framer-motion": "^11.3.19",
+    "lucide-react": "^0.417.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
