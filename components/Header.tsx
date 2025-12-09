@@ -149,7 +149,9 @@ const Header: React.FC<HeaderProps> = ({ user, planLimit, onLogout, onOpenHelpMo
                                 </div>
                                 <div className="py-2">
                                     <a href="#" onClick={handleAccountClick} className="block w-full text-left px-4 py-2 hover:bg-gray-700/50 transition-colors">계정 설정</a>
-                                    <a href="#" onClick={handleAdminClick} className="block w-full text-left px-4 py-2 hover:bg-gray-700/50 text-yellow-400 font-semibold transition-colors">관리자</a>
+                                    {user.isAdmin && (
+                                        <a href="#" onClick={handleAdminClick} className="block w-full text-left px-4 py-2 hover:bg-gray-700/50 text-yellow-400 font-semibold transition-colors">관리자</a>
+                                    )}
                                 </div>
                                 <div className="py-2 border-t border-gray-600/70">
                                     <button onClick={onLogout} className="block w-full text-left px-4 py-2 text-red-400 hover:bg-gray-700/50 transition-colors">

@@ -135,6 +135,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
 
     // Enhanced Navigation Function
     const navigateTo = useCallback((targetView: ViewType, params?: NavState['params']) => {
+        // Security check: Prevent non-admins from accessing admin page.
+        if (targetView === 'admin' && !user.isAdmin) {
+            console.warn("Access Denied: Non-admin user attempted to access the admin dashboard.");
+            return; // Silently block navigation
+        }
+
         setNavStack(prev => {
             // Push current state to stack before moving
             const currentParams = {
@@ -155,7 +161,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
         setView(targetView);
         // Scroll to top on navigation
         window.scrollTo(0, 0);
-    }, [view, channelDetailId, videoDetailId, previousChannelId, initialChannelDetailTab]);
+    }, [view, channelDetailId, videoDetailId, previousChannelId, initialChannelDetailTab, user]);
 
     const handleBack = useCallback(() => {
         setNavStack(prev => {

@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
@@ -9,17 +8,22 @@ import { clearCache } from './services/cacheService';
 import type { User, AppSettings } from './types';
 import { setGeminiApiKey } from './services/apiKeyService';
 
-// Mock user for demonstration
-const mockUser: User = {
+// Raw user data
+const mockUserData = {
   id: 'au_12345',
   name: 'Admin User',
   email: 'admin@corp.com',
-  isAdmin: true,
-  plan: 'Biz',
+  plan: 'Biz' as const,
   usage: 5,
   apiKeyYoutube: '',
   apiKeyAnalytics: '',
   apiKeyReporting: '',
+};
+
+// Create the final user object, dynamically setting isAdmin based on email
+const mockUser: User = {
+  ...mockUserData,
+  isAdmin: mockUserData.email === process.env.ADMIN_EMAIL,
 };
 
 const initialAppSettings: AppSettings = {
@@ -50,8 +54,26 @@ function App() {
     }
   }, [appSettings.apiKeys.gemini]);
 
-  const handleLogin = useCallback(() => {
-    setUser(mockUser);
+  const handleLogin = useCallback((googleUser?: {name: string, email: string}) => {
+    let userToSet: User;
+    if (googleUser) {
+        // Login via Google
+        userToSet = {
+            id: 'gu_' + googleUser.email.replace(/@.*/, ''),
+            name: googleUser.name,
+            email: googleUser.email,
+            isAdmin: googleUser.email === process.env.ADMIN_EMAIL,
+            plan: 'Free' as const,
+            usage: 0,
+            apiKeyYoutube: '',
+            apiKeyAnalytics: '',
+            apiKeyReporting: '',
+        };
+    } else {
+        // Existing mock login for email/password form
+        userToSet = mockUser;
+    }
+    setUser(userToSet);
     setView('dashboard');
   }, []);
 
