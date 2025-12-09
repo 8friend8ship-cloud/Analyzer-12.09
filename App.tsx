@@ -4,7 +4,7 @@ import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Registration from './components/Registration';
 import AccountSettings from './components/AccountSettings';
-import { clearCache } from './services/cacheService';
+import { clearCache, clearOldDailyCaches } from './services/cacheService';
 import type { User, AppSettings } from './types';
 import { setSystemGeminiApiKey, setUserGeminiApiKey } from './services/apiKeyService';
 import Spinner from './components/common/Spinner';
@@ -30,18 +30,14 @@ function App() {
   const [appSettings, setAppSettings] = useState<AppSettings>(initialAppSettings);
   const [initializing, setInitializing] = useState(true); // Forcing a clean start
 
-  const handleLogout = useCallback(() => {
-    clearCache();
+  // This effect runs only once on mount to ensure a clean state, solving the hot-reload issue.
+  useEffect(() => {
+    clearCache(); // Clears session cache
+    clearOldDailyCaches(); // Clears old daily caches from localStorage
     setUser(null);
     setView('landing');
+    setInitializing(false);
   }, []);
-  
-  // This effect runs only once on mount to ensure a clean state for development.
-  useEffect(() => {
-    handleLogout();
-    const timer = setTimeout(() => setInitializing(false), 250);
-    return () => clearTimeout(timer);
-  }, [handleLogout]);
 
   useEffect(() => {
     // Set the SYSTEM Gemini API key when app settings change.
@@ -131,6 +127,12 @@ function App() {
 
   const handleUpdateAppSettings = useCallback((updatedSettings: Partial<AppSettings>) => {
       setAppSettings(prev => ({...prev, ...updatedSettings}));
+  }, []);
+  
+  const handleLogout = useCallback(() => {
+    clearCache();
+    setUser(null);
+    setView('landing');
   }, []);
 
   const navigateTo = (targetView: 'login' | 'register' | 'dashboard' | 'account') => {

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { AlgorithmStage, AlgorithmResult, AlgorithmOption } from '../types';
 import Button from './common/Button';

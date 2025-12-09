@@ -1,7 +1,7 @@
 
 import type { VideoData, AnalysisMode, FilterState, ChannelDetails, ChannelAnalysisData, ChannelVideo, FormatStats, TrendPoint, PerformanceTrendData, VideoComment, ChannelRankingData, VideoRankingData, AudienceProfile, VideoDetailData, CommentInsights, MyChannelAnalyticsData, RetentionDataPoint, BenchmarkComparisonData, SimilarChannelData, AIVideoDeepDiveInsights, SortBy } from '../types';
 import { getAIChannelComprehensiveAnalysis, getAICommentInsights, getAISimilarChannels, getAIVideoDeepDiveInsights, getAIChannelDashboardInsights } from './geminiService';
-import { getFromCache, setInCache } from './cacheService';
+import { getFromCache, setInCache, getDailyCache, setDailyCache } from './cacheService';
 
 // Mock Data for MyChannelAnalytics
 const MOCK_MY_CHANNEL_DATA: MyChannelAnalyticsData = {
@@ -178,7 +178,7 @@ const filterItemsByExcludedCategories = (items: any[], excludedCategories: any) 
     
     if (excludedSet.size === 0) return items;
 
-    return items.filter((item: any) => !excludedSet.has(item.snippet.categoryId));
+    return items.filter((item: any) => item.snippet && !excludedSet.has(item.snippet.categoryId));
 };
 
 // Helper to filter items based on duration (Manual filtering as API doesn't support it for mostPopular)
@@ -355,7 +355,9 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
         }
     }
 
-    return statsData.items.map((item: any) => {
+    const validItems = statsData.items.filter((item: any) => item.statistics && item.contentDetails);
+
+    return validItems.map((item: any) => {
         const durationMin = parseISO8601Duration(item.contentDetails.duration);
         const views = parseInt(item.statistics.viewCount) || 0;
         const likes = parseInt(item.statistics.likeCount) || 0;
@@ -426,7 +428,9 @@ export const fetchChannelAnalysis = async (channelId: string, apiKey: string): P
         const videoStatsResponse = await fetch(`${BASE_URL}/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${apiKey}`);
         const videoStatsJson = await videoStatsResponse.json();
         
-        videoList = videoStatsJson.items ? videoStatsJson.items.map((v: any) => {
+        const validItems = videoStatsJson.items ? videoStatsJson.items.filter((v: any) => v.statistics && v.contentDetails) : [];
+
+        videoList = validItems.map((v: any) => {
             const views = parseInt(v.statistics.viewCount) || 0;
             const likes = parseInt(v.statistics.likeCount) || 0;
             const comments = parseInt(v.statistics.commentCount) || 0;
@@ -458,7 +462,7 @@ export const fetchChannelAnalysis = async (channelId: string, apiKey: string): P
                 estimatedRevenue: revenue,
                 tags: v.snippet.tags || [] // Capture tags for analysis
             };
-        }) : [];
+        });
     }
 
     const now = new Date();
@@ -573,6 +577,14 @@ export const fetchChannelAnalysis = async (channelId: string, apiKey: string): P
 };
 
 export const fetchRankingData = async (type: 'channels' | 'videos', filters: any, apiKey: string): Promise<(ChannelRankingData | VideoRankingData)[]> => {
+    const cacheKey = `ranking:${type}:${filters.country}:${filters.category}:${filters.limit}:${Array.from(filters.excludedCategories as Set<string>).join('-')}:${filters.videoFormat}`;
+    const cachedData = getDailyCache(cacheKey);
+    if (cachedData) {
+        // Add a small delay to simulate network latency for better UX on cache hits
+        await new Promise(resolve => setTimeout(resolve, 300));
+        return cachedData;
+    }
+
     const targetCount = filters.limit || 50;
     // DEEP SCAN: Increase max pages to scan (10 pages = 500 items) to ensure we get 50 valid items even after filtering
     const MAX_PAGES_TO_SCAN = 10; 
@@ -593,11 +605,18 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
         while (collectedItems.length < targetCount && attempt < MAX_PAGES_TO_SCAN) {
             const url = `${baseUrl}${pageToken ? `&pageToken=${pageToken}` : ''}`;
             const response = await fetch(url);
+            if (!response.ok) { // More robust error checking
+                const errorBody = await response.json();
+                console.error("YouTube API Error:", errorBody);
+                throw new Error(`YouTube API request failed with status ${response.status}: ${errorBody.error?.message || 'Unknown error'}`);
+            }
             const data = await response.json();
             
             if (!data.items || data.items.length === 0) break;
 
             let validItems = data.items;
+             // SAFETY NET: Ensure items have snippet and statistics before filtering
+            validItems = validItems.filter(item => item.snippet && item.statistics && item.contentDetails);
             validItems = filterItemsByExcludedCategories(validItems, filters.excludedCategories);
             validItems = filterItemsByDuration(validItems, filters.videoFormat);
 
@@ -612,6 +631,8 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
         collectedItems = collectedItems.slice(0, targetCount);
         
         if (collectedItems.length === 0) return [];
+
+        let finalResult: (ChannelRankingData | VideoRankingData)[] = [];
 
         if (type === 'channels') {
             const channelTrendStats = new Map<string, number>();
@@ -641,10 +662,7 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
                 const views = parseInt(item.statistics.viewCount) || 0;
                 const subscriberCount = parseInt(item.statistics.subscriberCount) || 0;
                 
-                // Simple assumption for channel ranking revenue since we don't have video breakdown here
-                // Use country from channel or filter
                 const channelCountry = item.snippet.country || filters.country;
-                // Conservative estimate using a generic mix RPM logic
                 const revenue = calculateEstimatedRevenue(views, "PT5M", "22", channelCountry, subscriberCount); 
 
                 return {
@@ -659,7 +677,7 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
                     rank: 0,
                     rankChange: 0, 
                     estimatedTotalRevenue: revenue, 
-                    estimatedMonthlyRevenue: revenue * 0.05, // Rough monthly estimate from total
+                    estimatedMonthlyRevenue: revenue * 0.05,
                     channelCountry: item.snippet.country,
                     description: item.snippet.description
                 };
@@ -667,7 +685,7 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
 
             rankedChannels.sort((a: any, b: any) => b.subscriberCount - a.subscriberCount);
 
-            return rankedChannels.map((ch: any, index: number) => ({
+            finalResult = rankedChannels.map((ch: any, index: number) => ({
                 ...ch,
                 rank: index + 1
             }));
@@ -677,7 +695,6 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
             const channelIds = [...new Set(collectedItems.map((item: any) => item.snippet.channelId))].join(',');
             let channelMap = new Map();
             if (channelIds) {
-                // Batch fetch channel details to get subscriber count for correct revenue calc
                 const idsToFetch = channelIds.split(',').slice(0, 50).join(',');
                 const channelsResponse = await fetch(`${BASE_URL}/channels?part=statistics&id=${idsToFetch}&key=${apiKey}`);
                 const channelsData = await channelsResponse.json();
@@ -688,7 +705,7 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
                 }
             }
 
-            return collectedItems.map((item: any, index: number) => {
+            finalResult = collectedItems.map((item: any, index: number) => {
                 const views = parseInt(item.statistics.viewCount);
                 const duration = parseISO8601Duration(item.contentDetails.duration);
                 const subscriberCount = channelMap.get(item.snippet.channelId) || 0;
@@ -724,12 +741,13 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
             });
         }
 
+        setDailyCache(cacheKey, finalResult);
+        return finalResult;
+
     } catch (e) {
         console.error("Error fetching ranking data:", e);
         return [];
     }
-    
-    return [];
 };
 
 export const fetchVideoComments = async (videoId: string, apiKey: string): Promise<VideoComment[]> => {
@@ -751,12 +769,12 @@ export const fetchVideoComments = async (videoId: string, apiKey: string): Promi
 
 export const fetchVideoDetails = async (videoId: string, apiKey: string): Promise<VideoDetailData> => {
     // 1. Fetch Video Stats
-    const response = await fetch(`${BASE_URL}/videos?part=snippet,statistics,contentDetails&id=${videoId}&key=${apiKey}`);
+    const response = await fetch(`${BASE_URL}/videos?part=snippet,statistics,contentDetails,player&id=${videoId}&key=${apiKey}`);
     const data = await response.json();
     if (!data.items || data.items.length === 0) throw new Error("Video not found");
     
     const item = data.items[0];
-    const views = parseInt(item.statistics.viewCount);
+    const views = parseInt(item.statistics?.viewCount || '0');
     
     // 2. Fetch Channel Stats (for subscriber count)
     const channelId = item.snippet.channelId;
@@ -775,7 +793,7 @@ export const fetchVideoDetails = async (videoId: string, apiKey: string): Promis
 
     const revenue = calculateEstimatedRevenue(
         views, 
-        item.contentDetails.duration, 
+        item.contentDetails?.duration || "PT0M0S", 
         item.snippet.categoryId, 
         channelCountry,
         channelSubscriberCount
@@ -802,13 +820,13 @@ export const fetchVideoDetails = async (videoId: string, apiKey: string): Promis
         description: item.snippet.description,
         thumbnailUrl: item.snippet.thumbnails.maxres?.url || item.snippet.thumbnails.medium?.url,
         publishedAt: item.snippet.publishedAt,
-        durationMinutes: parseISO8601Duration(item.contentDetails.duration),
+        durationMinutes: parseISO8601Duration(item.contentDetails?.duration),
         channelId: channelId,
         channelTitle: item.snippet.channelTitle,
         channelSubscriberCount: channelSubscriberCount,
         viewCount: views,
-        likeCount: parseInt(item.statistics.likeCount),
-        commentCount: parseInt(item.statistics.commentCount),
+        likeCount: parseInt(item.statistics?.likeCount || '0'),
+        commentCount: parseInt(item.statistics?.commentCount || '0'),
         embedHtml: item.player?.embedHtml || "",
         embeddable: true,
         comments: comments,
