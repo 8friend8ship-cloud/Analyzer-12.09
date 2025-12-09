@@ -28,24 +28,24 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<'landing' | 'login' | 'register' | 'dashboard' | 'account'>('landing');
   const [appSettings, setAppSettings] = useState<AppSettings>(initialAppSettings);
-  const [initializing, setInitializing] = useState(true); // Forcing a clean start
+  const [initializing, setInitializing] = useState(true);
 
-  // This effect runs only once on mount to ensure a clean state, solving the hot-reload issue.
   useEffect(() => {
-    clearCache(); // Clears session cache
-    clearOldDailyCaches(); // Clears old daily caches from localStorage
-    setUser(null);
-    setView('landing');
-    setInitializing(false);
+    const initializeApp = () => {
+      clearCache();
+      clearOldDailyCaches();
+      setUser(null);
+      setView('landing');
+      setInitializing(false);
+    };
+    initializeApp();
   }, []);
 
   useEffect(() => {
-    // Set the SYSTEM Gemini API key when app settings change.
     setSystemGeminiApiKey(appSettings.apiKeys.gemini);
   }, [appSettings.apiKeys.gemini]);
 
   useEffect(() => {
-    // Set or clear the USER-specific Gemini API key when the user logs in/out or updates their key.
     setUserGeminiApiKey(user?.apiKeyGemini || null);
   }, [user?.apiKeyGemini]);
 
@@ -73,7 +73,6 @@ function App() {
             apiKeyGemini: '',
             planExpirationDate: (plan !== 'Free') ? expirationDate.toISOString().split('T')[0] : undefined,
         };
-        // Restore API keys from localStorage
         const storedKeys = localStorage.getItem(`user_api_keys_${userId}`);
         if (storedKeys) {
             const { apiKeyYoutube, apiKeyGemini } = JSON.parse(storedKeys);
@@ -92,7 +91,7 @@ function App() {
             id: 'form_' + email.replace(/@.*/, ''),
             name: email.split('@')[0],
             email: email,
-            password: password, // Store password for display
+            password: password,
             isAdmin: isAdmin,
             plan: plan,
             usage: 0,
@@ -113,7 +112,6 @@ function App() {
           if (!prevUser) return null;
           const newUser = { ...prevUser, ...updatedUser };
 
-          // Persist API keys for Google users
           if (newUser.id.startsWith('gu_')) {
               const keysToStore = {
                   apiKeyYoutube: newUser.apiKeyYoutube,
@@ -162,7 +160,6 @@ function App() {
             case 'account':
                 return <AccountSettings user={user} onNavigate={navigateTo} onUpdateUser={handleUpdateUser} />;
             default:
-                 // If logged in but view is something else, redirect to dashboard
                 setView('dashboard');
                 return <Dashboard 
                             user={user} 
@@ -182,7 +179,6 @@ function App() {
             case 'register':
                 return <Registration onRegister={() => handleLogin({email: 'new@user.com', password: 'password'})} onNavigate={navigateTo} />;
             default:
-                 // If not logged in, always show landing
                 setView('landing');
                 return <LandingPage onStart={() => setView('login')} />;
         }

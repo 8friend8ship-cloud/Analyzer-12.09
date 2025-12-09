@@ -1,4 +1,5 @@
 
+
 import type { VideoData, AnalysisMode, FilterState, ChannelDetails, ChannelAnalysisData, ChannelVideo, FormatStats, TrendPoint, PerformanceTrendData, VideoComment, ChannelRankingData, VideoRankingData, AudienceProfile, VideoDetailData, CommentInsights, MyChannelAnalyticsData, RetentionDataPoint, BenchmarkComparisonData, SimilarChannelData, AIVideoDeepDiveInsights, SortBy } from '../types';
 import { getAIChannelComprehensiveAnalysis, getAICommentInsights, getAISimilarChannels, getAIVideoDeepDiveInsights, getAIChannelDashboardInsights } from './geminiService';
 import { getFromCache, setInCache, getDailyCache, setDailyCache } from './cacheService';
@@ -659,8 +660,9 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
             if (!channelsData.items) return [];
 
             const rankedChannels = channelsData.items.map((item: any) => {
-                const views = parseInt(item.statistics.viewCount) || 0;
-                const subscriberCount = parseInt(item.statistics.subscriberCount) || 0;
+                 // DEFENSIVE CODING: Ensure statistics object exists before accessing its properties
+                const views = parseInt(item.statistics?.viewCount || '0');
+                const subscriberCount = parseInt(item.statistics?.subscriberCount || '0');
                 
                 const channelCountry = item.snippet.country || filters.country;
                 const revenue = calculateEstimatedRevenue(views, "PT5M", "22", channelCountry, subscriberCount); 
@@ -672,7 +674,7 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
                     thumbnailUrl: item.snippet.thumbnails.medium?.url,
                     subscriberCount: subscriberCount,
                     viewsInPeriod: channelTrendStats.get(item.id) || 0, 
-                    videoCount: parseInt(item.statistics.videoCount) || 0,
+                    videoCount: parseInt(item.statistics?.videoCount || '0'),
                     viewCount: views,
                     rank: 0,
                     rankChange: 0, 
@@ -692,15 +694,19 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
         }
 
         if (type === 'videos') {
-            const channelIds = [...new Set(collectedItems.map((item: any) => item.snippet.channelId))].join(',');
-            let channelMap = new Map();
-            if (channelIds) {
-                const idsToFetch = channelIds.split(',').slice(0, 50).join(',');
-                const channelsResponse = await fetch(`${BASE_URL}/channels?part=statistics&id=${idsToFetch}&key=${apiKey}`);
+            const channelIds = [...new Set(collectedItems.map((item: any) => item.snippet.channelId))];
+            let channelMap = new Map<string, { subscribers: number }>();
+            
+            // BATCHING: Fetch channel details in chunks of 50 to avoid API errors
+            for (let i = 0; i < channelIds.length; i += 50) {
+                const batch = channelIds.slice(i, i + 50);
+                const channelsResponse = await fetch(`${BASE_URL}/channels?part=statistics&id=${batch.join(',')}&key=${apiKey}`);
                 const channelsData = await channelsResponse.json();
                 if (channelsData.items) {
                     channelsData.items.forEach((c: any) => {
-                        channelMap.set(c.id, parseInt(c.statistics.subscriberCount));
+                        // DEFENSIVE CODING: Handle cases where statistics might be missing for a channel
+                        const subCount = parseInt(c.statistics?.subscriberCount || '0');
+                        channelMap.set(c.id, { subscribers: subCount });
                     });
                 }
             }
@@ -708,7 +714,7 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
             finalResult = collectedItems.map((item: any, index: number) => {
                 const views = parseInt(item.statistics.viewCount);
                 const duration = parseISO8601Duration(item.contentDetails.duration);
-                const subscriberCount = channelMap.get(item.snippet.channelId) || 0;
+                const subscriberCount = channelMap.get(item.snippet.channelId)?.subscribers || 0;
                 
                 const revenue = calculateEstimatedRevenue(
                     views, 

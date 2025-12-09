@@ -1,4 +1,5 @@
 
+
 export interface VideoData {
   id: string;
   channelId: string;
@@ -327,6 +328,7 @@ export interface VideoRankingData {
     channelDescription?: string;
     durationSeconds: number;
     channelCountry?: string;
+    isShorts: boolean;
 }
 
 // FIX: Add missing types for MyChannelAnalytics feature
