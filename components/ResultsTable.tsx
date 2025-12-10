@@ -1,7 +1,10 @@
+
+
+
 // This component has been repurposed to act as the main Results Table
 import React, { useState } from 'react';
 import type { VideoData } from '../types';
-import { COUNTRY_OPTIONS } from '../types';
+import { COUNTRY_FLAGS } from '../types';
 
 interface ResultsTableProps {
   videos: VideoData[];
@@ -108,7 +111,7 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onShowChannelDetail
                         </thead>
                         <tbody className="divide-y divide-gray-700/50">
                             {videos.map((video, index) => {
-                                const countryCode = video.channelCountry;
+                                const countryLabel = video.channelCountry ? (COUNTRY_FLAGS[video.channelCountry] || video.channelCountry) : '';
                                 return (
                                 <tr key={video.id} className="hover:bg-gray-800/50">
                                     <td className="px-4 py-3 align-top">
@@ -129,13 +132,12 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onShowChannelDetail
                                             <div className="flex-grow min-w-0">
                                                 <button onClick={() => onShowVideoDetail(video.id)} className="font-semibold text-white line-clamp-2 leading-snug mb-1 text-left hover:text-blue-400 transition-colors bg-transparent border-none p-0 cursor-pointer focus:outline-none w-full">{video.title}</button>
                                                 <div className="flex items-center gap-1.5 min-w-0">
-                                                     {countryCode && (
-                                                        <span className="flex-shrink-0 text-xs flex items-center gap-1.5 bg-gray-700/50 px-1.5 py-0.5 rounded" title={COUNTRY_OPTIONS.find(c => c.value === countryCode)?.name || countryCode}>
-                                                            <span className="font-semibold text-gray-300">{countryCode}</span>
-                                                            <img src={`https://flagcdn.com/w20/${countryCode.toLowerCase()}.png`} alt={countryCode} className="w-4 h-auto" />
+                                                    {countryLabel && (
+                                                        <span title={video.channelCountry} className="flex-shrink-0 text-sm">
+                                                            {countryLabel}
                                                         </span>
                                                     )}
-                                                    <button onClick={() => onShowChannelDetail(video.channelId)} className="text-xs text-gray-400 truncate hover:text-white transition-colors">{video.channelTitle}</button>
+                                                    <p className="text-xs text-gray-400 truncate">{video.channelTitle}</p>
                                                     <button onClick={() => handleCopy(video.channelTitle, video.id)} className="text-gray-500 hover:text-white transition-colors duration-150 flex-shrink-0" title="채널명 복사">
                                                         {copiedChannelId === video.id ? (
                                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
@@ -162,7 +164,7 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onShowChannelDetail
             {/* Mobile Card View (visible on mobile) */}
             <div className="md:hidden space-y-3">
                 {videos.map((video, index) => {
-                    const countryCode = video.channelCountry;
+                    const countryLabel = video.channelCountry ? (COUNTRY_FLAGS[video.channelCountry] || video.channelCountry) : '';
                     return (
                     <div key={video.id} className="bg-gray-800/80 rounded-lg p-3 border border-gray-700/50">
                         <div className="flex items-start space-x-3 mb-3">
@@ -182,13 +184,12 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onShowChannelDetail
                             <div className="flex-grow min-w-0">
                                 <button onClick={() => onShowVideoDetail(video.id)} className="font-semibold text-white text-sm line-clamp-2 leading-snug mb-1 text-left hover:text-blue-400 transition-colors bg-transparent border-none p-0 cursor-pointer focus:outline-none w-full">{video.title}</button>
                                 <div className="flex items-center gap-1.5 min-w-0">
-                                    {countryCode && (
-                                        <span className="flex-shrink-0 text-xs flex items-center gap-1.5 bg-gray-700/50 px-1.5 py-0.5 rounded" title={COUNTRY_OPTIONS.find(c => c.value === countryCode)?.name || countryCode}>
-                                            <span className="font-semibold text-gray-300">{countryCode}</span>
-                                            <img src={`https://flagcdn.com/w20/${countryCode.toLowerCase()}.png`} alt={countryCode} className="w-4 h-auto" />
+                                    {countryLabel && (
+                                        <span title={video.channelCountry} className="flex-shrink-0 text-sm">
+                                            {countryLabel}
                                         </span>
                                     )}
-                                    <button onClick={() => onShowChannelDetail(video.channelId)} className="text-xs text-gray-400 truncate hover:text-white transition-colors">{video.channelTitle}</button>
+                                    <p className="text-xs text-gray-400 truncate">{video.channelTitle}</p>
                                     <button onClick={() => handleCopy(video.channelTitle, video.id)} className="text-gray-500 hover:text-white transition-colors duration-150 flex-shrink-0" title="채널명 복사">
                                       {copiedChannelId === video.id ? (<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>) : (<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>)}
                                     </button>

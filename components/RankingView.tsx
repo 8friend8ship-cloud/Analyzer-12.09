@@ -1,8 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+
+
+
+import React, { useState, useEffect, useCallback } from 'react';
 import Spinner from './common/Spinner';
 import { fetchRankingData } from '../services/youtubeService';
 import type { User, AppSettings, ChannelRankingData, VideoRankingData, RankingViewState } from '../types';
-import { YOUTUBE_CATEGORY_OPTIONS, COUNTRY_OPTIONS } from '../types';
+import { YOUTUBE_CATEGORY_OPTIONS, COUNTRY_FLAGS } from '../types';
 import ComparisonModal from './ComparisonModal';
 
 interface RankingViewProps {
@@ -16,6 +19,35 @@ interface RankingViewProps {
 
 type ActiveTab = 'channels' | 'videos' | 'performance';
 
+const countryOptions = [
+    { label: "전세계", value: "WW" },
+    { label: "대한민국", value: "KR" },
+    { label: "뉴질랜드", value: "NZ" },
+    { label: "대만", value: "TW" },
+    { label: "독일", value: "DE" },
+    { label: "러시아", value: "RU" },
+    { label: "말레이시아", value: "MY" },
+    { label: "멕시코", value: "MX" },
+    { label: "미국", value: "US" },
+    { label: "베트남", value: "VN" },
+    { label: "브루나이", value: "BN" },
+    { label: "싱가포르", value: "SG" },
+    { label: "영국", value: "GB" },
+    { label: "인도", value: "IN" },
+    { label: "인도네시아", value: "ID" },
+    { label: "일본", value: "JP" },
+    { label: "중국", value: "CN" },
+    { label: "칠레", value: "CL" },
+    { label: "캐나다", value: "CA" },
+    { label: "태국", value: "TH" },
+    { label: "파푸아뉴기니", value: "PG" },
+    { label: "페루", value: "PE" },
+    { label: "프랑스", value: "FR" },
+    { label: "필리핀", value: "PH" },
+    { label: "호주", value: "AU" },
+    { label: "홍콩", value: "HK" },
+];
+
 const YOUTUBE_CATEGORIES_KR: { [key: string]: string } = {
     '1': '영화/애니메이션', '2': '자동차/교통', '10': '음악', '15': '애완동물/동물',
     '17': '스포츠', '19': '여행/이벤트', '20': '게임', '22': '인물/블로그',
@@ -28,55 +60,6 @@ const EXCLUDABLE_CATEGORIES = [
     { id: '1', label: '영화' },
     { id: '20', label: '게임' },
 ];
-
-const CountrySelect: React.FC<{ selectedCountry: string; onChange: (value: string) => void; }> = ({ selectedCountry, onChange }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const ref = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (ref.current && !ref.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [ref]);
-    
-    const selectedOption = COUNTRY_OPTIONS.find(o => o.value === selectedCountry) || COUNTRY_OPTIONS[0];
-
-    return (
-        <div className="relative w-28" ref={ref}>
-            <button type="button" onClick={() => setIsOpen(!isOpen)} className="w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-1.5 flex items-center justify-between text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <span className="flex items-center gap-2">
-                    {selectedOption.value === 'WW' ? (
-                        <span role="img" aria-label="Worldwide">🌍</span>
-                    ) : (
-                        <img src={`https://flagcdn.com/w20/${selectedOption.value.toLowerCase()}.png`} alt={selectedOption.label} className="w-5 h-auto" />
-                    )}
-                    {selectedOption.label}
-                </span>
-                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-            </button>
-
-            {isOpen && (
-                <ul className="absolute z-10 mt-1 w-48 bg-gray-700 border border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto text-xs py-1">
-                    {COUNTRY_OPTIONS.map(opt => (
-                        <li key={opt.value} onClick={() => { onChange(opt.value); setIsOpen(false); }} className="px-3 py-2 flex items-center gap-3 hover:bg-gray-600 cursor-pointer text-gray-200">
-                            {opt.value === 'WW' ? (
-                                <span role="img" aria-label="Worldwide" className="text-lg">🌍</span>
-                            ) : (
-                                <img src={`https://flagcdn.com/w20/${opt.value.toLowerCase()}.png`} alt={opt.label} className="w-5 h-auto flex-shrink-0" />
-                            )}
-                            <span className="font-semibold">{opt.label}</span>
-                            <span className="text-gray-400">{opt.name}</span>
-                        </li>
-                    ))}
-                </ul>
-            )}
-        </div>
-    );
-};
 
 const RankChange: React.FC<{ change: number }> = ({ change }) => {
     if (change === 0) {
@@ -357,12 +340,11 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                                                     <p className="font-semibold text-white truncate text-sm" title={item.name}>{item.name}</p>
                                                     <div className="flex items-center gap-1.5 text-xs text-gray-400 truncate">
                                                         {channelCountry && (
-                                                            <span className="flex-shrink-0 flex items-center gap-1.5 bg-gray-700/50 px-1.5 py-0.5 rounded" title={COUNTRY_OPTIONS.find(c => c.value === channelCountry)?.name || channelCountry}>
-                                                                <span className="font-semibold text-gray-300">{channelCountry}</span>
-                                                                <img src={`https://flagcdn.com/w20/${channelCountry.toLowerCase()}.png`} alt={channelCountry} className="w-4 h-auto" />
+                                                            <span title={countryOptions.find(c => c.value === channelCountry)?.label || channelCountry}>
+                                                                {COUNTRY_FLAGS[channelCountry] || channelCountry}
                                                             </span>
                                                         )}
-                                                        <span>{(item as ChannelRankingData).channelHandle || ''}</span>
+                                                        <span>{item.name}</span>
                                                     </div>
                                                     {categoryName && <p className="text-xs font-semibold text-cyan-400 mt-1">#{categoryName}</p>}
                                                 </div>
@@ -382,12 +364,11 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                                                     </div>
                                                     <div className="flex items-center gap-1.5 text-xs text-gray-400 truncate">
                                                         {channelCountry && (
-                                                            <span className="flex-shrink-0 flex items-center gap-1.5 bg-gray-700/50 px-1.5 py-0.5 rounded" title={COUNTRY_OPTIONS.find(c => c.value === channelCountry)?.name || channelCountry}>
-                                                                <span className="font-semibold text-gray-300">{channelCountry}</span>
-                                                                <img src={`https://flagcdn.com/w20/${channelCountry.toLowerCase()}.png`} alt={channelCountry} className="w-4 h-auto" />
+                                                            <span title={countryOptions.find(c => c.value === channelCountry)?.label || channelCountry}>
+                                                                {COUNTRY_FLAGS[channelCountry] || channelCountry}
                                                             </span>
                                                         )}
-                                                        <button onClick={() => onShowChannelDetail((item as VideoRankingData).channelId)} className="hover:text-white transition-colors truncate">{(item as VideoRankingData).channelName}</button>
+                                                        <button onClick={() => onShowChannelDetail((item as VideoRankingData).channelId)} className="hover:text-white transition-colors">{(item as VideoRankingData).channelName}</button>
                                                     </div>
                                                     {categoryName && <p className="text-xs font-semibold text-cyan-400 mt-1">#{categoryName}</p>}
                                                 </div>
@@ -476,12 +457,11 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                                         </div>
                                         <div className="flex items-center gap-1.5 text-xs text-gray-400 truncate">
                                             {channelCountry && (
-                                                <span className="flex-shrink-0 flex items-center gap-1.5 bg-gray-700/50 px-1.5 py-0.5 rounded" title={COUNTRY_OPTIONS.find(c => c.value === channelCountry)?.name || channelCountry}>
-                                                    <span className="font-semibold text-gray-300">{channelCountry}</span>
-                                                    <img src={`https://flagcdn.com/w20/${channelCountry.toLowerCase()}.png`} alt={channelCountry} className="w-4 h-auto" />
+                                                <span title={countryOptions.find(c => c.value === channelCountry)?.label || channelCountry}>
+                                                    {COUNTRY_FLAGS[channelCountry] || channelCountry}
                                                 </span>
                                             )}
-                                            <span>{!isChannel ? (item as VideoRankingData).channelHandle || (item as VideoRankingData).channelName : ((item as ChannelRankingData).channelHandle || '')}</span>
+                                            <span>{!isChannel && (item as VideoRankingData).channelName}</span>
                                         </div>
                                         {categoryName && <p className="text-xs font-semibold text-cyan-400 mt-1">#{categoryName}</p>}
                                         {isPerformance && <div className="mt-1"><PerformanceBadge ratio={performanceRatio} /></div>}
@@ -528,7 +508,7 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
         explanation = "'조회수 / 구독자 수' 비율이 높은 순서대로 정렬합니다. 내 채널 규모보다 훨씬 높은 성과를 낸 '알고리즘 픽' 영상을 찾아보세요.";
     }
     
-    const countryLabel = COUNTRY_OPTIONS.find(c => c.value === country)?.label || country;
+    const countryLabel = countryOptions.find(c => c.value === country)?.label || country;
 
     return (
         <div className="p-4 md:p-6 lg:p-8">
@@ -562,8 +542,16 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                 <div className="mb-4 p-3 bg-gray-900/50 rounded-lg">
                     <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
                         <div className="flex items-center gap-2">
-                            <label className="text-sm font-semibold text-gray-400">국가:</label>
-                            <CountrySelect selectedCountry={country} onChange={setCountry} />
+                            <label htmlFor="country-ranking" className="text-sm font-semibold text-gray-400">국가:</label>
+                            <span className="text-xl">{COUNTRY_FLAGS[country] || '🏳️'}</span>
+                            <select
+                                id="country-ranking"
+                                value={country}
+                                onChange={e => setCountry(e.target.value)}
+                                className="bg-gray-700 border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-xs p-1.5"
+                            >
+                                {countryOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            </select>
                         </div>
                         <div className="flex items-center gap-2">
                             <label htmlFor="category-ranking" className="text-sm font-semibold text-gray-400">카테고리:</label>
@@ -631,8 +619,7 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
             <div className="">
                 <div className="flex justify-between items-center mb-2 px-1">
                     <h2 className="text-xl font-bold flex items-center gap-2">
-                        {country === 'WW' ? '🌍' : <img src={`https://flagcdn.com/w20/${country.toLowerCase()}.png`} alt={country} className="w-6 h-auto" />}
-                        {COUNTRY_OPTIONS.find(c => c.value === country)?.name} 실시간 
+                        {countryLabel} 실시간 
                         {activeTab === 'channels' && ' 인기 채널 순위'}
                         {activeTab === 'videos' && ' 인기 영상 순위'}
                         {activeTab === 'performance' && <span className="text-purple-400"> 조대전(급성장) 랭킹</span>}

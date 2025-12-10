@@ -1,11 +1,8 @@
 
-
-
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { fetchYouTubeData, fetchRankingData } from '../services/youtubeService';
 import { getAITrendingInsight, translateKeyword } from '../services/geminiService';
 import type { User, AppSettings, VideoData, AnalysisMode, FilterState, OutlierViewState } from '../types';
-import { COUNTRY_OPTIONS } from '../types';
 import Spinner from './common/Spinner';
 import Button from './common/Button';
 
@@ -28,6 +25,21 @@ interface OutlierStats {
   outlierCount: number;
 }
 
+const countryOptions = [
+    { label: "대한민국", value: "KR", flag: "🇰🇷" },
+    { label: "미국", value: "US", flag: "🇺🇸" },
+    { label: "일본", value: "JP", flag: "🇯🇵" },
+    { label: "영국", value: "GB", flag: "🇬🇧" },
+    { label: "인도", value: "IN", flag: "🇮🇳" },
+    { label: "캐나다", value: "CA", flag: "🇨🇦" },
+    { label: "호주", value: "AU", flag: "🇦🇺" },
+    { label: "독일", value: "DE", flag: "🇩🇪" },
+    { label: "프랑스", value: "FR", flag: "🇫🇷" },
+    { label: "브라질", value: "BR", flag: "🇧🇷" },
+    { label: "베트남", value: "VN", flag: "🇻🇳" },
+    { label: "전세계", value: "WW", flag: "🌍" },
+];
+
 const EXCLUDABLE_CATEGORIES = [
     { id: '10', label: '음악' },
     { id: '1', label: '영화/애니/드라마' },
@@ -38,55 +50,6 @@ const formatNumber = (num: number): string => {
   if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
   if (num >= 1_000) return `${(num / 1_000).toFixed(0)}K`;
   return num.toLocaleString();
-};
-
-const CountrySelect: React.FC<{ selectedCountry: string; onChange: (value: string) => void; }> = ({ selectedCountry, onChange }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const ref = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (ref.current && !ref.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [ref]);
-    
-    const selectedOption = COUNTRY_OPTIONS.find(o => o.value === selectedCountry) || COUNTRY_OPTIONS[0];
-
-    return (
-        <div className="relative w-28" ref={ref}>
-            <button type="button" onClick={() => setIsOpen(!isOpen)} className="w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2 flex items-center justify-between text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <span className="flex items-center gap-2">
-                    {selectedOption.value === 'WW' ? (
-                        <span role="img" aria-label="Worldwide">🌍</span>
-                    ) : (
-                        <img src={`https://flagcdn.com/w20/${selectedOption.value.toLowerCase()}.png`} alt={selectedOption.label} className="w-5 h-auto" />
-                    )}
-                    {selectedOption.label}
-                </span>
-                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-            </button>
-
-            {isOpen && (
-                <ul className="absolute z-10 mt-1 w-48 bg-gray-700 border border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto text-xs py-1">
-                    {COUNTRY_OPTIONS.map(opt => (
-                        <li key={opt.value} onClick={() => { onChange(opt.value); setIsOpen(false); }} className="px-3 py-2 flex items-center gap-3 hover:bg-gray-600 cursor-pointer text-gray-200">
-                            {opt.value === 'WW' ? (
-                                <span role="img" aria-label="Worldwide" className="text-lg">🌍</span>
-                            ) : (
-                                <img src={`https://flagcdn.com/w20/${opt.value.toLowerCase()}.png`} alt={opt.label} className="w-5 h-auto flex-shrink-0" />
-                            )}
-                            <span className="font-semibold">{opt.label}</span>
-                            <span className="text-gray-400">{opt.name}</span>
-                        </li>
-                    ))}
-                </ul>
-            )}
-        </div>
-    );
 };
 
 const OutlierVideoRow: React.FC<{ video: VideoData; averageViews: number; onShowVideoDetail: (id: string) => void; onShowChannelDetail: (id: string) => void }> = ({ video, averageViews, onShowVideoDetail, onShowChannelDetail }) => {
@@ -253,7 +216,7 @@ const OutlierAnalysisView: React.FC<OutlierAnalysisViewProps> = ({ user, appSett
         if (e) e.preventDefault();
 
         const planLimits = { 
-            Free: appSettings.plans.free.analyses, 
+            Free: appSettings.freePlanLimit, 
             Pro: appSettings.plans.pro.analyses, 
             Biz: appSettings.plans.biz.analyses 
         };
@@ -377,7 +340,15 @@ const OutlierAnalysisView: React.FC<OutlierAnalysisViewProps> = ({ user, appSett
                         </div>
 
                         <div className="flex items-center gap-2">
-                            <CountrySelect selectedCountry={trendingCountry} onChange={setTrendingCountry} />
+                            <select 
+                                value={trendingCountry} 
+                                onChange={(e) => setTrendingCountry(e.target.value)}
+                                className="bg-gray-700 border-gray-600 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                            >
+                                {countryOptions.map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.flag} {opt.label}</option>
+                                ))}
+                            </select>
                             <Button onClick={handleFetchTrending} disabled={isTrendingLoading} className="text-sm py-2 whitespace-nowrap">
                                 {isTrendingLoading ? '분석 중...' : '트렌드 분석 시작'}
                             </Button>
@@ -433,7 +404,7 @@ const OutlierAnalysisView: React.FC<OutlierAnalysisViewProps> = ({ user, appSett
                  )}
                  {!trendingData && !isTrendingLoading && (
                      <div className="text-center py-10 text-gray-500 border-2 border-dashed border-gray-700 rounded-lg">
-                         <p className="mb-2 text-lg">오늘 {COUNTRY_OPTIONS.find(c => c.value === trendingCountry)?.name}에서 뜨고 있는 주제가 궁금하신가요?</p>
+                         <p className="mb-2 text-lg">오늘 {countryOptions.find(c => c.value === trendingCountry)?.label}에서 뜨고 있는 주제가 궁금하신가요?</p>
                          <p className="text-sm mb-4">대기업 콘텐츠(음악, 영화 등)를 제외하고 실질적인 트렌드를 분석할 수 있습니다.</p>
                          <p className="text-sm font-semibold text-blue-400 cursor-pointer" onClick={handleFetchTrending}>'트렌드 분석 시작' 버튼을 눌러보세요.</p>
                      </div>

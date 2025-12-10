@@ -67,7 +67,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
     const [isInitial, setIsInitial] = useState(true);
     const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
     const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
-    const [upgradeModalContent, setUpgradeModalContent] = useState<{ title: string; message: string; } | null>(null);
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
     
     // Core State for View and Navigation Stack
     const [view, setView] = useState<ViewType>('main');
@@ -96,7 +96,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
 
 
     const planLimits = { 
-        Free: appSettings.plans.free.analyses, 
+        Free: appSettings.freePlanLimit, 
         Pro: appSettings.plans.pro.analyses, 
         Biz: appSettings.plans.biz.analyses 
     };
@@ -192,10 +192,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
 
     const handleAnalysis = useCallback(async (searchQuery: string) => {
         if (user.usage >= planLimit) {
-            setUpgradeModalContent({
-                title: "분석 한도 초과",
-                message: `현재 ${user.plan} 플랜의 월간 분석 ${planLimit}회를 모두 사용하셨습니다. 더 많은 분석을 실행하려면 요금제를 업그레이드해주세요.`
-            });
+            setIsUpgradeModalOpen(true);
             return;
         }
 
@@ -269,13 +266,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
     const handleCloseCompareModal = useCallback(() => setIsComparisonModalOpen(false), []);
     const handleOpenHelpModal = useCallback(() => setIsHelpModalOpen(true), []);
     const handleCloseHelpModal = useCallback(() => setIsHelpModalOpen(false), []);
-    const handleCloseUpgradeModal = useCallback(() => setUpgradeModalContent(null), []);
-    const handleUpgradeRequired = useCallback(() => {
-        setUpgradeModalContent({
-            title: 'Biz 플랜 전용 기능',
-            message: '이 기능은 Biz 플랜 구독자만 사용할 수 있습니다. 채널 성장을 위한 강력한 AI 분석 도구를 경험해보세요.'
-        });
-    }, []);
+    const handleCloseUpgradeModal = useCallback(() => setIsUpgradeModalOpen(false), []);
+    const handleUpgradeRequired = useCallback(() => setIsUpgradeModalOpen(true), []);
 
     const handleShowChannelDetail = useCallback((channelId: string, tab: 'overview' | 'similarChannels' = 'overview') => {
         navigateTo('channelDetail', { channelId, initialTab: tab });
@@ -297,12 +289,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
     }, []);
     
     const handleWorkflowNavigate = useCallback(async (featureId: string) => {
-        const bizFeatures = ['outliers', 'thumbnail_search', 'algorithm_finder', 'collections'];
-        if (bizFeatures.includes(featureId) && user.plan !== 'Biz' && !user.isAdmin) {
-            handleUpgradeRequired();
-            return;
-        }
-
         const getApiKey = () => user.isAdmin ? appSettings.apiKeys.youtube : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
 
         switch (featureId) {
@@ -357,7 +343,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
             default:
                 alert(`'${featureId}' 기능은 현재 준비 중입니다.`);
         }
-    }, [handleShowChannelDetail, user, appSettings, navigateTo, handleUpgradeRequired]);
+    }, [handleShowChannelDetail, user, appSettings, navigateTo]);
 
     const WelcomeMessage = () => (
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-center text-gray-500 p-8">
@@ -525,7 +511,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
             <Chatbot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
             {isComparisonModalOpen && <ComparisonModal user={user} appSettings={appSettings} onClose={handleCloseCompareModal} initialSelectedChannels={selectedChannels} />}
             {isHelpModalOpen && <HelpModal onClose={handleCloseHelpModal} />}
-            {upgradeModalContent && <UpgradeModal onClose={handleCloseUpgradeModal} title={upgradeModalContent.title} message={upgradeModalContent.message} />}
+            {isUpgradeModalOpen && <UpgradeModal onClose={handleCloseUpgradeModal} />}
             {isCommentModalOpen && selectedVideoForComments && (
                 <CommentAnalysisModal 
                     video={selectedVideoForComments}

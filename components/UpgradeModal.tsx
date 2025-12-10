@@ -1,13 +1,10 @@
-
 import React from 'react';
 
 interface UpgradeModalProps {
     onClose: () => void;
-    title: string;
-    message: string;
 }
 
-const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, title, message }) => {
+const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose }) => {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-gray-800 border border-gray-700 rounded-lg shadow-xl w-full max-w-md text-gray-200 flex flex-col items-center text-center p-8" onClick={(e) => e.stopPropagation()}>
@@ -18,9 +15,9 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose, title, message }) 
           </svg>
         </div>
         
-        <h2 className="text-2xl font-bold mb-2">{title}</h2>
+        <h2 className="text-2xl font-bold mb-2">분석 한도를 초과했습니다</h2>
         <p className="text-gray-400 mb-6">
-          {message}
+          Free 요금제의 월간 분석 10회를 모두 사용하셨습니다. 더 많은 분석을 실행하려면 요금제를 업그레이드해주세요.
         </p>
 
         <div className="w-full space-y-3">

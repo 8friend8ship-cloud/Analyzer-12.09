@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import LandingPage from './components/LandingPage';
 import Login from './components/Login';
@@ -10,10 +11,10 @@ import { setSystemGeminiApiKey, setUserGeminiApiKey } from './services/apiKeySer
 import Spinner from './components/common/Spinner';
 
 const initialAppSettings: AppSettings = {
+    freePlanLimit: 30, // Updated from 10 to 30
     plans: {
-        free: { name: 'Free', analyses: 200, price: 0, description: '행사2달 프로기능 동일한 조건 테스트', features: ['월 200회 분석', 'Pro 플랜 모든 기능', '아웃라이어 분석', '썸네일/알고리즘 진단', '컬렉션 기능'] },
-        pro: { name: 'Pro', analyses: 100, price: 19000, description: '개인 크리에이터에게 적합합니다.', features: ['월 100회 분석', 'AI 인사이트', '채널 비교 분석'] },
-        biz: { name: 'Biz', analyses: 200, price: 29000, description: '전문가 및 팀을 위한 플랜입니다.', features: ['월 200회 분석', 'Pro 플랜 모든 기능', '아웃라이어 분석', '썸네일/알고리즘 진단', '컬렉션 기능'] },
+        pro: { name: 'Pro', analyses: 100, price: 19000 },
+        biz: { name: 'Biz', analyses: 200, price: 29000 },
     },
     apiKeys: {
         youtube: '',
@@ -52,13 +53,12 @@ function App() {
 
   const handleLogin = useCallback((credentials: { googleUser?: { name: string; email: string }; email?: string; password?: string }) => {
     let userToSet: User | null = null;
-    const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '8friend8ship@hanmail.net').toLowerCase();
+    const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '8friend8ship@hanmail.net';
     
     if (credentials.googleUser) {
         const { name, email } = credentials.googleUser;
-        const normalizedEmail = email.toLowerCase();
-        const userId = 'gu_' + normalizedEmail.replace(/@.*/, '');
-        const isAdmin = normalizedEmail === ADMIN_EMAIL;
+        const userId = 'gu_' + email.replace(/@.*/, '');
+        const isAdmin = email === ADMIN_EMAIL;
         const plan = isAdmin ? 'Biz' : 'Free';
         const expirationDate = new Date();
         expirationDate.setMonth(expirationDate.getMonth() + 1);
@@ -66,7 +66,7 @@ function App() {
         userToSet = {
             id: userId,
             name: name,
-            email: normalizedEmail,
+            email: email,
             isAdmin: isAdmin,
             plan: plan,
             usage: 0,
@@ -83,18 +83,15 @@ function App() {
 
     } else if (credentials.email && credentials.password) {
         const { email, password } = credentials;
-        const normalizedEmail = email.toLowerCase();
-        const isAdmin = normalizedEmail === 'admin@corp.com' || normalizedEmail === ADMIN_EMAIL;
+        const isAdmin = email === 'admin@corp.com' || email === ADMIN_EMAIL;
         const plan = isAdmin ? 'Biz' : 'Free';
         const expirationDate = new Date();
         expirationDate.setMonth(expirationDate.getMonth() + 1);
-        
-        const userId = 'form_' + normalizedEmail.replace(/@.*/, '');
 
         userToSet = {
-            id: userId,
-            name: normalizedEmail.split('@')[0],
-            email: normalizedEmail,
+            id: 'form_' + email.replace(/@.*/, ''),
+            name: email.split('@')[0],
+            email: email,
             password: password,
             isAdmin: isAdmin,
             plan: plan,
@@ -103,13 +100,6 @@ function App() {
             apiKeyGemini: '',
             planExpirationDate: (plan !== 'Free') ? expirationDate.toISOString().split('T')[0] : undefined,
         };
-
-        const storedKeys = localStorage.getItem(`user_api_keys_${userId}`);
-        if (storedKeys) {
-            const { apiKeyYoutube, apiKeyGemini } = JSON.parse(storedKeys);
-            if(apiKeyYoutube) userToSet.apiKeyYoutube = apiKeyYoutube;
-            if(apiKeyGemini) userToSet.apiKeyGemini = apiKeyGemini;
-        }
     }
     
     if (userToSet) {
@@ -123,8 +113,7 @@ function App() {
           if (!prevUser) return null;
           const newUser = { ...prevUser, ...updatedUser };
 
-          // Persist API keys for all user types (Google and Form)
-          if (newUser.id && (newUser.id.startsWith('gu_') || newUser.id.startsWith('form_'))) {
+          if (newUser.id.startsWith('gu_')) {
               const keysToStore = {
                   apiKeyYoutube: newUser.apiKeyYoutube,
                   apiKeyGemini: newUser.apiKeyGemini,
@@ -170,7 +159,7 @@ function App() {
                             onUpdateAppSettings={handleUpdateAppSettings} 
                         />;
             case 'account':
-                return <AccountSettings user={user} appSettings={appSettings} onNavigate={navigateTo} onUpdateUser={handleUpdateUser} />;
+                return <AccountSettings user={user} onNavigate={navigateTo} onUpdateUser={handleUpdateUser} />;
             default:
                 setView('dashboard');
                 return <Dashboard 
@@ -185,14 +174,14 @@ function App() {
     } else {
         switch (view) {
             case 'landing':
-                return <LandingPage appSettings={appSettings} onStart={() => setView('login')} />;
+                return <LandingPage onStart={() => setView('login')} />;
             case 'login':
                 return <Login onLogin={handleLogin} onNavigate={navigateTo} />;
             case 'register':
                 return <Registration onRegister={() => handleLogin({email: 'new@user.com', password: 'password'})} onNavigate={navigateTo} />;
             default:
                 setView('landing');
-                return <LandingPage appSettings={appSettings} onStart={() => setView('login')} />;
+                return <LandingPage onStart={() => setView('login')} />;
         }
     }
   }

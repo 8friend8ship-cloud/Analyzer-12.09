@@ -1,10 +1,7 @@
-
 import React, { useState } from 'react';
-import type { AppSettings } from '../types';
 
 interface LandingPageProps {
   onStart: () => void;
-  appSettings: AppSettings;
 }
 
 // Inline SVG icons to remove external dependencies
@@ -21,10 +18,9 @@ const ZapIcon = () => <svg className="text-white w-8 h-8" xmlns="http://www.w3.o
 const FeatureBarChart2Icon = () => <svg className="text-white w-8 h-8" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>;
 
 
-export default function LandingPage({ onStart, appSettings }: LandingPageProps) {
+export default function LandingPage({ onStart }: LandingPageProps) {
   const [isHovered, setIsHovered] = useState(false);
   const APP_URL = "https://analyzer-12-09-42793942510.us-west1.run.app";
-  const { free: freePlan, pro: proPlan, biz: bizPlan } = appSettings.plans;
 
   return (
     <div className="min-h-screen bg-[#0F1117] text-white overflow-x-hidden font-sans selection:bg-blue-500 selection:text-white">
@@ -67,7 +63,7 @@ export default function LandingPage({ onStart, appSettings }: LandingPageProps) 
             Google 계정으로 무료 시작
             <ArrowRightIcon className={`w-5 h-5 transition-transform duration-300 ${isHovered ? 'translate-x-1' : ''}`} />
           </button>
-          <p className="text-sm text-gray-500 mt-6">신용카드 필요 없음 • 월 {freePlan.analyses}회 무료 분석 제공</p>
+          <p className="text-sm text-gray-500 mt-6">신용카드 필요 없음 • 월 30회 무료 분석 제공</p>
         </div>
       </section>
 
@@ -143,7 +139,7 @@ export default function LandingPage({ onStart, appSettings }: LandingPageProps) 
               <h3 className="text-2xl font-bold mb-4">압도적 가성비</h3>
               <p className="text-gray-400 leading-relaxed text-lg">
                 비싼 서버 비용을 기술적으로 없앴습니다. 
-                <span className="text-white font-semibold"> 월 {proPlan.price.toLocaleString()}원</span>으로 
+                <span className="text-white font-semibold"> 월 19,000원</span>으로 
                 나만의 전담 데이터 분석팀을 고용하세요.
               </p>
             </div>
@@ -170,7 +166,7 @@ export default function LandingPage({ onStart, appSettings }: LandingPageProps) 
                   <td className="p-6 font-medium text-gray-300">월 요금</td>
                   <td className="p-6 text-gray-500 line-through hidden md:table-cell">50,000원+</td>
                   <td className="p-6 text-gray-500 line-through hidden md:table-cell">38,500원+</td>
-                  <td className="p-6 text-2xl font-bold text-white bg-blue-500/5 border-x border-blue-500/20">{proPlan.price.toLocaleString()}원</td>
+                  <td className="p-6 text-2xl font-bold text-white bg-blue-500/5 border-x border-blue-500/20">19,000원</td>
                 </tr>
                 <tr>
                   <td className="p-6 font-medium text-gray-300">데이터 방식</td>
@@ -199,11 +195,12 @@ export default function LandingPage({ onStart, appSettings }: LandingPageProps) 
           
           <div className="grid md:grid-cols-3 gap-8 items-start">
             <div className="p-8 rounded-3xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors">
-              <h3 className="text-xl font-bold mb-2">{freePlan.name}</h3>
-              <div className="text-4xl font-bold mb-4">₩{freePlan.price.toLocaleString()}<span className="text-lg text-gray-400 font-normal">/월</span></div>
-              <p className="text-gray-400 mb-8 text-sm h-10">{freePlan.description}</p>
+              <h3 className="text-xl font-bold mb-2">Free</h3>
+              <div className="text-4xl font-bold mb-4">₩0<span className="text-lg text-gray-400 font-normal">/월</span></div>
+              <p className="text-gray-400 mb-8 text-sm h-10">내 채널의 현재 상태를<br/>가볍게 진단해보세요.</p>
               <ul className="space-y-4 mb-8 text-left text-sm text-gray-300">
-                {freePlan.features.map(f => <li key={f} className="flex gap-3"><CheckIcon /> {f}</li>)}
+                <li className="flex gap-3"><CheckIcon /> 월 30회 무료 분석</li>
+                <li className="flex gap-3"><CheckIcon /> 기본 데이터 조회</li>
                 <li className="flex gap-3"><XIcon /> AI 심층 코칭 제외</li>
               </ul>
               <button onClick={onStart} className="w-full py-4 rounded-xl bg-white/10 hover:bg-white/20 transition font-semibold">무료로 시작하기</button>
@@ -213,21 +210,26 @@ export default function LandingPage({ onStart, appSettings }: LandingPageProps) 
               <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-blue-500 text-white px-4 py-1 rounded-full text-sm font-bold tracking-wide shadow-lg">
                 가장 인기 있는 선택
               </div>
-              <h3 className="text-xl font-bold mb-2 text-blue-400">{proPlan.name}</h3>
-              <div className="text-5xl font-bold mb-4">₩{proPlan.price.toLocaleString()}<span className="text-lg text-gray-400 font-normal">/월</span></div>
-              <p className="text-gray-300 mb-8 text-sm h-10">{proPlan.description}</p>
+              <h3 className="text-xl font-bold mb-2 text-blue-400">Pro</h3>
+              <div className="text-5xl font-bold mb-4">₩19,000<span className="text-lg text-gray-400 font-normal">/월</span></div>
+              <p className="text-gray-300 mb-8 text-sm h-10">AI 코치와 함께<br/>채널을 급성장시키세요.</p>
               <ul className="space-y-4 mb-8 text-left text-sm text-gray-200">
-                {proPlan.features.map(f => <li key={f} className="flex gap-3"><ProCheckIcon /> <strong>{f}</strong></li>)}
+                <li className="flex gap-3"><ProCheckIcon /> <strong>무제한</strong> 분석</li>
+                <li className="flex gap-3"><ProCheckIcon /> <strong>AI 심층 코칭 (Gemini)</strong></li>
+                <li className="flex gap-3"><ProCheckIcon /> 채널 비교 분석</li>
+                <li className="flex gap-3"><ProCheckIcon /> 성장 전략 리포트</li>
               </ul>
               <button onClick={onStart} className="w-full py-4 rounded-xl bg-blue-500 hover:bg-blue-600 transition font-bold text-white shadow-lg shadow-blue-500/30">Pro 시작하기</button>
             </div>
 
             <div className="p-8 rounded-3xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors">
-              <h3 className="text-xl font-bold mb-2">{bizPlan.name}</h3>
-              <div className="text-4xl font-bold mb-4">₩{bizPlan.price.toLocaleString()}<span className="text-lg text-gray-400 font-normal">/월</span></div>
-              <p className="text-gray-400 mb-8 text-sm h-10">{bizPlan.description}</p>
+              <h3 className="text-xl font-bold mb-2">Biz</h3>
+              <div className="text-4xl font-bold mb-4">₩29,000<span className="text-lg text-gray-400 font-normal">/월</span></div>
+              <p className="text-gray-400 mb-8 text-sm h-10">데이터 기반의<br/>치밀한 전략이 필요할 때.</p>
               <ul className="space-y-4 mb-8 text-left text-sm text-gray-300">
-                {bizPlan.features.map(f => <li key={f} className="flex gap-3"><BizCheckIcon /> {f}</li>)}
+                <li className="flex gap-3"><BizCheckIcon /> <strong>Pro 기능 전체 포함</strong></li>
+                <li className="flex gap-3"><BizCheckIcon /> 상세 시청자 분석</li>
+                <li className="flex gap-3"><BizCheckIcon /> 우선 고객 지원</li>
               </ul>
               <button onClick={onStart} className="w-full py-4 rounded-xl bg-white/10 hover:bg-white/20 transition font-semibold">Biz 시작하기</button>
             </div>
