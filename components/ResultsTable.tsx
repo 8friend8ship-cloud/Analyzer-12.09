@@ -132,11 +132,7 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onShowChannelDetail
                                                      {countryCode && (
                                                         <span className="flex-shrink-0 text-xs flex items-center gap-1.5 bg-gray-700/50 px-1.5 py-0.5 rounded" title={COUNTRY_OPTIONS.find(c => c.value === countryCode)?.name || countryCode}>
                                                             <span className="font-semibold text-gray-300">{countryCode}</span>
-                                                            {countryCode === 'WW' ? (
-                                                                <span role="img" aria-label="Worldwide">🌍</span>
-                                                            ) : (
-                                                                <img src={`https://flagcdn.com/w20/${countryCode.toLowerCase()}.png`} alt={countryCode} className="w-4 h-auto" />
-                                                            )}
+                                                            <img src={`https://flagcdn.com/w20/${countryCode.toLowerCase()}.png`} alt={countryCode} className="w-4 h-auto" />
                                                         </span>
                                                     )}
                                                     <button onClick={() => onShowChannelDetail(video.channelId)} className="text-xs text-gray-400 truncate hover:text-white transition-colors">{video.channelTitle}</button>
@@ -189,11 +185,7 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onShowChannelDetail
                                     {countryCode && (
                                         <span className="flex-shrink-0 text-xs flex items-center gap-1.5 bg-gray-700/50 px-1.5 py-0.5 rounded" title={COUNTRY_OPTIONS.find(c => c.value === countryCode)?.name || countryCode}>
                                             <span className="font-semibold text-gray-300">{countryCode}</span>
-                                            {countryCode === 'WW' ? (
-                                                <span role="img" aria-label="Worldwide">🌍</span>
-                                            ) : (
-                                                <img src={`https://flagcdn.com/w20/${countryCode.toLowerCase()}.png`} alt={countryCode} className="w-4 h-auto" />
-                                            )}
+                                            <img src={`https://flagcdn.com/w20/${countryCode.toLowerCase()}.png`} alt={countryCode} className="w-4 h-auto" />
                                         </span>
                                     )}
                                     <button onClick={() => onShowChannelDetail(video.channelId)} className="text-xs text-gray-400 truncate hover:text-white transition-colors">{video.channelTitle}</button>

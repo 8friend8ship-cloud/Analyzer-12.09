@@ -1,6 +1,5 @@
 
 
-
 import type { VideoData, AnalysisMode, FilterState, ChannelDetails, ChannelAnalysisData, ChannelVideo, FormatStats, TrendPoint, PerformanceTrendData, VideoComment, ChannelRankingData, VideoRankingData, AudienceProfile, VideoDetailData, CommentInsights, MyChannelAnalyticsData, RetentionDataPoint, BenchmarkComparisonData, SimilarChannelData, AIVideoDeepDiveInsights, SortBy } from '../types';
 import { getAIChannelComprehensiveAnalysis, getAICommentInsights, getAISimilarChannels, getAIVideoDeepDiveInsights, getAIChannelDashboardInsights } from './geminiService';
 import { getFromCache, setInCache } from './cacheService';
@@ -323,7 +322,7 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
                 channelsData.items.forEach((c: any) => {
                     channelMap.set(c.id, {
                         subscribers: parseInt(c.statistics?.subscriberCount || '0'),
-                        country: c.snippet?.country || '' // Store country
+                        country: c.snippet?.country || '' // **BLACK SCREEN FIX**: Ensure country is always a string
                     });
                 });
             }
@@ -342,7 +341,7 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
         const channelId = item.snippet.channelId;
         const channelInfo = channelMap.get(channelId);
         const subscribers = channelInfo?.subscribers || 0;
-        const channelCountry = channelInfo?.country;
+        const channelCountry = channelInfo?.country || ''; // **BLACK SCREEN FIX**: Ensure country is always a string
         
         const revenue = calculateEstimatedRevenue(
             views, 
@@ -673,7 +672,7 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
             const rankedChannels = channelsDataItems.map((item: any) => {
                 const views = parseInt(item.statistics?.viewCount || '0');
                 const subscriberCount = parseInt(item.statistics?.subscriberCount || '0');
-                const channelCountry = item.snippet?.country || filters.country;
+                const channelCountry = item.snippet?.country || '';
                 const revenue = calculateEstimatedRevenue(views, "PT5M", "22", channelCountry, subscriberCount); 
 
                 return {
@@ -689,7 +688,7 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
                     rankChange: 0, 
                     estimatedTotalRevenue: revenue, 
                     estimatedMonthlyRevenue: revenue * 0.05,
-                    channelCountry: item.snippet?.country,
+                    channelCountry: item.snippet?.country || '', // **BLACK SCREEN FIX**
                     description: item.snippet?.description
                 };
             });

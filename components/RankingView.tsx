@@ -359,11 +359,7 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                                                         {channelCountry && (
                                                             <span className="flex-shrink-0 flex items-center gap-1.5 bg-gray-700/50 px-1.5 py-0.5 rounded" title={COUNTRY_OPTIONS.find(c => c.value === channelCountry)?.name || channelCountry}>
                                                                 <span className="font-semibold text-gray-300">{channelCountry}</span>
-                                                                {channelCountry === 'WW' ? (
-                                                                    <span role="img" aria-label="Worldwide">🌍</span>
-                                                                ) : (
-                                                                    <img src={`https://flagcdn.com/w20/${channelCountry.toLowerCase()}.png`} alt={channelCountry} className="w-4 h-auto" />
-                                                                )}
+                                                                <img src={`https://flagcdn.com/w20/${channelCountry.toLowerCase()}.png`} alt={channelCountry} className="w-4 h-auto" />
                                                             </span>
                                                         )}
                                                         <span>{(item as ChannelRankingData).channelHandle || ''}</span>
@@ -388,11 +384,7 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                                                         {channelCountry && (
                                                             <span className="flex-shrink-0 flex items-center gap-1.5 bg-gray-700/50 px-1.5 py-0.5 rounded" title={COUNTRY_OPTIONS.find(c => c.value === channelCountry)?.name || channelCountry}>
                                                                 <span className="font-semibold text-gray-300">{channelCountry}</span>
-                                                                {channelCountry === 'WW' ? (
-                                                                    <span role="img" aria-label="Worldwide">🌍</span>
-                                                                ) : (
-                                                                    <img src={`https://flagcdn.com/w20/${channelCountry.toLowerCase()}.png`} alt={channelCountry} className="w-4 h-auto" />
-                                                                )}
+                                                                <img src={`https://flagcdn.com/w20/${channelCountry.toLowerCase()}.png`} alt={channelCountry} className="w-4 h-auto" />
                                                             </span>
                                                         )}
                                                         <button onClick={() => onShowChannelDetail((item as VideoRankingData).channelId)} className="hover:text-white transition-colors truncate">{(item as VideoRankingData).channelName}</button>
@@ -486,11 +478,7 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                                             {channelCountry && (
                                                 <span className="flex-shrink-0 flex items-center gap-1.5 bg-gray-700/50 px-1.5 py-0.5 rounded" title={COUNTRY_OPTIONS.find(c => c.value === channelCountry)?.name || channelCountry}>
                                                     <span className="font-semibold text-gray-300">{channelCountry}</span>
-                                                    {channelCountry === 'WW' ? (
-                                                        <span role="img" aria-label="Worldwide">🌍</span>
-                                                    ) : (
-                                                        <img src={`https://flagcdn.com/w20/${channelCountry.toLowerCase()}.png`} alt={channelCountry} className="w-4 h-auto" />
-                                                    )}
+                                                    <img src={`https://flagcdn.com/w20/${channelCountry.toLowerCase()}.png`} alt={channelCountry} className="w-4 h-auto" />
                                                 </span>
                                             )}
                                             <span>{!isChannel ? (item as VideoRankingData).channelHandle || (item as VideoRankingData).channelName : ((item as ChannelRankingData).channelHandle || '')}</span>
