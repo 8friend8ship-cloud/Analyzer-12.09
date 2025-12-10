@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import ApiKeyModal from './ApiKeyModal';
 import EditUserModal from './EditUserModal';
 // FIX: Centralized types in types.ts
@@ -27,9 +27,37 @@ interface UserForModal {
   plan: string;
 }
 
+const PlanPreviewCard: React.FC<{ plan: Plan, isRecommended?: boolean }> = ({ plan, isRecommended = false }) => (
+    <div className={`relative rounded-xl border p-6 text-center h-full flex flex-col ${isRecommended ? 'border-blue-500 bg-gray-800/50' : 'border-gray-700 bg-gray-800/60'}`}>
+        {isRecommended && <div className="absolute top-0 right-6 -mt-3 inline-block rounded-full bg-blue-500 px-4 py-1 text-xs font-semibold uppercase tracking-wider text-white">추천</div>}
+        <h3 className="text-2xl font-semibold">{plan.name}</h3>
+        <p className="mt-2 text-gray-400 text-sm flex-grow h-10">{plan.description}</p>
+        <div className="mt-6">
+            <span className="text-4xl font-bold">₩{plan.price.toLocaleString()}</span>
+            <span className="text-base font-medium text-gray-400">/월</span>
+        </div>
+        <ul className="mt-6 space-y-3 text-left text-sm">
+            {plan.features.map((feature: string, index: number) => (
+                <li key={index} className="flex items-start">
+                    <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                    <span className="ml-3 text-gray-300">{feature}</span>
+                </li>
+            ))}
+        </ul>
+    </div>
+);
+
+
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpdateSettings }) => {
   // User management state remains local as it's a mock feature for now
   const [users, setUsers] = useState(initialUsers);
+
+  // Local state for settings to enable "save" functionality
+  const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
+
+  useEffect(() => {
+    setLocalSettings(settings);
+  }, [settings]);
   
   // Local state for modal visibility and temporary data
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
@@ -40,27 +68,37 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Handlers now update the parent state via onUpdateSettings prop
-  const handlePlanChange = (planKey: 'pro' | 'biz', field: 'analyses' | 'price', value: string) => {
+  // Handlers now update local state. The save button will commit to parent.
+  const handlePlanChange = (planKey: 'free' | 'pro' | 'biz', field: 'analyses' | 'price', value: string) => {
     const numericValue = parseInt(value, 10);
     if (!isNaN(numericValue) && numericValue >= 0) {
-      const updatedPlans = {
-        ...settings.plans,
-        [planKey]: { ...settings.plans[planKey], [field]: numericValue }
-      };
-      onUpdateSettings({ plans: updatedPlans });
+      setLocalSettings(prev => {
+          const newPlans = { ...prev.plans };
+          newPlans[planKey] = { ...newPlans[planKey], [field]: numericValue };
+          return { ...prev, plans: newPlans };
+      });
     }
   };
 
-  const handleFreePlanLimitChange = (value: string) => {
-    const numericValue = parseInt(value, 10);
-     if (!isNaN(numericValue) && numericValue >= 0) {
-        onUpdateSettings({ freePlanLimit: numericValue });
-     }
+  const handleTextChange = (planKey: 'free' | 'pro' | 'biz', field: 'description', value: string) => {
+      setLocalSettings(prev => {
+          const newPlans = { ...prev.plans };
+          newPlans[planKey] = { ...newPlans[planKey], [field]: value };
+          return { ...prev, plans: newPlans };
+      });
+  };
+
+  const handleFeaturesChange = (planKey: 'free' | 'pro' | 'biz', value: string) => {
+      const featuresArray = value.split('\n').map(f => f.trim()).filter(f => f);
+      setLocalSettings(prev => {
+          const newPlans = { ...prev.plans };
+          newPlans[planKey] = { ...newPlans[planKey], features: featuresArray };
+          return { ...prev, plans: newPlans };
+      });
   };
 
   const handleSaveSettings = (settingName: string) => {
-      // Data is already saved on change, this button is for user feedback
+      onUpdateSettings({ plans: localSettings.plans });
       alert(`${settingName} 설정이 저장되었습니다.`);
   };
 
@@ -70,6 +108,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
   };
 
   const handleSaveApiKey = (key: string, value: string) => {
+    // This can still update directly as it's a separate concern from plans
     const updatedApiKeys = {
         ...settings.apiKeys,
         [key]: value
@@ -91,7 +130,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
   };
   
   const handleExportSettings = () => {
-    // Export settings from props
+    // Export settings from props (saved state)
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(settings, null, 2));
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute("href", dataStr);
@@ -119,10 +158,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
         
         // Construct a partial settings object to update
         const settingsToUpdate: Partial<AppSettings> = {};
-        if (typeof importedSettings.freePlanLimit === 'number') {
-            settingsToUpdate.freePlanLimit = importedSettings.freePlanLimit;
-        }
-        if (importedSettings.plans?.pro && importedSettings.plans?.biz) {
+        if (importedSettings.plans?.free && importedSettings.plans?.pro && importedSettings.plans?.biz) {
             settingsToUpdate.plans = importedSettings.plans;
         }
         if (importedSettings.apiKeys) {
@@ -154,10 +190,48 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
   
 
   const apiConfigs = [
-    { key: 'youtube' as const, name: 'YouTube Data API v3', description: '채널 정보 및 비디오 데이터 수집에 사용됩니다.' },
-    { key: 'analytics' as const, name: 'YouTube Analytics API', description: '채널의 심층적인 시청자 데이터 분석에 사용됩니다.' },
-    { key: 'reporting' as const, name: 'YouTube Reporting API', description: '대규모 데이터 보고서 및 광고 수익 분석에 사용됩니다.' },
-    { key: 'gemini' as const, name: 'Gemini API', description: 'AI 기능(연관 키워드, AI 분석)에 사용됩니다.' },
+    { 
+      key: 'youtube' as const, 
+      name: 'YouTube Data API v3', 
+      description: '채널 정보 및 비디오 데이터 수집에 사용됩니다.',
+      instructions: {
+        link: 'https://console.cloud.google.com/apis/library/youtube.googleapis.com',
+        steps: [
+            'Google Cloud Console로 이동하여 프로젝트를 선택/생성합니다.',
+            'YouTube Data API v3를 "사용 설정"합니다.',
+            '좌측 메뉴에서 "사용자 인증 정보"로 이동합니다.',
+            '"사용자 인증 정보 만들기" > "API 키"를 선택하여 키를 생성합니다.',
+            '생성된 키를 복사하여 여기에 붙여넣습니다.'
+        ]
+      }
+    },
+    { 
+      key: 'gemini' as const, 
+      name: 'Gemini API', 
+      description: 'AI 기능(연관 키워드, AI 분석)에 사용됩니다.',
+      instructions: {
+        link: 'https://aistudio.google.com/app/apikey',
+        steps: [
+            'Google AI Studio로 이동하여 로그인합니다.',
+            '"Get API key"를 클릭합니다.',
+            '"Create API key in new project"를 선택하여 키를 생성합니다.',
+            '생성된 키를 복사하여 여기에 붙여넣습니다.'
+        ]
+      }
+    },
+    { 
+      key: 'analytics' as const, 
+      name: 'YouTube Analytics API', 
+      description: '채널의 심층적인 시청자 데이터 분석에 사용됩니다.',
+      instructions: {
+        link: 'https://console.cloud.google.com/apis/library/youtubeanalytics.googleapis.com',
+        steps: [
+            'YouTube Data API와 동일한 Google Cloud 프로젝트를 사용하세요.',
+            'YouTube Analytics API를 "사용 설정"합니다.',
+            '이 API는 OAuth 2.0 인증이 필요하며, 현재 앱에서는 제한적으로 사용됩니다.'
+        ]
+      }
+    },
   ];
 
   return (
@@ -173,40 +247,44 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
         {/* Left Column */}
         <div className="space-y-6">
           <div className="bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
-            <h2 className="text-xl font-semibold mb-4">앱 초기 설정</h2>
-            <div>
-              <label htmlFor="free-limit" className="block text-sm font-medium text-gray-400">무료 플랜 월간 사용량 제한</label>
-              <div className="mt-2 flex items-center gap-3">
-                <input type="number" id="free-limit" value={settings.freePlanLimit} onChange={(e) => handleFreePlanLimitChange(e.target.value)} className="block w-full max-w-xs bg-gray-700 border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2" />
-                <button onClick={() => handleSaveSettings('무료 플랜')} className="px-4 py-2 text-sm font-semibold rounded-md bg-blue-600 hover:bg-blue-700">설정 저장</button>
-              </div>
-              <p className="mt-2 text-xs text-gray-500">새로 가입하는 'Free' 플랜 사용자에게 적용되는 월간 분석 제한 횟수입니다.</p>
-            </div>
-          </div>
-          
-           {/* Pricing Plan Management */}
-          <div className="bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
             <h2 className="text-xl font-semibold mb-4">요금제 관리</h2>
-            <div className="space-y-4">
-              {/* FIX: Explicitly type the destructured `plan` object as `Plan` to resolve properties being inferred as `unknown`. */}
-              {Object.entries(settings.plans).map(([key, plan]: [string, Plan]) => (
+            <div className="space-y-6">
+              {Object.entries(localSettings.plans).map(([key, plan]: [string, Plan]) => (
                 <div key={key}>
                   <h3 className="font-semibold text-lg text-blue-400">{plan.name} Plan</h3>
                   <div className="grid grid-cols-2 gap-3 mt-2">
                     <div>
                       <label htmlFor={`${key}-analyses`} className="block text-sm font-medium text-gray-400">월 분석 횟수</label>
-                      <input type="number" id={`${key}-analyses`} value={plan.analyses} onChange={e => handlePlanChange(key as 'pro' | 'biz', 'analyses', e.target.value)} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2"/>
+                      <input type="number" id={`${key}-analyses`} value={plan.analyses} onChange={e => handlePlanChange(key as 'free' | 'pro' | 'biz', 'analyses', e.target.value)} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2"/>
                     </div>
                      <div>
                       <label htmlFor={`${key}-price`} className="block text-sm font-medium text-gray-400">가격 (원)</label>
-                      <input type="number" id={`${key}-price`} value={plan.price} onChange={e => handlePlanChange(key as 'pro' | 'biz', 'price', e.target.value)} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2"/>
+                      <input type="number" id={`${key}-price`} value={plan.price} onChange={e => handlePlanChange(key as 'free' | 'pro' | 'biz', 'price', e.target.value)} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2"/>
                     </div>
+                  </div>
+                  <div className="mt-3">
+                      <label htmlFor={`${key}-description`} className="block text-sm font-medium text-gray-400">설명</label>
+                      <input type="text" id={`${key}-description`} value={plan.description} onChange={e => handleTextChange(key as 'free'|'pro'|'biz', 'description', e.target.value)} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2"/>
+                  </div>
+                  <div className="mt-3">
+                      <label htmlFor={`${key}-features`} className="block text-sm font-medium text-gray-400">기능 목록 (한 줄에 하나씩)</label>
+                      <textarea id={`${key}-features`} rows={4} value={plan.features.join('\n')} onChange={e => handleFeaturesChange(key as 'free'|'pro'|'biz', e.target.value)} className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-2"/>
                   </div>
                 </div>
               ))}
             </div>
-            <button onClick={() => handleSaveSettings('요금제')} className="mt-4 w-full px-4 py-2 text-sm font-semibold rounded-md bg-green-600 hover:bg-green-700">요금제 변경사항 저장</button>
+            <button onClick={() => handleSaveSettings('요금제')} className="mt-6 w-full px-4 py-2 text-sm font-semibold rounded-md bg-green-600 hover:bg-green-700">요금제 변경사항 저장</button>
           </div>
+
+          <div className="bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
+              <h2 className="text-xl font-semibold mb-4">요금제 미리보기</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <PlanPreviewCard plan={localSettings.plans.free} />
+                  <PlanPreviewCard plan={localSettings.plans.pro} isRecommended={true} />
+                  <PlanPreviewCard plan={localSettings.plans.biz} />
+              </div>
+          </div>
+          
            <div className="bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
             <h2 className="text-xl font-semibold mb-2">설정 및 캐시 관리</h2>
             <p className="text-sm text-gray-400 mb-4">현재 관리자 설정을 파일로 내보내거나, 백업 파일로부터 복원합니다.</p>
@@ -226,31 +304,45 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
 
         {/* Right Column */}
         <div className="space-y-6">
+           <div className="bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
+            <h2 className="text-xl font-semibold mb-2">API 키 관리</h2><p className="text-sm text-gray-400 mb-6">어플리케이션에서 사용하는 외부 API 키를 관리합니다. 키는 안전하게 저장됩니다.</p>
+            <div className="space-y-4">
+                {apiConfigs.map(config => (
+                <div key={config.key} className="bg-gray-900/50 p-4 rounded-md">
+                    <div className="flex justify-between items-start gap-4">
+                    <div>
+                        <h3 className="font-semibold text-white">{config.name}</h3>
+                        <p className="text-xs text-gray-400 mt-1">{config.description}</p>
+                        {settings.apiKeys[config.key] ? (
+                        <p className="text-sm font-semibold text-green-400 mt-2">설정됨</p>
+                        ) : (
+                        <p className="text-sm font-semibold text-yellow-400 mt-2">설정되지 않음</p>
+                        )}
+                    </div>
+                    <button onClick={() => openApiKeyModal(config.key, config.name)} className="px-4 py-2 text-sm font-semibold rounded-md bg-gray-600 hover:bg-gray-500 flex-shrink-0">
+                        {settings.apiKeys[config.key] ? '키 수정' : '키 추가'}
+                    </button>
+                    </div>
+                    {config.instructions && (
+                        <details className="mt-3 text-xs">
+                        <summary className="cursor-pointer text-gray-500 hover:text-gray-300">API 키 발급 방법 보기</summary>
+                        <div className="mt-2 p-3 bg-gray-800 rounded-md space-y-2">
+                            <ol className="list-decimal list-inside space-y-1 text-gray-400">
+                            {config.instructions.steps.map((step, i) => <li key={i}>{step}</li>)}
+                            </ol>
+                            <a href={config.instructions.link} target="_blank" rel="noopener noreferrer" className="inline-block text-blue-400 hover:text-blue-300 font-semibold">
+                            API 키 발급 페이지로 바로가기 &rarr;
+                            </a>
+                        </div>
+                        </details>
+                    )}
+                </div>
+                ))}
+            </div>
+          </div>
           <div className="bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
             <div className="flex justify-between items-center mb-4"><h2 className="text-xl font-semibold">사용자 관리</h2><button className="px-4 py-2 text-sm font-semibold rounded-md bg-gray-600 hover:bg-gray-500">새로고침</button></div>
             <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="text-xs text-gray-400"><tr><th className="p-2">이름</th><th className="p-2">요금제</th><th className="p-2">상태</th><th className="p-2">만료일</th><th className="p-2"></th></tr></thead><tbody className="divide-y divide-gray-700/50">{users.map(user => (<tr key={user.id}><td className="p-2"><div className="font-semibold text-white">{user.name} {user.isAdmin && <span className="text-xs text-yellow-400">(Admin)</span>}</div><div className="text-gray-400">{user.email}</div></td><td className="p-2">{user.plan}</td><td className="p-2">{user.status === 'Active' ? (<span className="px-2 py-1 text-xs font-semibold bg-green-500/30 text-green-300 rounded-full">{user.status}</span>) : (<span className="text-gray-500">{user.status}</span>)}</td><td className="p-2">{user.expires}</td><td className="p-2 text-right"><button onClick={() => openUserModal(user)} className="text-blue-400 hover:text-blue-300">수정</button></td></tr>))}</tbody></table></div>
-          </div>
-        </div>
-        
-        <div className="lg:col-span-2 bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
-          <h2 className="text-xl font-semibold mb-2">API 키 관리</h2><p className="text-sm text-gray-400 mb-6">어플리케이션에서 사용하는 외부 API 키를 관리합니다. 키는 안전하게 저장됩니다.</p>
-          <div className="space-y-4">
-            {apiConfigs.map(config => (
-              <div key={config.key} className="bg-gray-900/50 p-4 rounded-md flex justify-between items-center">
-                <div>
-                  <h3 className="font-semibold text-white">{config.name}</h3>
-                  <p className="text-xs text-gray-400 mt-1">{config.description}</p>
-                  {settings.apiKeys[config.key] ? (
-                     <p className="text-sm font-semibold text-green-400 mt-2">설정됨</p>
-                  ) : (
-                     <p className="text-sm font-semibold text-yellow-400 mt-2">설정되지 않음</p>
-                  )}
-                </div>
-                <button onClick={() => openApiKeyModal(config.key, config.name)} className="px-4 py-2 text-sm font-semibold rounded-md bg-gray-600 hover:bg-gray-500">
-                   {settings.apiKeys[config.key] ? '키 수정' : '키 추가'}
-                </button>
-              </div>
-            ))}
           </div>
         </div>
       </div>

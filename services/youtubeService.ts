@@ -1,8 +1,10 @@
 
 
+
 import type { VideoData, AnalysisMode, FilterState, ChannelDetails, ChannelAnalysisData, ChannelVideo, FormatStats, TrendPoint, PerformanceTrendData, VideoComment, ChannelRankingData, VideoRankingData, AudienceProfile, VideoDetailData, CommentInsights, MyChannelAnalyticsData, RetentionDataPoint, BenchmarkComparisonData, SimilarChannelData, AIVideoDeepDiveInsights, SortBy } from '../types';
 import { getAIChannelComprehensiveAnalysis, getAICommentInsights, getAISimilarChannels, getAIVideoDeepDiveInsights, getAIChannelDashboardInsights } from './geminiService';
-import { getFromCache, setInCache, getDailyCache, setDailyCache } from './cacheService';
+import { getFromCache, setInCache } from './cacheService';
+import { getRankingFromFirestore, setRankingInFirestore } from './firebaseService';
 
 // Mock Data for MyChannelAnalytics
 const MOCK_MY_CHANNEL_DATA: MyChannelAnalyticsData = {
@@ -109,15 +111,9 @@ function parseISO8601Duration(duration: string): number {
 
 /**
  * Calculates estimated revenue based on views, duration, category, and country.
- * 
- * Logic:
- * - Subscribers < 1000: Revenue is 0 (Not Monetized).
- * - Shorts (< 60s): Low RPM ($0.01 - $0.05)
- * - Longform: Base RPM ($1.5 - $3.0) adjusted by Category and Country
  */
 const calculateEstimatedRevenue = (viewCount: number, durationStr: string, categoryId: string, countryCode: string = 'KR', subscriberCount: number = 0): number => {
     // Basic Monetization Threshold: 1000 subscribers.
-    // Note: We cannot check 4000 hours or 10M Shorts views publicly, so this is the best available filter.
     if (subscriberCount < 1000) {
         return 0;
     }
@@ -126,43 +122,29 @@ const calculateEstimatedRevenue = (viewCount: number, durationStr: string, categ
     const isShorts = durationSeconds <= 60;
 
     // Base RPM (Revenue Per 1,000 views) in USD
-    // Shorts are significantly lower.
     let rpm = isShorts ? 0.04 : 2.0;
 
     // Category Multipliers (Approximate Market Rates)
     const categoryMultipliers: Record<string, number> = {
-        '1': 0.9,  // Film & Animation
-        '2': 1.8,  // Autos & Vehicles (High)
-        '10': 0.8, // Music (Low due to licensing/official mvs)
-        '15': 1.2, // Pets & Animals
-        '17': 1.2, // Sports
-        '19': 1.1, // Travel & Events
-        '20': 0.7, // Gaming (Generally lower, though volume is high)
-        '22': 1.0, // People & Blogs (Baseline)
-        '23': 0.9, // Comedy
-        '24': 0.9, // Entertainment
-        '25': 1.5, // News & Politics (Decent)
-        '26': 1.6, // Howto & Style
-        '27': 2.0, // Education (High)
-        '28': 2.5, // Science & Technology (Very High)
-        '29': 1.2, // Nonprofits & Activism
+        '1': 0.9, '2': 1.8, '10': 0.8, '15': 1.2, '17': 1.2, '19': 1.1,
+        '20': 0.7, '22': 1.0, '23': 0.9, '24': 0.9, '25': 1.5, '26': 1.6,
+        '27': 2.0, '28': 2.5, '29': 1.2,
     };
 
     if (categoryId && categoryMultipliers[categoryId]) {
         rpm *= categoryMultipliers[categoryId];
     }
 
-    // Country Multipliers relative to KR (Tier 2 ish)
+    // Country Multipliers
     const countryMultipliers: Record<string, number> = {
-        'US': 3.5, 'AU': 3.5, 'CA': 3.0, 'GB': 2.5, 'DE': 2.5, // Tier 1
-        'KR': 1.0, 'JP': 1.2, 'FR': 1.5, 'IT': 1.2, 'ES': 1.0, // Tier 2
-        'IN': 0.15, 'VN': 0.15, 'ID': 0.15, 'PH': 0.15, 'BR': 0.2, 'RU': 0.2, 'TH': 0.2 // Tier 3
+        'US': 3.5, 'AU': 3.5, 'CA': 3.0, 'GB': 2.5, 'DE': 2.5,
+        'KR': 1.0, 'JP': 1.2, 'FR': 1.5, 'IT': 1.2, 'ES': 1.0,
+        'IN': 0.15, 'VN': 0.15, 'ID': 0.15, 'PH': 0.15, 'BR': 0.2, 'RU': 0.2, 'TH': 0.2
     };
 
     if (countryCode && countryMultipliers[countryCode]) {
         rpm *= countryMultipliers[countryCode];
     } else if (countryCode !== 'KR' && countryCode !== 'WW') {
-        // Fallback for unknown countries (assume Lower Tier 2 / Tier 3 mix)
         rpm *= 0.5;
     }
 
@@ -182,16 +164,15 @@ const filterItemsByExcludedCategories = (items: any[], excludedCategories: any) 
     return items.filter((item: any) => item.snippet && !excludedSet.has(item.snippet.categoryId));
 };
 
-// Helper to filter items based on duration (Manual filtering as API doesn't support it for mostPopular)
+// Helper to filter items based on duration (Manual filtering)
 const filterItemsByDuration = (items: any[], format: 'all' | 'longform' | 'shorts') => {
     if (format === 'all' || !items) return items;
     
     return items.filter((item: any) => {
-        if (!item.contentDetails || !item.contentDetails.duration) return true; // Keep if unknown
+        if (!item.contentDetails || !item.contentDetails.duration) return true;
         const durationMinutes = parseISO8601Duration(item.contentDetails.duration);
         const durationSeconds = durationMinutes * 60;
         
-        // 3분 이하 = Shorts (in this context) / 3분 초과 = Longform
         if (format === 'shorts') {
             return durationSeconds <= 180;
         } else if (format === 'longform') {
@@ -200,8 +181,6 @@ const filterItemsByDuration = (items: any[], format: 'all' | 'longform' | 'short
         return true;
     });
 };
-
-// --- NEW Helper Functions for Statistics ---
 
 const calculateStats = (videos: ChannelVideo[]): FormatStats => {
     if (!videos || videos.length === 0) return { totalVideos: 0, avgViews: 0, avgEngagementRate: 0, avgLikes: 0, avgComments: 0 };
@@ -221,7 +200,6 @@ const calculateStats = (videos: ChannelVideo[]): FormatStats => {
 };
 
 const estimateAudienceProfile = (country: string = 'KR'): AudienceProfile => {
-    // Provide plausible estimated data based on general YouTube demographics for the region
     const isKorea = country === 'KR';
     return {
         summary: "채널의 공개 데이터와 카테고리 트렌드를 기반으로 추정한 시청자 프로필입니다.",
@@ -244,15 +222,13 @@ const estimateAudienceProfile = (country: string = 'KR'): AudienceProfile => {
 
 const extractChannelKeywords = (keywordsStr: string): string[] => {
     if (!keywordsStr) return [];
-    // Regex to handle quoted strings like "funny video" or plain words
     const regex = /"([^"]+)"|(\S+)/g;
     const keywords: string[] = [];
     let match;
     while ((match = regex.exec(keywordsStr)) !== null) {
-        // match[1] is the quoted string (without quotes), match[2] is the unquoted word
         keywords.push(match[1] || match[2]);
     }
-    return keywords.slice(0, 15); // Limit to 15
+    return keywords.slice(0, 15);
 };
 
 const aggregateFrequency = (items: string[][]): { keyword: string, score: number }[] => {
@@ -260,8 +236,8 @@ const aggregateFrequency = (items: string[][]): { keyword: string, score: number
     items.forEach(list => {
         if (!list) return;
         list.forEach(item => {
-            const normalized = item.trim(); // Keep case for display usually, or toLowerCase for aggregation
-            if (normalized.length > 1) { // Ignore single chars
+            const normalized = item.trim();
+            if (normalized.length > 1) {
                 counts.set(normalized, (counts.get(normalized) || 0) + 1);
             }
         });
@@ -271,7 +247,6 @@ const aggregateFrequency = (items: string[][]): { keyword: string, score: number
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10)
         .map(([keyword, count]) => {
-            // Score 0-100 based on relative frequency
             const max = Math.max(...Array.from(counts.values()));
             return {
                 keyword,
@@ -336,19 +311,20 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
     const statsResponse = await fetch(`${BASE_URL}/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${apiKey}`);
     const statsData = await statsResponse.json();
 
-    // To calculate revenue correctly, we need subscriber counts.
-    // Collect channel IDs from the video list.
     const channelIds = [...new Set(statsData.items.map((item: any) => item.snippet.channelId))].join(',');
-    let channelMap = new Map<string, number>();
+    let channelMap = new Map<string, { subscribers: number, country: string }>();
     
     if (channelIds) {
         try {
-            // Batch fetch channel details (limit is 50, same as max search result, so one call usually suffices)
-            const channelsResponse = await fetch(`${BASE_URL}/channels?part=statistics&id=${channelIds}&key=${apiKey}`);
+            // Need 'snippet' part to get country, 'statistics' for subscriber count
+            const channelsResponse = await fetch(`${BASE_URL}/channels?part=statistics,snippet&id=${channelIds}&key=${apiKey}`);
             const channelsData = await channelsResponse.json();
             if (channelsData.items) {
                 channelsData.items.forEach((c: any) => {
-                    channelMap.set(c.id, parseInt(c.statistics.subscriberCount) || 0);
+                    channelMap.set(c.id, {
+                        subscribers: parseInt(c.statistics?.subscriberCount || '0'),
+                        country: c.snippet?.country || '' // Store country
+                    });
                 });
             }
         } catch (e) {
@@ -358,15 +334,16 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
 
     const validItems = statsData.items.filter((item: any) => item.statistics && item.contentDetails);
 
-    return validItems.map((item: any) => {
+    const results = validItems.map((item: any) => {
         const durationMin = parseISO8601Duration(item.contentDetails.duration);
         const views = parseInt(item.statistics.viewCount) || 0;
         const likes = parseInt(item.statistics.likeCount) || 0;
         const comments = parseInt(item.statistics.commentCount) || 0;
         const channelId = item.snippet.channelId;
-        const subscribers = channelMap.get(channelId) || 0;
+        const channelInfo = channelMap.get(channelId);
+        const subscribers = channelInfo?.subscribers || 0;
+        const channelCountry = channelInfo?.country;
         
-        // Calculate dynamic revenue with subscriber threshold check
         const revenue = calculateEstimatedRevenue(
             views, 
             item.contentDetails.duration, 
@@ -389,29 +366,36 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
             commentCount: comments,
             durationMinutes: parseFloat(durationMin.toFixed(2)),
             engagementRate: views > 0 ? ((likes + comments) / views) * 100 : 0,
-            performanceRatio: subscribers > 0 ? views / subscribers : 1.5, // Default if unknown subs
+            performanceRatio: subscribers > 0 ? views / subscribers : 1.5,
             satisfactionScore: views > 0 ? (likes * 5 + comments * 10) / views * 100 : 0,
             cll: 0,
             cul: 0,
             grade: 'B',
             estimatedRevenue: revenue,
-            estimatedMonthlyRevenue: 0
+            estimatedMonthlyRevenue: 0,
+            channelCountry: channelCountry // Added country info
         } as VideoData;
     });
+
+    // Strict filtering for keyword search to prevent country bleeding (e.g., UK videos showing in US search)
+    // Only applies if a specific country is selected (not Worldwide)
+    if (mode === 'keyword' && filters.country && filters.country !== 'WW') {
+        return results.filter((video: VideoData) => video.channelCountry === filters.country);
+    }
+
+    return results;
 };
 
 export const fetchChannelAnalysis = async (channelId: string, apiKey: string): Promise<ChannelAnalysisData> => {
-    // Add brandingSettings to the part parameter to get keywords
     const channelResponse = await fetch(`${BASE_URL}/channels?part=snippet,statistics,contentDetails,brandingSettings&id=${channelId}&key=${apiKey}`);
     const channelJson = await channelResponse.json();
     if (!channelJson.items || channelJson.items.length === 0) throw new Error("Channel not found");
     
     const channelItem = channelJson.items[0];
-    const channelCountry = channelItem.snippet.country || 'KR'; // Default to KR if not present
+    const channelCountry = channelItem.snippet.country || 'KR';
     const uploadsPlaylistId = channelItem.contentDetails.relatedPlaylists.uploads;
-    const subscriberCount = parseInt(channelItem.statistics.subscriberCount);
+    const subscriberCount = parseInt(channelItem.statistics?.subscriberCount || '0');
     
-    // Extract description and channel keywords
     const description = channelItem.snippet.description || "채널 설명이 없습니다.";
     const rawKeywords = channelItem.brandingSettings?.channel?.keywords || "";
     const channelKeywords = extractChannelKeywords(rawKeywords);
@@ -461,7 +445,7 @@ export const fetchChannelAnalysis = async (channelId: string, apiKey: string): P
                 durationMinutes: duration,
                 viewsPerHour: Math.round(views / (Math.max(1, (Date.now() - new Date(v.snippet.publishedAt).getTime()) / (1000 * 60 * 60)))),
                 estimatedRevenue: revenue,
-                tags: v.snippet.tags || [] // Capture tags for analysis
+                tags: v.snippet.tags || []
             };
         });
     }
@@ -511,31 +495,23 @@ export const fetchChannelAnalysis = async (channelId: string, apiKey: string): P
     const longFormStats = calculateStats(longformVideos);
     const audienceProfile = estimateAudienceProfile(channelItem.snippet.country);
 
-    // Estimate Total Revenue based on "Blended RPM" from recent videos
-    const totalChannelViews = parseInt(channelItem.statistics.viewCount);
+    const totalChannelViews = parseInt(channelItem.statistics?.viewCount || '0');
     let estimatedTotalRevenue = 0;
     
     if (subscriberCount >= 1000 && recentTotalViews > 0) {
-        // Calculate average RPM from recent videos
         const blendedRPM = (recentTotalRevenue / recentTotalViews) * 1000;
         estimatedTotalRevenue = Math.round((totalChannelViews / 1000) * blendedRPM);
     } else if (subscriberCount < 1000) {
         estimatedTotalRevenue = 0;
     } else {
-        estimatedTotalRevenue = Math.round((totalChannelViews / 1000) * 1.5); // Conservative default
+        estimatedTotalRevenue = Math.round((totalChannelViews / 1000) * 1.5);
     }
 
-    // --- New Analysis Logic: Use Top 10 Recent Videos ---
-    // Previously used only index 0. Now we take slice(0, 10).
     const recent10Videos = videoList.slice(0, 10);
-    
-    // 1. Analyze popular keywords from titles of recent 10 videos
     const titleWords = recent10Videos.map(v => v.title.split(' '));
     const popularKeywords = aggregateFrequency(titleWords);
-
-    // 2. Analyze tags from recent 10 videos
     const allTags = recent10Videos.map(v => v.tags || []);
-    const aggregatedTags = aggregateFrequency(allTags).map(t => t.keyword); // Just need strings for competitiveness tags
+    const aggregatedTags = aggregateFrequency(allTags).map(t => t.keyword);
 
     return {
         id: channelId,
@@ -544,7 +520,7 @@ export const fetchChannelAnalysis = async (channelId: string, apiKey: string): P
         thumbnailUrl: channelItem.snippet.thumbnails.medium?.url,
         subscriberCount: subscriberCount,
         totalViews: totalChannelViews,
-        totalVideos: parseInt(channelItem.statistics.videoCount),
+        totalVideos: parseInt(channelItem.statistics?.videoCount || '0'),
         publishedAt: channelItem.snippet.publishedAt,
         description: description,
         channelKeywords: channelKeywords,
@@ -578,16 +554,32 @@ export const fetchChannelAnalysis = async (channelId: string, apiKey: string): P
 };
 
 export const fetchRankingData = async (type: 'channels' | 'videos', filters: any, apiKey: string): Promise<(ChannelRankingData | VideoRankingData)[]> => {
-    const cacheKey = `ranking:${type}:${filters.country}:${filters.category}:${filters.limit}:${Array.from(filters.excludedCategories as Set<string>).join('-')}:${filters.videoFormat}`;
-    const cachedData = getDailyCache(cacheKey);
-    if (cachedData) {
-        // Add a small delay to simulate network latency for better UX on cache hits
-        await new Promise(resolve => setTimeout(resolve, 300));
-        return cachedData;
+    // Construct a unique and safe key for Firestore
+    const today = new Date().toISOString().split('T')[0];
+    const safeCategory = filters.category === 'all' ? 'all' : filters.category;
+    const safeCountry = filters.country || 'KR';
+    const safeType = type;
+    const safeFormat = filters.videoFormat || 'all';
+    
+    // Firestore Doc ID format: type_country_category_format_date
+    const firestoreKey = `${safeType}_${safeCountry}_${safeCategory}_${safeFormat}_${today}`;
+
+    // 1. Try to get data from Firestore (The "Library") - Safely
+    try {
+        const cachedData = await getRankingFromFirestore(firestoreKey);
+        if (cachedData) {
+            console.log(`[Ranking] HIT from Firestore for ${firestoreKey}`);
+            // Simulate minimal network latency
+            await new Promise(resolve => setTimeout(resolve, 200));
+            return cachedData;
+        }
+    } catch (e) {
+        console.warn("[Ranking] Firestore check failed, continuing to live API...", e);
     }
 
+    console.log(`[Ranking] MISS/SKIP for ${firestoreKey}, fetching live data...`);
+
     const targetCount = filters.limit || 50;
-    // DEEP SCAN: Increase max pages to scan (10 pages = 500 items) to ensure we get 50 valid items even after filtering
     const MAX_PAGES_TO_SCAN = 10; 
     
     let collectedItems: any[] = [];
@@ -606,18 +598,26 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
         while (collectedItems.length < targetCount && attempt < MAX_PAGES_TO_SCAN) {
             const url = `${baseUrl}${pageToken ? `&pageToken=${pageToken}` : ''}`;
             const response = await fetch(url);
-            if (!response.ok) { // More robust error checking
-                const errorBody = await response.json();
+            if (!response.ok) { 
+                const errorBody = await response.json().catch(() => ({}));
                 console.error("YouTube API Error:", errorBody);
-                throw new Error(`YouTube API request failed with status ${response.status}: ${errorBody.error?.message || 'Unknown error'}`);
+                // Don't crash immediately, try to recover if possible, or just break loop
+                throw new Error(`YouTube API failed: ${response.status}`);
             }
             const data = await response.json();
             
             if (!data.items || data.items.length === 0) break;
 
-            let validItems = data.items;
-             // SAFETY NET: Ensure items have snippet and statistics before filtering
-            validItems = validItems.filter(item => item.snippet && item.statistics && item.contentDetails);
+            // SAFETY NET: Ensure items have necessary parts. Filter out "ghost" videos.
+            let validItems = data.items.filter((item: any) => 
+                item && 
+                item.snippet && 
+                item.statistics && 
+                item.contentDetails && 
+                // Sometimes viewCount is missing on very new or weird videos
+                item.statistics.viewCount !== undefined
+            );
+            
             validItems = filterItemsByExcludedCategories(validItems, filters.excludedCategories);
             validItems = filterItemsByDuration(validItems, filters.videoFormat);
 
@@ -640,7 +640,7 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
             const uniqueChannelIds = new Set<string>();
 
             collectedItems.forEach((item: any) => {
-                const cid = item.snippet.channelId;
+                const cid = item.snippet?.channelId;
                 if (cid) {
                     uniqueChannelIds.add(cid);
                     const vViews = parseInt(item.statistics?.viewCount || '0');
@@ -653,35 +653,44 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
 
             const channelIdsArr = Array.from(uniqueChannelIds).slice(0, targetCount);
             if (channelIdsArr.length === 0) return [];
-
-            const channelsResp = await fetch(`${BASE_URL}/channels?part=snippet,statistics&id=${channelIdsArr.join(',')}&key=${apiKey}`);
-            const channelsData = await channelsResp.json();
             
-            if (!channelsData.items) return [];
-
-            const rankedChannels = channelsData.items.map((item: any) => {
-                 // DEFENSIVE CODING: Ensure statistics object exists before accessing its properties
+            let channelsDataItems: any[] = [];
+            // BATCHING: Fetch channel details in chunks of 50
+            for (let i = 0; i < channelIdsArr.length; i += 50) {
+                const batch = channelIdsArr.slice(i, i + 50);
+                try {
+                    const channelsResp = await fetch(`${BASE_URL}/channels?part=snippet,statistics&id=${batch.join(',')}&key=${apiKey}`);
+                    const channelsData = await channelsResp.json();
+                    if (channelsData.items) {
+                        channelsDataItems = [...channelsDataItems, ...channelsData.items];
+                    }
+                } catch (e) {
+                    console.error("Error fetching batch channels:", e);
+                }
+            }
+            
+            // Map safely with optional chaining
+            const rankedChannels = channelsDataItems.map((item: any) => {
                 const views = parseInt(item.statistics?.viewCount || '0');
                 const subscriberCount = parseInt(item.statistics?.subscriberCount || '0');
-                
-                const channelCountry = item.snippet.country || filters.country;
+                const channelCountry = item.snippet?.country || filters.country;
                 const revenue = calculateEstimatedRevenue(views, "PT5M", "22", channelCountry, subscriberCount); 
 
                 return {
                     id: item.id,
-                    name: item.snippet.title,
-                    channelHandle: item.snippet.customUrl,
-                    thumbnailUrl: item.snippet.thumbnails.medium?.url,
+                    name: item.snippet?.title || 'Unknown Channel',
+                    channelHandle: item.snippet?.customUrl,
+                    thumbnailUrl: item.snippet?.thumbnails?.medium?.url,
                     subscriberCount: subscriberCount,
                     viewsInPeriod: channelTrendStats.get(item.id) || 0, 
                     videoCount: parseInt(item.statistics?.videoCount || '0'),
                     viewCount: views,
-                    rank: 0,
+                    rank: 0, // Will be set after sort
                     rankChange: 0, 
                     estimatedTotalRevenue: revenue, 
                     estimatedMonthlyRevenue: revenue * 0.05,
-                    channelCountry: item.snippet.country,
-                    description: item.snippet.description
+                    channelCountry: item.snippet?.country,
+                    description: item.snippet?.description
                 };
             });
 
@@ -694,32 +703,37 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
         }
 
         if (type === 'videos') {
-            const channelIds = [...new Set(collectedItems.map((item: any) => item.snippet.channelId))];
+            const channelIds = [...new Set(collectedItems.map((item: any) => item.snippet?.channelId).filter(Boolean))];
             let channelMap = new Map<string, { subscribers: number }>();
             
-            // BATCHING: Fetch channel details in chunks of 50 to avoid API errors
             for (let i = 0; i < channelIds.length; i += 50) {
                 const batch = channelIds.slice(i, i + 50);
-                const channelsResponse = await fetch(`${BASE_URL}/channels?part=statistics&id=${batch.join(',')}&key=${apiKey}`);
-                const channelsData = await channelsResponse.json();
-                if (channelsData.items) {
-                    channelsData.items.forEach((c: any) => {
-                        // DEFENSIVE CODING: Handle cases where statistics might be missing for a channel
-                        const subCount = parseInt(c.statistics?.subscriberCount || '0');
-                        channelMap.set(c.id, { subscribers: subCount });
-                    });
-                }
+                try {
+                    const channelsResponse = await fetch(`${BASE_URL}/channels?part=statistics&id=${batch.join(',')}&key=${apiKey}`);
+                    const channelsData = await channelsResponse.json();
+                    if (channelsData.items) {
+                        channelsData.items.forEach((c: any) => {
+                            const subCount = parseInt(c.statistics?.subscriberCount || '0');
+                            channelMap.set(c.id, { subscribers: subCount });
+                        });
+                    }
+                } catch (e) { console.error("Error batching video channels", e); }
             }
 
             finalResult = collectedItems.map((item: any, index: number) => {
-                const views = parseInt(item.statistics.viewCount);
-                const duration = parseISO8601Duration(item.contentDetails.duration);
-                const subscriberCount = channelMap.get(item.snippet.channelId)?.subscribers || 0;
+                // Defensive coding: ensure item parts exist
+                const stats = item.statistics || {};
+                const snippet = item.snippet || {};
+                const content = item.contentDetails || {};
+
+                const views = parseInt(stats.viewCount || '0');
+                const duration = parseISO8601Duration(content.duration);
+                const subscriberCount = channelMap.get(snippet.channelId)?.subscribers || 0;
                 
                 const revenue = calculateEstimatedRevenue(
                     views, 
-                    item.contentDetails.duration, 
-                    item.snippet.categoryId, 
+                    content.duration || 'PT0S', 
+                    snippet.categoryId, 
                     filters.country,
                     subscriberCount
                 );
@@ -727,19 +741,19 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
                 return {
                     id: item.id,
                     rank: index + 1,
-                    name: item.snippet.title,
-                    channelName: item.snippet.channelTitle,
-                    channelId: item.snippet.channelId,
-                    thumbnailUrl: item.snippet.thumbnails.medium?.url,
-                    publishedDate: item.snippet.publishedAt,
+                    name: snippet.title || 'Unknown Video',
+                    channelName: snippet.channelTitle || 'Unknown Channel',
+                    channelId: snippet.channelId,
+                    thumbnailUrl: snippet.thumbnails?.medium?.url || '',
+                    publishedDate: snippet.publishedAt,
                     viewCount: views,
-                    viewsPerHour: Math.round(views / (Math.max(1, (Date.now() - new Date(item.snippet.publishedAt).getTime()) / (1000 * 60 * 60)))),
+                    viewsPerHour: Math.round(views / (Math.max(1, (Date.now() - new Date(snippet.publishedAt || Date.now()).getTime()) / (1000 * 60 * 60)))),
                     rankChange: 0,
                     channelTotalViews: 0,
                     channelSubscriberCount: subscriberCount,
                     estimatedRevenue: revenue,
                     estimatedMonthlyRevenue: 0,
-                    categoryId: item.snippet.categoryId,
+                    categoryId: snippet.categoryId,
                     durationSeconds: Math.floor(duration * 60),
                     isShorts: duration <= 1,
                     channelCountry: filters.country
@@ -747,14 +761,19 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
             });
         }
 
-        setDailyCache(cacheKey, finalResult);
+        // 2. Save the valid data to Firestore (Be the Librarian)
+        if (finalResult.length > 0) {
+            setRankingInFirestore(firestoreKey, finalResult).catch(e => console.warn("Background save failed:", e));
+        }
+
         return finalResult;
 
     } catch (e) {
-        console.error("Error fetching ranking data:", e);
+        console.error("Error fetching ranking data (Global Catch):", e);
         return [];
     }
 };
+
 
 export const fetchVideoComments = async (videoId: string, apiKey: string): Promise<VideoComment[]> => {
     try {
@@ -790,7 +809,7 @@ export const fetchVideoDetails = async (videoId: string, apiKey: string): Promis
         const channelResp = await fetch(`${BASE_URL}/channels?part=statistics,snippet&id=${channelId}&key=${apiKey}`);
         const channelData = await channelResp.json();
         if (channelData.items && channelData.items.length > 0) {
-            channelSubscriberCount = parseInt(channelData.items[0].statistics.subscriberCount);
+            channelSubscriberCount = parseInt(channelData.items[0].statistics?.subscriberCount || '0');
             channelCountry = channelData.items[0].snippet.country || 'KR';
         }
     } catch (e) {
@@ -818,8 +837,6 @@ export const fetchVideoDetails = async (videoId: string, apiKey: string): Promis
         strategicRecommendations: { contentStrategy: "심층 분석을 실행해주세요.", newTopics: [], growthStrategy: "-" }
     };
 
-    // We simply return the data WITHOUT waiting for AI. 
-    // The UI will handle the "Start Analysis" user flow.
     return {
         id: videoId,
         title: item.snippet.title,
@@ -850,7 +867,6 @@ export const analyzeVideoDeeply = async (videoData: VideoDetailData, apiKey: str
     
     if (videoData.comments.length > 0) {
         try {
-            // Increased timeout to 20s for comments
             commentInsights = await withTimeout(
                 getAICommentInsights(videoData.comments),
                 20000, 
@@ -880,7 +896,6 @@ export const analyzeVideoDeeply = async (videoData: VideoDetailData, apiKey: str
 
     let deepDiveInsights = fallbackDeepDive;
     try {
-        // Increased timeout to 60s for deep reasoning
         deepDiveInsights = await withTimeout(
             getAIVideoDeepDiveInsights(prelimVideoData as any),
             60000, 
@@ -894,25 +909,17 @@ export const analyzeVideoDeeply = async (videoData: VideoDetailData, apiKey: str
 };
 
 export const fetchSimilarChannels = async (channelId: string, apiKey: string): Promise<SimilarChannelData[]> => {
-    // 1. Get channel details to understand the topic
     const channelDetails = await fetchChannelAnalysis(channelId, apiKey);
-    
-    // 2. Ask AI for REAL competitor names
-    // OPTIMIZATION: Reduced request count to 3 to speed up the process and save quota
     const aiSuggestions = await getAISimilarChannels(channelDetails);
     
-    // 3. Search YouTube for these channels to get REAL stats (ID, Subs, Videos)
     const promises = aiSuggestions.channels.map(async (suggestion) => {
         try {
-            // Search for the channel by name
             const searchUrl = `${BASE_URL}/search?part=snippet&type=channel&q=${encodeURIComponent(suggestion.name)}&key=${apiKey}&maxResults=1`;
             const searchResp = await fetch(searchUrl);
             const searchData = await searchResp.json();
             
             if (searchData.items && searchData.items.length > 0) {
                 const foundChannelId = searchData.items[0].snippet.channelId;
-                
-                // Get detailed stats for the found channel
                 const statsUrl = `${BASE_URL}/channels?part=snippet,statistics&id=${foundChannelId}&key=${apiKey}`;
                 const statsResp = await fetch(statsUrl);
                 const statsData = await statsResp.json();
@@ -929,7 +936,7 @@ export const fetchSimilarChannels = async (channelId: string, apiKey: string): P
                     };
                 }
             }
-            return null; // Channel not found in API
+            return null;
         } catch (e) {
             console.error(`Failed to resolve similar channel: ${suggestion.name}`, e);
             return null;

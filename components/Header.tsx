@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 // FIX: Centralized types in types.ts
 import type { User } from '../types';
@@ -109,17 +108,20 @@ const Header: React.FC<HeaderProps> = ({ user, planLimit, onLogout, onOpenHelpMo
                         <span className="text-xs font-medium text-gray-400 group-hover:text-white transition-colors hidden lg:block">API Status</span>
                     </button>
 
-                    <div className="hidden md:flex items-center space-x-2">
-                        <div className="px-3 py-1.5 text-sm bg-[#2C2F3B] rounded-lg">
+                    <button 
+                        onClick={() => onNavigate('account')}
+                        className="flex items-center gap-2 sm:gap-3 px-3 py-1.5 rounded-lg bg-[#2C2F3B] hover:bg-[#363a49] transition-colors"
+                        title="계정 설정으로 이동"
+                    >
+                        <div className="text-xs sm:text-sm text-left">
                             <span className="font-semibold text-cyan-400">{user.plan}</span>
-                            {user.plan !== 'Free' && user.planExpirationDate && <span className="text-gray-400 text-xs ml-1.5">(만료: {user.planExpirationDate})</span>}
                         </div>
-
-                        <div className="px-3 py-1.5 text-sm bg-[#2C2F3B] rounded-lg">
-                            <span className="text-gray-400">오늘 사용량: </span>
-                            <span className="font-semibold text-white">{user.usage} / {planLimit === Infinity ? '무제한' : planLimit}</span>
+                        <div className="w-px h-4 bg-gray-600"></div>
+                        <div className="text-xs sm:text-sm text-left">
+                            <span className="text-gray-400 hidden sm:inline">사용량: </span>
+                            <span className="font-semibold text-white">{user.usage}/{planLimit === Infinity ? '∞' : planLimit}</span>
                         </div>
-                    </div>
+                    </button>
                     
                     <button onClick={onOpenHelpModal} className="p-1.5 rounded-full text-gray-400 hover:bg-gray-700/60 transition-colors" title="사용 설명서">
                         <HelpIcon />

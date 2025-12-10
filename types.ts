@@ -22,6 +22,7 @@ export interface VideoData {
   estimatedRevenue: number; // Lifetime revenue
   estimatedMonthlyRevenue: number; // Projected monthly revenue based on current VPH
   aiThumbnailScore?: number;
+  channelCountry?: string; // Added for country flag display
 }
 
 export type AnalysisMode = 'keyword' | 'channel';
@@ -54,6 +55,36 @@ export const YOUTUBE_CATEGORY_OPTIONS = [
     { label: "Comedy (23)", value: "23" },
     { label: "Science & Technology (28)", value: "28" },
     { label: "News & Politics (25)", value: "25" },
+];
+
+export const COUNTRY_OPTIONS = [
+    { label: "WW", name: "전세계", value: "WW" },
+    { label: "KR", name: "대한민국", value: "KR" },
+    { label: "NZ", name: "뉴질랜드", value: "NZ" },
+    { label: "TW", name: "대만", value: "TW" },
+    { label: "DE", name: "독일", value: "DE" },
+    { label: "RU", name: "러시아", value: "RU" },
+    { label: "MY", name: "말레이시아", value: "MY" },
+    { label: "MX", name: "멕시코", value: "MX" },
+    { label: "US", name: "미국", value: "US" },
+    { label: "VN", name: "베트남", value: "VN" },
+    { label: "BN", name: "브루나이", value: "BN" },
+    { label: "SG", name: "싱가포르", value: "SG" },
+    { label: "GB", name: "영국", value: "GB" },
+    { label: "IN", name: "인도", value: "IN" },
+    { label: "ID", name: "인도네시아", value: "ID" },
+    { label: "JP", name: "일본", value: "JP" },
+    { label: "CN", name: "중국", value: "CN" },
+    { label: "CL", name: "칠레", value: "CL" },
+    { label: "CA", name: "캐나다", value: "CA" },
+    { label: "TH", name: "태국", value: "TH" },
+    { label: "PG", name: "파푸아뉴기니", value: "PG" },
+    { label: "PE", name: "페루", value: "PE" },
+    { label: "FR", name: "프랑스", value: "FR" },
+    { label: "PH", name: "필리핀", value: "PH" },
+    { label: "AU", name: "호주", value: "AU" },
+    { label: "HK", name: "홍콩", value: "HK" },
+    { label: "BR", name: "브라질", value: "BR" },
 ];
 
 
@@ -256,6 +287,8 @@ export interface Plan {
     name: string;
     analyses: number;
     price: number;
+    description: string;
+    features: string[];
 }
 
 export interface User {
@@ -279,8 +312,7 @@ export interface AnalyticsConnection {
 }
 
 export interface AppSettings {
-    freePlanLimit: number;
-    plans: Record<'pro' | 'biz', Plan>;
+    plans: Record<'free' | 'pro' | 'biz', Plan>;
     apiKeys: {
         youtube: string;
         analytics: string;

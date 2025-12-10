@@ -1,7 +1,9 @@
 
-import React, { useState, useCallback, useEffect } from 'react';
+
+
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import type { AnalysisMode, FilterState, VideoLength, Period, SortBy, VideoFormat } from '../types';
-import { YOUTUBE_CATEGORY_OPTIONS } from '../types';
+import { YOUTUBE_CATEGORY_OPTIONS, COUNTRY_OPTIONS } from '../types';
 import Button from './common/Button';
 import { translateKeyword, getRelatedKeywords } from '../services/geminiService';
 
@@ -37,35 +39,6 @@ const videoFormatOptions = [
     { label: "3분 이하 (Shorts)", value: 'shorts' },
 ];
 
-const countryOptions = [
-    { label: "전세계", value: "WW" },
-    { label: "대한민국", value: "KR" },
-    { label: "뉴질랜드", value: "NZ" },
-    { label: "대만", value: "TW" },
-    { label: "독일", value: "DE" },
-    { label: "러시아", value: "RU" },
-    { label: "말레이시아", value: "MY" },
-    { label: "멕시코", value: "MX" },
-    { label: "미국", value: "US" },
-    { label: "베트남", value: "VN" },
-    { label: "브루나이", value: "BN" },
-    { label: "싱가포르", value: "SG" },
-    { label: "영국", value: "GB" },
-    { label: "인도", value: "IN" },
-    { label: "인도네시아", value: "ID" },
-    { label: "일본", value: "JP" },
-    { label: "중국", value: "CN" },
-    { label: "칠레", value: "CL" },
-    { label: "캐나다", value: "CA" },
-    { label: "태국", value: "TH" },
-    { label: "파푸아뉴기니", value: "PG" },
-    { label: "페루", value: "PE" },
-    { label: "프랑스", value: "FR" },
-    { label: "필리핀", value: "PH" },
-    { label: "호주", value: "AU" },
-    { label: "홍콩", value: "HK" },
-];
-
 const initialFilterState: FilterState = {
   minViews: 100000,
   videoLength: 'any',
@@ -76,6 +49,56 @@ const initialFilterState: FilterState = {
   country: 'KR',
   category: 'all',
 };
+
+const CountrySelect: React.FC<{ selectedCountry: string; onChange: (value: string) => void; }> = ({ selectedCountry, onChange }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (ref.current && !ref.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [ref]);
+    
+    const selectedOption = COUNTRY_OPTIONS.find(o => o.value === selectedCountry) || COUNTRY_OPTIONS[0];
+
+    return (
+        <div className="relative w-28" ref={ref}>
+            <button type="button" onClick={() => setIsOpen(!isOpen)} className="w-full bg-gray-700 border-gray-600 rounded-md shadow-sm p-1.5 flex items-center justify-between text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <span className="flex items-center gap-2">
+                    {selectedOption.value === 'WW' ? (
+                        <span role="img" aria-label="Worldwide">🌍</span>
+                    ) : (
+                        <img src={`https://flagcdn.com/w20/${selectedOption.value.toLowerCase()}.png`} alt={selectedOption.label} className="w-5 h-auto" />
+                    )}
+                    {selectedOption.label}
+                </span>
+                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            </button>
+
+            {isOpen && (
+                <ul className="absolute z-10 mt-1 w-48 bg-gray-700 border border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto text-xs py-1">
+                    {COUNTRY_OPTIONS.map(opt => (
+                        <li key={opt.value} onClick={() => { onChange(opt.value); setIsOpen(false); }} className="px-3 py-2 flex items-center gap-3 hover:bg-gray-600 cursor-pointer text-gray-200">
+                            {opt.value === 'WW' ? (
+                                <span role="img" aria-label="Worldwide" className="text-lg">🌍</span>
+                            ) : (
+                                <img src={`https://flagcdn.com/w20/${opt.value.toLowerCase()}.png`} alt={opt.label} className="w-5 h-auto flex-shrink-0" />
+                            )}
+                            <span className="font-semibold">{opt.label}</span>
+                            <span className="text-gray-400">{opt.name}</span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+};
+
 
 const FilterBar: React.FC<FilterBarProps> = ({ 
     onAnalyze, 
@@ -198,10 +221,8 @@ const FilterBar: React.FC<FilterBarProps> = ({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
             <h3 className="text-sm font-semibold text-gray-400 mr-2">필터 조건:</h3>
             <div className="flex items-center gap-1.5">
-                <label htmlFor="country" className="text-gray-300">국가:</label>
-                <select id="country" value={filters.country} onChange={e => handleFilterChange('country', e.target.value)} className="bg-gray-700 border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-xs p-1.5">
-                    {countryOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                </select>
+                <label className="text-gray-300">국가:</label>
+                <CountrySelect selectedCountry={filters.country} onChange={(value) => handleFilterChange('country', value)} />
             </div>
             <div className="flex items-center gap-1.5">
                 <label htmlFor="category" className="text-gray-300">카테고리:</label>
