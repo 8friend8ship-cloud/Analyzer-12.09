@@ -187,6 +187,7 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
     const handleCloseCompareModal = () => setIsComparisonModalOpen(false);
     
     const handleTabChange = (tab: ActiveTab) => {
+        setResults([]); // CRITICAL FIX: Clear results immediately to prevent rendering crashes due to mismatched data types
         setActiveTab(tab);
         setSelectedChannels({});
         setVideoFormat('all');
@@ -215,7 +216,7 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
         const fetchData = async () => {
             setIsLoading(true);
             setError(null);
-            setResults([]); 
+            // setResults([]); // We do this in handleTabChange now for better UX, but keeping it here for other filter changes is fine.
 
             const filters = { 
                 limit: limit, 
@@ -223,7 +224,9 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                 category, 
                 metric: 'mostPopular', 
                 excludedCategories,
-                videoFormat
+                videoFormat,
+                // Critical Change: Skip cache if tab is performance/surging to ensure fresh API call
+                skipCache: activeTab === 'performance'
             };
             
             const apiKey = user.isAdmin ? appSettings.apiKeys.youtube : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
@@ -271,7 +274,7 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
     };
     
     const renderResults = () => {
-        if (isLoading) return <div className="flex justify-center items-center pt-20"><Spinner message="일일 마스터 데이터를 불러오는 중입니다..." /></div>;
+        if (isLoading) return <div className="flex justify-center items-center pt-20"><Spinner message={activeTab === 'performance' ? "실시간 급상승 데이터를 분석 중입니다... (API 호출)" : "일일 마스터 데이터를 불러오는 중입니다..."} /></div>;
         if (error) return <div className="text-center text-red-400 p-4 bg-red-900/50 rounded-lg">{error}</div>;
         if (!results || results.length === 0) return <div className="text-center py-20 text-gray-500"><p>결과가 없습니다. 필터를 변경해보세요.</p></div>;
 
@@ -310,7 +313,7 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                 
                     <div className="divide-y divide-gray-700/50">
                         {results.map((item, index) => {
-                            // Safety checks
+                            // Safety checks - Critical for preventing White Screen of Death
                             if (!item) return null;
 
                             const isChannel = 'viewsInPeriod' in item;

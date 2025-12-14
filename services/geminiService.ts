@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type, Chat } from "@google/genai";
+import { GoogleGenAI, Type, Chat, Schema } from "@google/genai";
 import type { VideoData, AIInsights, AnalysisMode, ComparisonInsights, VideoComment, CommentInsights, ChannelAnalysisData, AudienceProfile, VideoDetailData, AIVideoDeepDiveInsights, AIThumbnailInsights, ChannelRankingData, VideoRankingData, MyChannelAnalyticsData } from '../types';
 import { getGeminiApiKey } from './apiKeyService';
 
@@ -401,7 +401,7 @@ export const getAIAdKeywords = async (videoData: VideoData[]): Promise<string[]>
 
 // Combined function to reduce API calls (RPM optimization)
 export const getAIChannelComprehensiveAnalysis = async (
-    channelStats: { name: string; publishedAt: string; subscriberCount: number; totalViews: number; totalVideos: number; },
+    channelStats: { name: string; publishedAt: string; subscriberCount: number; totalViews: number; totalVideos: number; description: string },
     videoSnippets: { title: string; tags: string[] }[],
     knownFirstVideoDate: string | null
 ): Promise<{
@@ -410,34 +410,47 @@ export const getAIChannelComprehensiveAnalysis = async (
 }> => {
     console.log(`Generating comprehensive AI analysis for channel "${channelStats.name}"`);
     
-    // Fallback data in case of error
-    const fallback = {
-        overview: { competitiveness: { categories: ['분석 불가'], tags: ['AI 분석 실패'] }, popularKeywords: [{ keyword: '분석 불가', score: 0 }] },
-        audienceProfile: generateMockAudienceProfile(),
-    };
-
     try {
         const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
         
-        // Optimizing input tokens: only take top 15 videos, remove unnecessary punctuation in tags if needed
-        const videosInput = videoSnippets.slice(0, 15).map(v => `- ${v.title} [${v.tags.slice(0,3).join(',')}]`).join('\n');
+        const videosInput = videoSnippets.slice(0, 15).map(v => `- ${v.title} [${(v.tags || []).slice(0,3).join(',')}]`).join('\n');
 
         const prompt = `
-            Analyze the following YouTube channel data and return a comprehensive report in JSON format.
-            
-            Channel Info:
-            - Name: ${channelStats.name}
-            - Created: ${channelStats.publishedAt}
-            - Subscribers: ${channelStats.subscriberCount}
-            - Views: ${channelStats.totalViews}
-            - Videos: ${channelStats.totalVideos}
+            You are a YouTube Algorithm Specialist. Your task is to INFER the likely audience demographics based on the channel's content, as the YouTube API does not provide this publicly.
 
-            Recent Videos:
+            **Channel Context:**
+            - Name: ${channelStats.name}
+            - Description: ${channelStats.description.slice(0, 200)}...
+            - Subscribers: ${channelStats.subscriberCount}
+
+            **Recent Video Content (Use this to deduce audience):**
             ${videosInput}
 
-            Tasks:
-            1. Overview: Identify 2-3 categories, 5-10 main tags, and 5 popular keywords with score (0-100).
-            2. Audience: Summarize audience, list interests, estimate gender ratio (sum 100), age groups (sum 100), and top countries (sum 100). All text in Korean.
+            **Inference Rules (Apply these logic strictly):**
+            1.  **Gender:**
+                -   Gaming (LoL, Minecraft), Tech, Cars, Sports, Stock Market -> High Male % (e.g., 70-90%)
+                -   Beauty, Vlog, Fashion, Cooking, K-Pop, Idol, Diet -> High Female % (e.g., 60-90%)
+                -   Music, News, Humor, Movie -> Balanced (45-55%)
+            2.  **Age:**
+                -   Minecraft, Roblox, TikTok Trends, Idol -> Young (10s-20s)
+                -   Stocks, Real Estate, Politics, News, Golf -> Older (30s-50s+)
+                -   Trot (Korean Folk), Health info for seniors -> Very Old (50s-60s+)
+                -   Tech, Career, Self-help -> Young Adult (20s-30s)
+            3.  **Country:**
+                -   If content is in Korean -> Korea 90%+
+                -   If content has no words (Mukbang, ASMR) or English titles -> Global mixed.
+
+            **Task:**
+            Generate a JSON response with:
+            1.  **Overview:** 2-3 main categories, 5 main tags, 5 popular keywords with score.
+            2.  **AudienceProfile:** 
+                -   A specific summary in Korean explaining WHO watches this and WHY (e.g., "이 채널은 롤 강의 콘텐츠가 주를 이루므로, 티어 상승을 원하는 10~20대 남성 시청자 비중이 압도적으로 높을 것으로 추정됩니다.").
+                -   5 Specific Interests.
+                -   Estimated Gender Ratio (Male/Female, sum 100).
+                -   Estimated Age Groups (18-24, 25-34, 35-44, 45+, sum 100).
+                -   Estimated Top Countries (sum 100).
+
+            **IMPORTANT:** Do NOT return generic 50/50 data. Be bold in your estimation based on the video topics. ALL text must be in Korean.
         `;
 
         const response = await ai.models.generateContent({
@@ -496,11 +509,15 @@ export const getAIChannelComprehensiveAnalysis = async (
         });
 
         const result = JSON.parse(response.text.trim());
+        if (!result.overview || !result.audienceProfile) throw new Error("Incomplete AI response");
         return result;
 
     } catch (error) {
         console.error("Error calling Gemini API for comprehensive analysis:", error);
-        return fallback;
+        return {
+            overview: { competitiveness: { categories: ['분석 지연'], tags: ['데이터 수집 중'] }, popularKeywords: [] },
+            audienceProfile: generateMockAudienceProfile(),
+        };
     }
 };
 
@@ -802,24 +819,14 @@ export const getAIVideoDeepDiveInsights = async (video: Omit<VideoDetailData, 'd
 
 
 const generateMockAudienceProfile = (): AudienceProfile => ({
-    summary: "AI 분석에 따르면 이 채널의 주요 시청자층은 기술과 생산성 도구에 관심이 많은 20-30대 남성으로 추정됩니다. 최신 IT 트렌드와 소프트웨어 활용법에 대한 콘텐츠가 높은 참여를 유도할 가능성이 높습니다.",
-    interests: ["Productivity Software", "Tech Gadgets", "Web Development", "AI Tools", "Startups"],
-    genderRatio: [
-        { label: '남성', value: 75 },
-        { label: '여성', value: 25 },
-    ],
+    summary: "콘텐츠 내용을 바탕으로 AI가 시청자층을 분석하고 있습니다. 잠시만 기다려주세요.",
+    interests: ["분석 중..."],
+    genderRatio: [{ label: '남성', value: 50 }, { label: '여성', value: 50 }],
     ageGroups: [
-        { label: '18-24', value: 35 },
-        { label: '25-34', value: 45 },
-        { label: '35-44', value: 15 },
-        { label: '기타', value: 5 },
+        { label: '18-24', value: 25 }, { label: '25-34', value: 25 },
+        { label: '35-44', value: 25 }, { label: '45+', value: 25 }
     ],
-    topCountries: [
-        { label: '대한민국', value: 85 },
-        { label: '미국', value: 7 },
-        { label: '일본', value: 3 },
-        { label: '베트남', value: 2 },
-    ]
+    topCountries: [{ label: '대한민국', value: 90 }, { label: '기타', value: 10 }]
 });
 
 export const getAISimilarChannels = async (channelData: ChannelAnalysisData): Promise<{ channels: { name: string; reason: string }[] }> => {
