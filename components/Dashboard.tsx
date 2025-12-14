@@ -63,6 +63,7 @@ interface NavState {
 const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNavigate, onUpdateUser, onUpdateAppSettings }) => {
     const [videos, setVideos] = useState<VideoData[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [loadingMessage, setLoadingMessage] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [isInitial, setIsInitial] = useState(true);
     const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
@@ -85,6 +86,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
     const [query, setQuery] = useState('시니어');
     const [mode, setMode] = useState<AnalysisMode>('keyword');
     const [filters, setFilters] = useState<FilterState>(initialFilterState);
+    const [popularQueries, setPopularQueries] = useState<PopularQuery[]>([]);
 
     const [selectedChannels, setSelectedChannels] = useState<Record<string, { name: string }>>({});
     const [isChatOpen, setIsChatOpen] = useState(false);
@@ -109,6 +111,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
 
     useEffect(() => {
         pruneQueries(); 
+        setPopularQueries(getPopularQueries(5));
 
         const preFetchData = async () => {
             console.log("Pre-fetching data to warm up the cache...");
@@ -190,14 +193,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
     }, []);
 
 
-    const handleAnalysis = useCallback(async (searchQuery: string) => {
+    const handleAnalysis = useCallback(async (searchQuery: string, searchMode: AnalysisMode) => {
         if (user.usage >= planLimit) {
             setIsUpgradeModalOpen(true);
             return;
         }
 
-        logQuery(searchQuery, mode);
+        logQuery(searchQuery, searchMode);
 
+        setLoadingMessage(`AI가 '${searchQuery}'에 대한 데이터를 분석 중입니다...`);
         setIsLoading(true);
         setError(null);
         setVideos([]);
@@ -206,21 +210,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
 
         try {
             if (!searchQuery.trim()) {
-                setError("키워드 또는 채널 URL을 입력해주세요.");
-                setIsLoading(false);
-                return;
+                throw new Error("키워드 또는 채널 URL을 입력해주세요.");
             }
             
             if (!hasAllApiKeys) {
                 const adminError = "API 키가 모두 설정되지 않았습니다. [관리자 대시보드]에서 YouTube 및 Gemini 키를 설정해주세요.";
                 const userError = "API 키가 모두 설정되지 않았습니다. [계정 설정]에서 개인 YouTube 및 Gemini 키를 추가해주세요.";
-                setError(user.isAdmin ? adminError : userError);
-                setIsLoading(false);
-                return;
+                throw new Error(user.isAdmin ? adminError : userError);
             }
             
             const apiKey = user.isAdmin ? appSettings.apiKeys.youtube : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
-            const videoData = await fetchYouTubeData(mode, searchQuery, filters, apiKey!);
+            const videoData = await fetchYouTubeData(searchMode, searchQuery, filters, apiKey!);
             setVideos(videoData);
             onUpdateUser({ usage: user.usage + 1 }); 
         } catch (err) {
@@ -230,8 +230,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
         } finally {
             setIsLoading(false);
         }
-    }, [user, onUpdateUser, appSettings, mode, filters, hasAllApiKeys, planLimit]);
+    }, [user, onUpdateUser, appSettings, filters, hasAllApiKeys, planLimit]);
     
+    const handlePopularQuerySelect = (selectedQuery: string, selectedMode: AnalysisMode) => {
+        setQuery(selectedQuery);
+        setMode(selectedMode);
+        handleAnalysis(selectedQuery, selectedMode);
+    };
+
     const sortedVideos = useMemo(() => {
         if (videos.length === 0) return [];
         
@@ -345,13 +351,35 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
         }
     }, [handleShowChannelDetail, user, appSettings, navigateTo]);
 
-    const WelcomeMessage = () => (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-center text-gray-500 p-8">
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-24 h-24 mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
-        <h2 className="text-2xl font-bold text-gray-300">데이터 분석을 시작하세요</h2>
-        <p className="mt-2 max-w-md">상단 필터 바에서 검색어와 필터를 설정한 후 '검색' 버튼을 클릭하세요.</p>
-      </div>
-    );
+    const QuickStartView: React.FC<{
+      onQuerySelect: (query: string, mode: AnalysisMode) => void;
+    }> = ({ onQuerySelect }) => {
+      return (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 animate-fade-in">
+              <div className="max-w-2xl w-full bg-gray-800/50 p-8 rounded-2xl border border-gray-700/50">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 mb-4 mx-auto text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                  <h2 className="text-3xl font-bold text-white">분석을 시작하세요</h2>
+                  <p className="mt-2 text-gray-400 mb-6">위 검색창에 키워드나 채널을 입력하거나, 인기 검색어를 선택하세요.</p>
+                  {popularQueries.length > 0 && (
+                      <div>
+                          <h3 className="text-sm font-semibold text-gray-500 mb-3">인기 검색어</h3>
+                          <div className="flex flex-wrap justify-center gap-2">
+                              {popularQueries.map(pq => (
+                                  <button
+                                      key={pq.query}
+                                      onClick={() => onQuerySelect(pq.query, pq.mode)}
+                                      className="px-4 py-2 text-sm font-medium bg-gray-700 text-gray-200 rounded-full hover:bg-gray-600 hover:text-white transition-colors"
+                                  >
+                                      {pq.query}
+                                  </button>
+                              ))}
+                          </div>
+                      </div>
+                  )}
+              </div>
+          </div>
+      );
+    };
     
     const AIAnalysisView = ({ data }: { data: VideoData[] }) => (
         <div className="mb-6 animate-fade-in">
@@ -370,26 +398,29 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
         switch (view) {
             case 'main':
                 return (
-                    <div className="p-4 md:p-6 lg:p-8">
-                        {isLoading ? (
-                            <div className="flex justify-center items-center h-64"><Spinner /></div>
-                        ) : error ? (
+                    <div className="p-4 md:p-6 lg:p-8 relative min-h-[60vh]">
+                        {isLoading && (
+                            <div className="absolute inset-0 bg-gray-900/80 flex justify-center items-center z-20 animate-fade-in">
+                                <Spinner message={loadingMessage} />
+                            </div>
+                        )}
+                        {error ? (
                             <div className="text-center text-red-400 p-4 bg-red-900/50 rounded-lg">{error}</div>
                         ) : isInitial ? (
-                            <WelcomeMessage />
+                            <QuickStartView onQuerySelect={handlePopularQuerySelect} />
                         ) : (
-                        <>
-                            {videos.length > 0 && <AIAnalysisView data={videos} />}
-                            <h2 className="text-xl font-bold mb-4">관련 영상 리스트</h2>
-                            <ResultsTable 
-                                videos={sortedVideos} 
-                                onShowChannelDetail={handleShowChannelDetail} 
-                                onShowVideoDetail={handleShowVideoDetail}
-                                onOpenCommentModal={handleOpenCommentModal}
-                                selectedChannels={selectedChannels}
-                                onChannelSelect={handleChannelSelect}
-                            />
-                        </>
+                            <div className="animate-fade-in">
+                                {videos.length > 0 && <AIAnalysisView data={videos} />}
+                                <h2 className="text-xl font-bold mb-4 mt-8">관련 영상 리스트</h2>
+                                <ResultsTable 
+                                    videos={sortedVideos} 
+                                    onShowChannelDetail={handleShowChannelDetail} 
+                                    onShowVideoDetail={handleShowVideoDetail}
+                                    onOpenCommentModal={handleOpenCommentModal}
+                                    selectedChannels={selectedChannels}
+                                    onChannelSelect={handleChannelSelect}
+                                />
+                            </div>
                         )}
                     </div>
                 );

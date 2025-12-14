@@ -6,7 +6,7 @@ import Button from './common/Button';
 import { translateKeyword, getRelatedKeywords } from '../services/geminiService';
 
 interface FilterBarProps {
-  onAnalyze: (searchQuery: string) => void;
+  onAnalyze: (searchQuery: string, searchMode: AnalysisMode) => void;
   isLoading: boolean;
   onOpenCompareModal: () => void;
   selectedChannelCount: number;
@@ -157,7 +157,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
             searchQuery = translatedKeyword;
         }
     }
-    onAnalyze(searchQuery);
+    onAnalyze(searchQuery, mode);
   };
   
   return (
