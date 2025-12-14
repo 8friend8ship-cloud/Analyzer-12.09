@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import Spinner from './common/Spinner';
 import { fetchRankingData } from '../services/youtubeService';
@@ -62,7 +60,8 @@ const EXCLUDABLE_CATEGORIES = [
 ];
 
 const RankChange: React.FC<{ change: number }> = ({ change }) => {
-    if (change === 0) {
+    // Safety check for undefined/null change
+    if (change === undefined || change === null || change === 0) {
         return <span className="text-gray-500">-</span>;
     }
     const isUp = change > 0;
@@ -74,6 +73,11 @@ const RankChange: React.FC<{ change: number }> = ({ change }) => {
 };
 
 const PerformanceBadge: React.FC<{ ratio: number }> = ({ ratio }) => {
+    // Robust safety check to prevent rendering crashes
+    if (typeof ratio !== 'number' || isNaN(ratio) || !isFinite(ratio)) {
+        return <span className="text-xs text-gray-500">-</span>;
+    }
+
     let color = 'bg-gray-600 text-gray-200';
     let icon = '';
     
@@ -106,7 +110,7 @@ const ShortsBadge: React.FC = () => (
 );
 
 const DurationBadge: React.FC<{ seconds: number }> = ({ seconds }) => {
-    if (!seconds) return null;
+    if (!seconds || isNaN(seconds)) return null;
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
     const timeString = `${minutes}:${secs.toString().padStart(2, '0')}`;
@@ -191,10 +195,18 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
     const processPerformanceData = (rawData: VideoRankingData[]) => {
         if (!Array.isArray(rawData)) return [];
         return rawData
-            .filter(video => video && video.channelSubscriberCount >= 1000 && video.viewCount >= 10000)
+            .filter(video => 
+                video && 
+                typeof video.channelSubscriberCount === 'number' && 
+                video.channelSubscriberCount >= 1000 && 
+                typeof video.viewCount === 'number' &&
+                video.viewCount >= 10000
+            )
             .sort((a, b) => {
-                const ratioA = a.channelSubscriberCount > 0 ? a.viewCount / a.channelSubscriberCount : 0;
-                const ratioB = b.channelSubscriberCount > 0 ? b.viewCount / b.channelSubscriberCount : 0;
+                const subA = a.channelSubscriberCount || 1;
+                const subB = b.channelSubscriberCount || 1;
+                const ratioA = a.viewCount / subA;
+                const ratioB = b.viewCount / subB;
                 return ratioB - ratioA;
             });
     };
@@ -206,7 +218,7 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
             setResults([]); 
 
             const filters = { 
-                limit: activeTab === 'performance' ? 100 : limit, 
+                limit: limit, 
                 country, 
                 category, 
                 metric: 'mostPopular', 
@@ -251,7 +263,7 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
     }, [activeTab, country, category, limit, user, appSettings, excludedCategories, videoFormat]);
     
     const formatNumber = (num: number): string => {
-        if (num === undefined || num === null) return '-';
+        if (num === undefined || num === null || isNaN(num)) return '-';
         if (num >= 1000000000) return `${(num / 1000000000).toFixed(1).replace('.0', '')}B`;
         if (num >= 1000000) return `${(num / 1000000).toFixed(1).replace('.0', '')}M`;
         if (num >= 10000) return `${(num / 1000).toFixed(0)}K`;
@@ -311,9 +323,15 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                             const channelCountry = (item as ChannelRankingData | VideoRankingData).channelCountry;
                             
                             const displayRank = isPerformance ? index + 1 : item.rank;
-                            const performanceRatio = !isChannel && (item as VideoRankingData).channelSubscriberCount > 0 
-                                ? (item as VideoRankingData).viewCount / (item as VideoRankingData).channelSubscriberCount 
-                                : 0;
+                            
+                            // Safe ratio calculation
+                            let performanceRatio = 0;
+                            if (!isChannel) {
+                                const vData = item as VideoRankingData;
+                                if (vData.channelSubscriberCount > 0) {
+                                    performanceRatio = vData.viewCount / vData.channelSubscriberCount;
+                                }
+                            }
                             
                             const isShorts = !isChannel && (item as any).isShorts;
                             const durationSeconds = !isChannel ? (item as VideoRankingData).durationSeconds : 0;
@@ -418,9 +436,15 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                         const categoryName = item.categoryId ? YOUTUBE_CATEGORIES_KR[item.categoryId] : null;
                         const channelCountry = (item as ChannelRankingData | VideoRankingData).channelCountry;
                         const displayRank = isPerformance ? index + 1 : item.rank;
-                         const performanceRatio = !isChannel && (item as VideoRankingData).channelSubscriberCount > 0 
-                                ? (item as VideoRankingData).viewCount / (item as VideoRankingData).channelSubscriberCount 
-                                : 0;
+                        
+                        let performanceRatio = 0;
+                        if (!isChannel) {
+                            const vData = item as VideoRankingData;
+                            if (vData.channelSubscriberCount > 0) {
+                                performanceRatio = vData.viewCount / vData.channelSubscriberCount;
+                            }
+                        }
+
                         const isShorts = !isChannel && (item as any).isShorts;
                         const durationSeconds = !isChannel ? (item as VideoRankingData).durationSeconds : 0;
                         

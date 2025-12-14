@@ -560,9 +560,11 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
     const safeCountry = filters.country || 'KR';
     const safeType = type;
     const safeFormat = filters.videoFormat || 'all';
+    // IMPORTANT: Include limit in the key to prevent cache mismatch between 'videos' (50) and 'performance' (100) views
+    const limit = filters.limit || 50;
     
-    // Firestore Doc ID format: type_country_category_format_date
-    const firestoreKey = `${safeType}_${safeCountry}_${safeCategory}_${safeFormat}_${today}`;
+    // Firestore Doc ID format: type_country_category_format_limit_date
+    const firestoreKey = `${safeType}_${safeCountry}_${safeCategory}_${safeFormat}_${limit}_${today}`;
 
     // 1. Try to get data from Firestore (The "Library") - Safely
     try {
