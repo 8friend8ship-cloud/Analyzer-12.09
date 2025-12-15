@@ -83,7 +83,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
     const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
     const [selectedVideoForComments, setSelectedVideoForComments] = useState<{id: string, title: string} | null>(null);
     
-    const [query, setQuery] = useState('시니어');
+    const [query, setQuery] = useState('');
     const [mode, setMode] = useState<AnalysisMode>('keyword');
     const [filters, setFilters] = useState<FilterState>(initialFilterState);
     const [popularQueries, setPopularQueries] = useState<PopularQuery[]>([]);

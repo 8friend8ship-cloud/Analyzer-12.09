@@ -19,7 +19,12 @@ import type {
     VideoAnalytics,
     AIAnalyticsInsight
 } from '../types';
-import { getRankingFromFirestore, setRankingInFirestore } from './firebaseService';
+import { 
+    getRankingFromFirestore, 
+    setRankingInFirestore,
+    getSearchResultsFromFirestore,
+    setSearchResultsInFirestore
+} from './firebaseService';
 import { 
     getAICommentInsights, 
     getAIVideoDeepDiveInsights, 
@@ -147,6 +152,38 @@ export const resolveChannelId = async (query: string, apiKey: string): Promise<s
 };
 
 export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filters: FilterState, apiKey: string): Promise<VideoData[]> => {
+    // --- 1. Firestore Cache Check (Optimized) ---
+    // Generate a unique, safe key for Firestore that includes ALL filters
+    const safeQuery = query.replace(/[^a-zA-Z0-9가-힣-_]/g, '_');
+    const safeFormat = filters.videoFormat || 'any';
+    const safePeriod = filters.period || '30';
+    const safeSort = filters.sortBy || 'viewCount';
+    
+    // Version 2 key to prevent conflicts with old cache structure
+    const cacheKey = `search_v2_${mode}_${safeQuery}_${filters.country}_${filters.category}_${safeFormat}_${safePeriod}_${safeSort}`;
+    
+    try {
+        const cached = await getSearchResultsFromFirestore(cacheKey);
+        if (cached && cached.timestamp) {
+            const now = new Date().getTime();
+            const cachedTime = new Date(cached.timestamp).getTime();
+            const hoursDiff = (now - cachedTime) / (1000 * 60 * 60);
+            
+            // If cache is younger than 24 hours, return it
+            if (hoursDiff < 24) {
+                console.log(`[Search] HIT from Firestore for ${cacheKey} (${hoursDiff.toFixed(1)}h old)`);
+                return cached.data;
+            } else {
+                console.log(`[Search] EXPIRED Firestore data for ${cacheKey} (${hoursDiff.toFixed(1)}h old), refreshing...`);
+            }
+        } else {
+            console.log(`[Search] MISS for ${cacheKey}, fetching from API...`);
+        }
+    } catch (e) {
+        console.warn("[Search] Firestore check failed, proceeding to API", e);
+    }
+
+    // --- 2. Live API Call (If cache miss or expired) ---
     let searchUrl = `${BASE_URL}/search?part=snippet&maxResults=${filters.resultsLimit}&key=${apiKey}`;
     
     if (mode === 'channel') {
@@ -161,6 +198,15 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
         if (filters.category && filters.category !== 'all') {
             searchUrl += `&videoCategoryId=${filters.category}`;
         }
+    }
+
+    // Date filtering for 'period' logic (approximate for search query)
+    if (filters.period !== 'any' && mode === 'keyword') {
+        const date = new Date();
+        if (filters.period === '7') date.setDate(date.getDate() - 7);
+        else if (filters.period === '30') date.setDate(date.getDate() - 30);
+        else if (filters.period === '90') date.setDate(date.getDate() - 90);
+        searchUrl += `&publishedAfter=${date.toISOString()}`;
     }
 
     const searchResponse = await fetch(searchUrl);
@@ -254,6 +300,13 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
     // Only applies if a specific country is selected (not Worldwide)
     if (mode === 'keyword' && filters.country && filters.country !== 'WW') {
         filteredResults = filteredResults.filter((video: VideoData) => video.channelCountry === filters.country);
+    }
+
+    // --- 3. Save to Firestore Cache ---
+    if (filteredResults.length > 0) {
+        await setSearchResultsInFirestore(cacheKey, filteredResults).catch(err => {
+            console.error("[Search] Failed to save to Firestore:", err);
+        });
     }
 
     return filteredResults;
@@ -474,7 +527,7 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
                 return cachedData;
             }
         } catch (e) {
-            console.warn("[Ranking] Firestore check failed, continuing to live API...", e);
+            console.warn("[Ranking] Firestore check failed, continuing with live API...", e);
         }
     }
 

@@ -1,6 +1,4 @@
 
-
-
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
@@ -33,6 +31,8 @@ try {
     db = null;
 }
 
+// --- Ranking Logic ---
+
 export const getRankingFromFirestore = async (key: string) => {
     // Safety check: If DB isn't ready, behave as if data is missing (cache miss)
     if (!db) return null;
@@ -63,5 +63,43 @@ export const setRankingInFirestore = async (key: string, data: any) => {
         console.log(`[Firestore] Data saved for key: ${key}`);
     } catch (e) {
         console.error("[Firestore] Write error:", e);
+    }
+};
+
+// --- Search Result Logic (New) ---
+
+export const getSearchResultsFromFirestore = async (key: string) => {
+    if (!db) return null;
+
+    try {
+        const docRef = doc(db, "search_results", key);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+            const result = docSnap.data();
+            return {
+                data: result.data,
+                timestamp: result.timestamp
+            };
+        }
+        return null;
+    } catch (e) {
+        console.error("[Firestore] Search read error:", e);
+        return null;
+    }
+};
+
+export const setSearchResultsInFirestore = async (key: string, data: any) => {
+    if (!db) return;
+
+    try {
+        const docRef = doc(db, "search_results", key);
+        await setDoc(docRef, {
+            data: data,
+            timestamp: new Date().toISOString()
+        });
+        console.log(`[Firestore] Search results saved for key: ${key}`);
+    } catch (e) {
+        console.error("[Firestore] Search write error:", e);
     }
 };

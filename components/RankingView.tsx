@@ -490,9 +490,7 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
         setActiveTab(tab);
         setSelectedChannels({});
         setVideoFormat('all');
-        setResults([]); // Reset results on tab change
-        setHasSearched(false);
-        // Do not auto fetch
+        fetchData(tab);
     };
 
     const handleSearchClick = () => {
