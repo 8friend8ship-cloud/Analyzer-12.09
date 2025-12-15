@@ -2,32 +2,32 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
-// Placeholder configuration. 
-// The app will check if these are real values before attempting to connect.
+// Configuration
+// vite.config.ts의 define 설정에 의해 'process.env.KEY' 문자열 자체가 빌드 시점에 실제 값(문자열)으로 바뀝니다.
 const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY || "YOUR_API_KEY",
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN || "YOUR_PROJECT.firebaseapp.com",
-  projectId: process.env.FIREBASE_PROJECT_ID || "crypto-sphere-468511-a7",
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "YOUR_PROJECT.appspot.com",
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "YOUR_SENDER_ID",
-  appId: process.env.FIREBASE_APP_ID || "YOUR_APP_ID"
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.FIREBASE_APP_ID
 };
 
 let db: any = null;
 
 try {
-    // CRITICAL FIX: Do NOT attempt to initialize if keys are placeholders.
-    // This prevents the "Black Screen" on deployment when keys aren't set yet.
-    if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY" && !firebaseConfig.apiKey.includes("YOUR_")) {
+    // 키 유효성 검사 및 초기화
+    // 빈 문자열("")이나 기본값("YOUR_API_KEY")이 아닐 때만 초기화
+    const apiKey = firebaseConfig.apiKey;
+    if (apiKey && apiKey !== "" && apiKey !== "YOUR_API_KEY" && !apiKey.includes("YOUR_")) {
         const app = initializeApp(firebaseConfig);
         db = getFirestore(app);
-        console.log("[Firebase] Initialized successfully.");
+        console.log("[Firebase] Initialized successfully with Cloud Run config.");
     } else {
-        console.warn("[Firebase] Config missing or using placeholders. Firestore features (Central Cache) are disabled. App will run in standalone mode.");
+        console.warn("[Firebase] Environment variables missing. Firestore features (Central Cache) are disabled. (Current Key Status: " + (apiKey ? "Present" : "Missing") + ")");
     }
 } catch (e) {
     console.error("[Firebase] Initialization failed:", e);
-    // Ensure db is null so the app falls back gracefully
     db = null;
 }
 
