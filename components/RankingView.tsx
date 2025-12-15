@@ -59,8 +59,9 @@ const EXCLUDABLE_CATEGORIES = [
     { id: '20', label: '게임' },
 ];
 
+// --- Utility Components ---
+
 const RankChange: React.FC<{ change: number }> = ({ change }) => {
-    // Safety check for undefined/null change
     if (change === undefined || change === null || change === 0) {
         return <span className="text-gray-500">-</span>;
     }
@@ -73,7 +74,6 @@ const RankChange: React.FC<{ change: number }> = ({ change }) => {
 };
 
 const PerformanceBadge: React.FC<{ ratio: number }> = ({ ratio }) => {
-    // Robust safety check to prevent rendering crashes
     if (typeof ratio !== 'number' || isNaN(ratio) || !isFinite(ratio)) {
         return <span className="text-xs text-gray-500">-</span>;
     }
@@ -122,12 +122,244 @@ const DurationBadge: React.FC<{ seconds: number }> = ({ seconds }) => {
     );
 };
 
+const formatNumber = (num: number): string => {
+    if (num === undefined || num === null || isNaN(num)) return '-';
+    if (num >= 1000000000) return `${(num / 1000000000).toFixed(1).replace('.0', '')}B`;
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1).replace('.0', '')}M`;
+    if (num >= 10000) return `${(num / 1000).toFixed(0)}K`;
+    return num.toLocaleString();
+};
+
+// --- Sub-components to prevent rendering crashes ---
+
+const ChannelRow: React.FC<{ 
+    item: ChannelRankingData; 
+    rank: number; 
+    isSelected: boolean; 
+    onSelect: (selected: boolean) => void;
+    onShowDetail: (id: string) => void;
+}> = ({ item, rank, isSelected, onSelect, onShowDetail }) => {
+    const categoryName = item.categoryId ? YOUTUBE_CATEGORY_OPTIONS.find(c => c.value === item.categoryId)?.label : null;
+    const countryLabel = COUNTRY_FLAGS[item.channelCountry || ''] || item.channelCountry;
+
+    return (
+        <div className="grid grid-cols-12 items-center px-4 py-3 hover:bg-gray-700/40">
+            <div className="col-span-1 text-lg font-bold text-gray-500 text-center flex items-center justify-center gap-2">
+                <span>{rank}</span>
+                <RankChange change={item.rankChange} />
+            </div>
+            <div className="col-span-8 flex items-center gap-3">
+                <input
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 bg-gray-700 border-gray-600 rounded text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                    checked={isSelected}
+                    onChange={(e) => onSelect(e.target.checked)}
+                />
+                <button onClick={() => onShowDetail(item.id)} className="flex items-center gap-3 text-left min-w-0">
+                    <img src={item.thumbnailUrl} alt={item.name} className="w-16 h-16 object-cover rounded-full flex-shrink-0" />
+                    <div className="min-w-0">
+                        <p className="font-semibold text-white truncate text-sm" title={item.name}>{item.name}</p>
+                        <div className="flex items-center gap-1.5 text-xs text-gray-400 truncate">
+                            {countryLabel && <span>{countryLabel}</span>}
+                            <span>{item.name}</span>
+                        </div>
+                        {categoryName && <p className="text-xs font-semibold text-cyan-400 mt-1">#{categoryName}</p>}
+                    </div>
+                </button>
+            </div>
+            <div className="col-span-1 text-center font-semibold text-sm text-blue-400">{formatNumber(item.viewsInPeriod)}</div>
+            <div className="col-span-1 text-center font-semibold text-sm">{formatNumber(item.subscriberCount)}</div>
+            <div className="col-span-1 text-right font-semibold text-green-400 text-sm">${formatNumber(item.estimatedMonthlyRevenue)}</div>
+        </div>
+    );
+};
+
+const VideoRow: React.FC<{ 
+    item: VideoRankingData; 
+    rank: number; 
+    isPerformance: boolean;
+    isSelected: boolean; 
+    onSelect: (selected: boolean) => void;
+    onShowDetail: (id: string) => void;
+    onShowChannel: (id: string) => void;
+}> = ({ item, rank, isPerformance, isSelected, onSelect, onShowDetail, onShowChannel }) => {
+    const categoryName = item.categoryId ? YOUTUBE_CATEGORIES_KR[item.categoryId] : null;
+    const countryLabel = COUNTRY_FLAGS[item.channelCountry || ''] || item.channelCountry;
+    
+    let performanceRatio = 0;
+    if (item.channelSubscriberCount > 0) {
+        performanceRatio = item.viewCount / item.channelSubscriberCount;
+    }
+
+    return (
+        <div className="grid grid-cols-12 items-center px-4 py-3 hover:bg-gray-700/40">
+            <div className="col-span-1 text-lg font-bold text-gray-500 text-center flex items-center justify-center gap-2">
+                <span>{rank}</span>
+                {!isPerformance && <RankChange change={item.rankChange} />}
+            </div>
+            
+            <div className={`${isPerformance ? 'col-span-6' : 'col-span-8'} flex items-center gap-3`}>
+                <input
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 bg-gray-700 border-gray-600 rounded text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                    checked={isSelected}
+                    onChange={(e) => onSelect(e.target.checked)}
+                />
+                <a href={`https://www.youtube.com/watch?v=${item.id}`} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 group relative">
+                    <div className="relative">
+                        <img src={item.thumbnailUrl} alt={item.name} className="w-16 h-16 object-cover rounded-lg flex-shrink-0 transition-transform group-hover:scale-105" />
+                        <DurationBadge seconds={item.durationSeconds} />
+                    </div>
+                </a>
+                <div className="min-w-0">
+                    <div className="flex items-center">
+                        <button onClick={() => onShowDetail(item.id)} className="font-semibold text-white truncate text-sm text-left hover:text-blue-400 transition-colors bg-transparent border-none p-0 cursor-pointer focus:outline-none" title={item.name}>{item.name}</button>
+                        {item.isShorts && <ShortsBadge />}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-gray-400 truncate">
+                        {countryLabel && <span>{countryLabel}</span>}
+                        <button onClick={() => onShowChannel(item.channelId)} className="hover:text-white transition-colors">{item.channelName}</button>
+                    </div>
+                    {categoryName && <p className="text-xs font-semibold text-cyan-400 mt-1">#{categoryName}</p>}
+                </div>
+            </div>
+
+            {isPerformance ? (
+                <>
+                    <div className="col-span-2 text-center">
+                        <PerformanceBadge ratio={performanceRatio} />
+                    </div>
+                    <div className="col-span-1 text-center font-semibold text-sm text-gray-300">{formatNumber(item.viewCount)}</div>
+                    <div className="col-span-1 text-center font-semibold text-sm text-gray-400">{formatNumber(item.channelSubscriberCount)}</div>
+                    <div className="col-span-1 text-right">
+                            <button onClick={() => onShowDetail(item.id)} className="text-xs text-blue-400 hover:text-blue-300 font-semibold">분석</button>
+                    </div>
+                </>
+            ) : (
+                <>
+                    <div className="col-span-1 text-center font-bold text-sm text-blue-400">{formatNumber(item.viewsPerHour)}</div>
+                    <div className="col-span-1 text-center font-semibold text-sm">{formatNumber(item.viewCount)}</div>
+                    <div className="col-span-1 text-right font-semibold text-green-400 text-sm">${formatNumber(item.estimatedRevenue)}</div>
+                </>
+            )}
+        </div>
+    );
+};
+
+// --- Mobile Card Components ---
+
+const ChannelCardMobile: React.FC<{
+    item: ChannelRankingData;
+    rank: number;
+    isSelected: boolean;
+    onSelect: (selected: boolean) => void;
+    onShowDetail: (id: string) => void;
+}> = ({ item, rank, isSelected, onSelect, onShowDetail }) => {
+    const categoryName = item.categoryId ? YOUTUBE_CATEGORY_OPTIONS.find(c => c.value === item.categoryId)?.label : null;
+    
+    return (
+        <div className="bg-gray-800/80 rounded-lg p-3 border border-gray-700/50">
+            <div className="flex items-start gap-3 mb-3">
+                <div className="flex items-center pt-1 gap-2">
+                    <div className="flex flex-col items-center">
+                        <span className="text-lg font-bold text-gray-500">{rank}</span>
+                        <RankChange change={item.rankChange} />
+                    </div>
+                    <input
+                        type="checkbox"
+                        className="form-checkbox h-4 w-4 bg-gray-700 border-gray-600 rounded text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                        checked={isSelected}
+                        onChange={(e) => onSelect(e.target.checked)}
+                    />
+                </div>
+                <img src={item.thumbnailUrl} alt={item.name} className="w-12 h-12 object-cover rounded-full flex-shrink-0" />
+                <div className="min-w-0 flex-grow">
+                    <p className="font-semibold text-white truncate text-sm" title={item.name}>{item.name}</p>
+                    <div className="flex items-center gap-1.5 text-xs text-gray-400 truncate">
+                        <span>{item.name}</span>
+                    </div>
+                    {categoryName && <p className="text-xs font-semibold text-cyan-400 mt-1">#{categoryName}</p>}
+                </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center border-t border-gray-700/50 pt-3">
+                <div><p className="text-xs text-gray-400">인기 조회수</p><p className="font-semibold text-blue-400">{formatNumber(item.viewsInPeriod)}</p></div>
+                <div><p className="text-xs text-gray-400">구독자</p><p className="font-semibold">{formatNumber(item.subscriberCount)}</p></div>
+                <div><p className="text-xs text-gray-400">월 수익(추정)</p><p className="font-semibold text-green-400">${formatNumber(item.estimatedMonthlyRevenue)}</p></div>
+            </div>
+            <div className="mt-3">
+                <button onClick={() => onShowDetail(item.id)} className="w-full text-center px-3 py-2 text-xs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white">채널 분석</button>
+            </div>
+        </div>
+    );
+};
+
+const VideoCardMobile: React.FC<{
+    item: VideoRankingData;
+    rank: number;
+    isPerformance: boolean;
+    isSelected: boolean;
+    onSelect: (selected: boolean) => void;
+    onShowDetail: (id: string) => void;
+}> = ({ item, rank, isPerformance, isSelected, onSelect, onShowDetail }) => {
+    const categoryName = item.categoryId ? YOUTUBE_CATEGORIES_KR[item.categoryId] : null;
+    
+    let performanceRatio = 0;
+    if (item.channelSubscriberCount > 0) {
+        performanceRatio = item.viewCount / item.channelSubscriberCount;
+    }
+
+    return (
+        <div className="bg-gray-800/80 rounded-lg p-3 border border-gray-700/50">
+            <div className="flex items-start gap-3 mb-3">
+                <div className="flex items-center pt-1 gap-2">
+                    <div className="flex flex-col items-center">
+                        <span className="text-lg font-bold text-gray-500">{rank}</span>
+                        {!isPerformance && <RankChange change={item.rankChange} />}
+                    </div>
+                    <input
+                        type="checkbox"
+                        className="form-checkbox h-4 w-4 bg-gray-700 border-gray-600 rounded text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                        checked={isSelected}
+                        onChange={(e) => onSelect(e.target.checked)}
+                    />
+                </div>
+                <div className="relative flex-shrink-0">
+                    <img src={item.thumbnailUrl} alt={item.name} className="w-20 h-auto object-cover rounded-md" />
+                    <DurationBadge seconds={item.durationSeconds} />
+                </div>
+                <div className="min-w-0 flex-grow">
+                    <div className="flex items-center">
+                        <p className="font-semibold text-white truncate text-sm" title={item.name}>{item.name}</p>
+                        {item.isShorts && <ShortsBadge />}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-gray-400 truncate">
+                        <span>{item.channelName}</span>
+                    </div>
+                    {categoryName && <p className="text-xs font-semibold text-cyan-400 mt-1">#{categoryName}</p>}
+                    {isPerformance && <div className="mt-1"><PerformanceBadge ratio={performanceRatio} /></div>}
+                </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center border-t border-gray-700/50 pt-3">
+                <div><p className="text-xs text-gray-400">{isPerformance ? '구독자' : 'VPH'}</p><p className="font-semibold text-blue-400">{formatNumber(isPerformance ? item.channelSubscriberCount : item.viewsPerHour)}</p></div>
+                <div><p className="text-xs text-gray-400">조회수</p><p className="font-semibold">{formatNumber(item.viewCount)}</p></div>
+                <div><p className="text-xs text-gray-400">총 수익</p><p className="font-semibold text-green-400">${formatNumber(item.estimatedRevenue)}</p></div>
+            </div>
+            <div className="mt-3 flex gap-2">
+                <button onClick={() => onShowDetail(item.id)} className="flex-1 text-center px-3 py-2 text-xs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white">상세 분석</button>
+                <a href={`https://www.youtube.com/watch?v=${item.id}`} target="_blank" rel="noopener noreferrer" className="flex-1 text-center px-3 py-2 text-xs font-semibold rounded bg-gray-600 hover:bg-gray-500 text-white">영상 보기</a>
+            </div>
+        </div>
+    );
+};
+
+
 const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChannelDetail, onShowVideoDetail, savedState, onSaveState }) => {
     const [activeTab, setActiveTab] = useState<ActiveTab>(savedState?.activeTab || 'channels');
     const [results, setResults] = useState<(ChannelRankingData | VideoRankingData)[]>(savedState?.results || []);
-    const [isLoading, setIsLoading] = useState(!savedState?.results.length);
+    const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+    const [hasSearched, setHasSearched] = useState(!!savedState?.results.length);
 
     const [country, setCountry] = useState(savedState?.country || 'KR');
     const [category, setCategory] = useState(savedState?.category || 'all');
@@ -186,13 +418,6 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
     };
     const handleCloseCompareModal = () => setIsComparisonModalOpen(false);
     
-    const handleTabChange = (tab: ActiveTab) => {
-        setResults([]); // CRITICAL FIX: Clear results immediately to prevent rendering crashes due to mismatched data types
-        setActiveTab(tab);
-        setSelectedChannels({});
-        setVideoFormat('all');
-    };
-
     const processPerformanceData = (rawData: VideoRankingData[]) => {
         if (!Array.isArray(rawData)) return [];
         return rawData
@@ -212,68 +437,80 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
             });
     };
 
-    useEffect(() => {
-        const fetchData = async () => {
-            setIsLoading(true);
-            setError(null);
-            // setResults([]); // We do this in handleTabChange now for better UX, but keeping it here for other filter changes is fine.
+    // The core fetching logic
+    const fetchData = async (targetTab: ActiveTab) => {
+        setIsLoading(true);
+        setError(null);
+        setResults([]); // Clear results first to avoid type mismatch during render
+        setHasSearched(true); 
 
-            const filters = { 
-                limit: limit, 
-                country, 
-                category, 
-                metric: 'mostPopular', 
-                excludedCategories,
-                videoFormat,
-                // Critical Change: Skip cache if tab is performance/surging to ensure fresh API call
-                skipCache: activeTab === 'performance'
-            };
-            
-            const apiKey = user.isAdmin ? appSettings.apiKeys.youtube : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
-            
-            if (!apiKey) {
-                setError(user.isAdmin ? "시스템 API 키가 필요합니다." : "관리자 대시보드에서 설정해주세요.");
-                setIsLoading(false);
-                return;
-            }
-
-            try {
-                const fetchType = activeTab === 'channels' ? 'channels' : 'videos';
-                const data = await fetchRankingData(fetchType, filters, apiKey);
-                
-                if (data && data.length > 0 && (data[0] as any)._meta) {
-                    setLastUpdated((data[0] as any)._meta.lastUpdated);
-                } else {
-                    setLastUpdated(new Date().toLocaleString());
-                }
-
-                if (activeTab === 'performance') {
-                    setResults(processPerformanceData(data as VideoRankingData[]));
-                } else {
-                    setResults(Array.isArray(data) ? data : []);
-                }
-            } catch (err) {
-                console.error("Failed to fetch ranking data:", err);
-                setError(err instanceof Error ? err.message : "랭킹 데이터를 불러오는데 실패했습니다.");
-                setResults([]);
-            } finally {
-                setIsLoading(false);
-            }
+        const filters = { 
+            limit: limit, 
+            country, 
+            category, 
+            metric: 'mostPopular', 
+            excludedCategories,
+            videoFormat,
+            skipCache: targetTab === 'performance'
         };
+        
+        const apiKey = user.isAdmin ? appSettings.apiKeys.youtube : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
+        
+        if (!apiKey) {
+            setError(user.isAdmin ? "시스템 API 키가 필요합니다." : "관리자 대시보드에서 설정해주세요.");
+            setIsLoading(false);
+            return;
+        }
 
-        fetchData();
+        try {
+            const fetchType = targetTab === 'channels' ? 'channels' : 'videos';
+            const data = await fetchRankingData(fetchType, filters, apiKey);
+            
+            if (data && data.length > 0 && (data[0] as any)._meta) {
+                setLastUpdated((data[0] as any)._meta.lastUpdated);
+            } else {
+                setLastUpdated(new Date().toLocaleString());
+            }
 
-    }, [activeTab, country, category, limit, user, appSettings, excludedCategories, videoFormat]);
-    
-    const formatNumber = (num: number): string => {
-        if (num === undefined || num === null || isNaN(num)) return '-';
-        if (num >= 1000000000) return `${(num / 1000000000).toFixed(1).replace('.0', '')}B`;
-        if (num >= 1000000) return `${(num / 1000000).toFixed(1).replace('.0', '')}M`;
-        if (num >= 10000) return `${(num / 1000).toFixed(0)}K`;
-        return num.toLocaleString();
+            if (targetTab === 'performance') {
+                setResults(processPerformanceData(data as VideoRankingData[]));
+            } else {
+                setResults(Array.isArray(data) ? data : []);
+            }
+        } catch (err) {
+            console.error("Failed to fetch ranking data:", err);
+            setError(err instanceof Error ? err.message : "랭킹 데이터를 불러오는데 실패했습니다.");
+            setResults([]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleTabChange = (tab: ActiveTab) => {
+        setActiveTab(tab);
+        setSelectedChannels({});
+        setVideoFormat('all');
+        setResults([]); // Reset results on tab change
+        setHasSearched(false);
+        // Do not auto fetch
+    };
+
+    const handleSearchClick = () => {
+        fetchData(activeTab);
     };
     
+    
     const renderResults = () => {
+        if (!hasSearched && !isLoading) {
+            return (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-500 bg-gray-800/30 rounded-lg border border-dashed border-gray-700">
+                    <span className="text-4xl mb-4">🏆</span>
+                    <p className="text-lg font-medium">보고 싶은 랭킹 버튼을 눌러주세요</p>
+                    <p className="text-sm mt-2 text-gray-400">국가와 카테고리를 설정하고 '순위 조회'를 누르면 데이터가 갱신됩니다.</p>
+                </div>
+            );
+        }
+
         if (isLoading) return <div className="flex justify-center items-center pt-20"><Spinner message={activeTab === 'performance' ? "실시간 급상승 데이터를 분석 중입니다... (API 호출)" : "일일 마스터 데이터를 불러오는 중입니다..."} /></div>;
         if (error) return <div className="text-center text-red-400 p-4 bg-red-900/50 rounded-lg">{error}</div>;
         if (!results || results.length === 0) return <div className="text-center py-20 text-gray-500"><p>결과가 없습니다. 필터를 변경해보세요.</p></div>;
@@ -313,118 +550,37 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                 
                     <div className="divide-y divide-gray-700/50">
                         {results.map((item, index) => {
-                            // Safety checks - Critical for preventing White Screen of Death
                             if (!item) return null;
-
-                            const isChannel = 'viewsInPeriod' in item;
+                            const isChannel = activeTab === 'channels';
                             const isPerformance = activeTab === 'performance';
-                            const channelInfo = isChannel
-                                ? { id: item.id, name: item.name }
-                                : { id: (item as VideoRankingData).channelId, name: (item as VideoRankingData).channelName };
                             
-                            const categoryName = item.categoryId ? YOUTUBE_CATEGORIES_KR[item.categoryId] : null;
-                            const channelCountry = (item as ChannelRankingData | VideoRankingData).channelCountry;
-                            
-                            const displayRank = isPerformance ? index + 1 : item.rank;
-                            
-                            // Safe ratio calculation
-                            let performanceRatio = 0;
-                            if (!isChannel) {
-                                const vData = item as VideoRankingData;
-                                if (vData.channelSubscriberCount > 0) {
-                                    performanceRatio = vData.viewCount / vData.channelSubscriberCount;
-                                }
+                            // Type Guard: Ensure we are rendering the correct component for the data type
+                            if (isChannel && 'subscriberCount' in item) {
+                                return (
+                                    <ChannelRow 
+                                        key={item.id} 
+                                        item={item as ChannelRankingData} 
+                                        rank={index + 1}
+                                        isSelected={!!selectedChannels[item.id]}
+                                        onSelect={(val) => handleChannelSelect({id: item.id, name: item.name}, val)}
+                                        onShowDetail={onShowChannelDetail}
+                                    />
+                                );
+                            } else if (!isChannel && 'channelSubscriberCount' in item) {
+                                return (
+                                    <VideoRow 
+                                        key={item.id} 
+                                        item={item as VideoRankingData} 
+                                        rank={index + 1}
+                                        isPerformance={isPerformance}
+                                        isSelected={!!selectedChannels[(item as VideoRankingData).channelId]}
+                                        onSelect={(val) => handleChannelSelect({id: (item as VideoRankingData).channelId, name: (item as VideoRankingData).channelName}, val)}
+                                        onShowDetail={onShowVideoDetail}
+                                        onShowChannel={onShowChannelDetail}
+                                    />
+                                );
                             }
-                            
-                            const isShorts = !isChannel && (item as any).isShorts;
-                            const durationSeconds = !isChannel ? (item as VideoRankingData).durationSeconds : 0;
-
-                            return (
-                                <div key={item.id} className="grid grid-cols-12 items-center px-4 py-3 hover:bg-gray-700/40">
-                                    <div className="col-span-1 text-lg font-bold text-gray-500 text-center flex items-center justify-center gap-2">
-                                        <span>{displayRank}</span>
-                                        {!isPerformance && <RankChange change={item.rankChange} />}
-                                    </div>
-                                    
-                                    <div className={`${isPerformance ? 'col-span-6' : 'col-span-8'} flex items-center gap-3`}>
-                                        <input
-                                            type="checkbox"
-                                            className="form-checkbox h-4 w-4 bg-gray-700 border-gray-600 rounded text-blue-600 focus:ring-blue-500 flex-shrink-0"
-                                            checked={!!selectedChannels[channelInfo.id]}
-                                            onChange={(e) => handleChannelSelect(channelInfo, e.target.checked)}
-                                            title="채널 비교 선택"
-                                        />
-                                        {isChannel ? (
-                                            <button onClick={() => onShowChannelDetail(item.id)} className="flex items-center gap-3 text-left min-w-0">
-                                                <img src={item.thumbnailUrl} alt={item.name} className="w-16 h-16 object-cover rounded-full flex-shrink-0" />
-                                                <div className="min-w-0">
-                                                    <p className="font-semibold text-white truncate text-sm" title={item.name}>{item.name}</p>
-                                                    <div className="flex items-center gap-1.5 text-xs text-gray-400 truncate">
-                                                        {channelCountry && (
-                                                            <span title={countryOptions.find(c => c.value === channelCountry)?.label || channelCountry}>
-                                                                {COUNTRY_FLAGS[channelCountry] || channelCountry}
-                                                            </span>
-                                                        )}
-                                                        <span>{item.name}</span>
-                                                    </div>
-                                                    {categoryName && <p className="text-xs font-semibold text-cyan-400 mt-1">#{categoryName}</p>}
-                                                </div>
-                                            </button>
-                                        ) : (
-                                            <>
-                                                <a href={`https://www.youtube.com/watch?v=${item.id}`} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 group relative">
-                                                    <div className="relative">
-                                                        <img src={item.thumbnailUrl} alt={item.name} className="w-16 h-16 object-cover rounded-lg flex-shrink-0 transition-transform group-hover:scale-105" />
-                                                        <DurationBadge seconds={durationSeconds} />
-                                                    </div>
-                                                </a>
-                                                <div className="min-w-0">
-                                                    <div className="flex items-center">
-                                                        <button onClick={() => onShowVideoDetail(item.id)} className="font-semibold text-white truncate text-sm text-left hover:text-blue-400 transition-colors bg-transparent border-none p-0 cursor-pointer focus:outline-none" title={item.name}>{item.name}</button>
-                                                        {isShorts && <ShortsBadge />}
-                                                    </div>
-                                                    <div className="flex items-center gap-1.5 text-xs text-gray-400 truncate">
-                                                        {channelCountry && (
-                                                            <span title={countryOptions.find(c => c.value === channelCountry)?.label || channelCountry}>
-                                                                {COUNTRY_FLAGS[channelCountry] || channelCountry}
-                                                            </span>
-                                                        )}
-                                                        <button onClick={() => onShowChannelDetail((item as VideoRankingData).channelId)} className="hover:text-white transition-colors">{(item as VideoRankingData).channelName}</button>
-                                                    </div>
-                                                    {categoryName && <p className="text-xs font-semibold text-cyan-400 mt-1">#{categoryName}</p>}
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-                                
-                                    {isChannel ? (
-                                        <>
-                                            <div className="col-span-1 text-center font-semibold text-sm text-blue-400">
-                                                {formatNumber((item as ChannelRankingData).viewsInPeriod)}
-                                            </div>
-                                            <div className="col-span-1 text-center font-semibold text-sm">{formatNumber((item as ChannelRankingData).subscriberCount)}</div>
-                                            <div className="col-span-1 text-right font-semibold text-green-400 text-sm">${formatNumber((item as ChannelRankingData).estimatedMonthlyRevenue)}</div>
-                                        </>
-                                    ) : isPerformance ? (
-                                        <>
-                                            <div className="col-span-2 text-center">
-                                                <PerformanceBadge ratio={performanceRatio} />
-                                            </div>
-                                            <div className="col-span-1 text-center font-semibold text-sm text-gray-300">{formatNumber((item as VideoRankingData).viewCount)}</div>
-                                            <div className="col-span-1 text-center font-semibold text-sm text-gray-400">{formatNumber((item as VideoRankingData).channelSubscriberCount)}</div>
-                                            <div className="col-span-1 text-right">
-                                                 <button onClick={() => onShowVideoDetail(item.id)} className="text-xs text-blue-400 hover:text-blue-300 font-semibold">분석</button>
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <div className="col-span-1 text-center font-bold text-sm text-blue-400">{formatNumber((item as VideoRankingData).viewsPerHour)}</div>
-                                            <div className="col-span-1 text-center font-semibold text-sm">{formatNumber((item as VideoRankingData).viewCount)}</div>
-                                            <div className="col-span-1 text-right font-semibold text-green-400 text-sm">${formatNumber((item as VideoRankingData).estimatedRevenue)}</div>
-                                        </>
-                                    )}
-                                </div>
-                            )
+                            return null;
                         })}
                     </div>
                 </div>
@@ -433,98 +589,39 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                 <div className="md:hidden space-y-3">
                     {results.map((item, index) => {
                         if (!item) return null;
-                        const isChannel = 'subscriberCount' in item;
+                        const isChannel = activeTab === 'channels';
                         const isPerformance = activeTab === 'performance';
-                        const channelInfo = isChannel ? { id: item.id, name: item.name } : { id: (item as VideoRankingData).channelId, name: (item as VideoRankingData).channelName };
-                        const categoryName = item.categoryId ? YOUTUBE_CATEGORIES_KR[item.categoryId] : null;
-                        const channelCountry = (item as ChannelRankingData | VideoRankingData).channelCountry;
-                        const displayRank = isPerformance ? index + 1 : item.rank;
-                        
-                        let performanceRatio = 0;
-                        if (!isChannel) {
-                            const vData = item as VideoRankingData;
-                            if (vData.channelSubscriberCount > 0) {
-                                performanceRatio = vData.viewCount / vData.channelSubscriberCount;
-                            }
+
+                        if (isChannel && 'subscriberCount' in item) {
+                            return (
+                                <ChannelCardMobile 
+                                    key={item.id}
+                                    item={item as ChannelRankingData}
+                                    rank={index + 1}
+                                    isSelected={!!selectedChannels[item.id]}
+                                    onSelect={(val) => handleChannelSelect({id: item.id, name: item.name}, val)}
+                                    onShowDetail={onShowChannelDetail}
+                                />
+                            );
+                        } else if (!isChannel && 'channelSubscriberCount' in item) {
+                            return (
+                                <VideoCardMobile 
+                                    key={item.id}
+                                    item={item as VideoRankingData}
+                                    rank={index + 1}
+                                    isPerformance={isPerformance}
+                                    isSelected={!!selectedChannels[(item as VideoRankingData).channelId]}
+                                    onSelect={(val) => handleChannelSelect({id: (item as VideoRankingData).channelId, name: (item as VideoRankingData).channelName}, val)}
+                                    onShowDetail={onShowVideoDetail}
+                                />
+                            );
                         }
-
-                        const isShorts = !isChannel && (item as any).isShorts;
-                        const durationSeconds = !isChannel ? (item as VideoRankingData).durationSeconds : 0;
-                        
-                        return (
-                            <div key={item.id} className="bg-gray-800/80 rounded-lg p-3 border border-gray-700/50">
-                                <div className="flex items-start gap-3 mb-3">
-                                    <div className="flex items-center pt-1 gap-2">
-                                        <div className="flex flex-col items-center">
-                                            <span className="text-lg font-bold text-gray-500">{displayRank}</span>
-                                            {!isPerformance && <RankChange change={item.rankChange} />}
-                                        </div>
-                                        <input
-                                            type="checkbox"
-                                            className="form-checkbox h-4 w-4 bg-gray-700 border-gray-600 rounded text-blue-600 focus:ring-blue-500 flex-shrink-0"
-                                            checked={!!selectedChannels[channelInfo.id]}
-                                            onChange={(e) => handleChannelSelect(channelInfo, e.target.checked)}
-                                            title="채널 비교 선택"
-                                        />
-                                    </div>
-                                    
-                                    {isChannel ? (
-                                        <img src={item.thumbnailUrl} alt={item.name} className="w-12 h-12 object-cover rounded-full flex-shrink-0" />
-                                    ) : (
-                                        <div className="relative flex-shrink-0">
-                                            <img src={item.thumbnailUrl} alt={item.name} className="w-20 h-auto object-cover rounded-md" />
-                                            <DurationBadge seconds={durationSeconds} />
-                                        </div>
-                                    )}
-
-                                    <div className="min-w-0 flex-grow">
-                                        <div className="flex items-center">
-                                            <p className="font-semibold text-white truncate text-sm" title={item.name}>{item.name}</p>
-                                            {isShorts && <ShortsBadge />}
-                                        </div>
-                                        <div className="flex items-center gap-1.5 text-xs text-gray-400 truncate">
-                                            {channelCountry && (
-                                                <span title={countryOptions.find(c => c.value === channelCountry)?.label || channelCountry}>
-                                                    {COUNTRY_FLAGS[channelCountry] || channelCountry}
-                                                </span>
-                                            )}
-                                            <span>{!isChannel && (item as VideoRankingData).channelName}</span>
-                                        </div>
-                                        {categoryName && <p className="text-xs font-semibold text-cyan-400 mt-1">#{categoryName}</p>}
-                                        {isPerformance && <div className="mt-1"><PerformanceBadge ratio={performanceRatio} /></div>}
-                                    </div>
-                                </div>
-
-                                {isChannel ? (
-                                    <div className="grid grid-cols-3 gap-2 text-center border-t border-gray-700/50 pt-3">
-                                        <div><p className="text-xs text-gray-400">인기 조회수</p><p className="font-semibold text-blue-400">{formatNumber((item as ChannelRankingData).viewsInPeriod)}</p></div>
-                                        <div><p className="text-xs text-gray-400">구독자</p><p className="font-semibold">{formatNumber((item as ChannelRankingData).subscriberCount)}</p></div>
-                                        <div><p className="text-xs text-gray-400">월 수익(추정)</p><p className="font-semibold text-green-400">${formatNumber((item as ChannelRankingData).estimatedMonthlyRevenue)}</p></div>
-                                    </div>
-                                ) : (
-                                     <div className="grid grid-cols-3 gap-2 text-center border-t border-gray-700/50 pt-3">
-                                        <div><p className="text-xs text-gray-400">{isPerformance ? '구독자' : 'VPH'}</p><p className="font-semibold text-blue-400">{formatNumber(isPerformance ? (item as VideoRankingData).channelSubscriberCount : (item as VideoRankingData).viewsPerHour)}</p></div>
-                                        <div><p className="text-xs text-gray-400">조회수</p><p className="font-semibold">{formatNumber((item as VideoRankingData).viewCount)}</p></div>
-                                        <div><p className="text-xs text-gray-400">총 수익</p><p className="font-semibold text-green-400">${formatNumber((item as VideoRankingData).estimatedRevenue)}</p></div>
-                                    </div>
-                                )}
-                                <div className="mt-3 flex gap-2">
-                                     {isChannel ? (
-                                        <button onClick={() => onShowChannelDetail(item.id)} className="w-full text-center px-3 py-2 text-xs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white">채널 분석</button>
-                                     ) : (
-                                        <>
-                                            <button onClick={() => onShowVideoDetail(item.id)} className="flex-1 text-center px-3 py-2 text-xs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white">상세 분석</button>
-                                            <a href={`https://www.youtube.com/watch?v=${item.id}`} target="_blank" rel="noopener noreferrer" className="flex-1 text-center px-3 py-2 text-xs font-semibold rounded bg-gray-600 hover:bg-gray-500 text-white">영상 보기</a>
-                                        </>
-                                     )}
-                                </div>
-                            </div>
-                        )
+                        return null;
                     })}
                 </div>
             </div>
-        )
-    }
+        );
+    };
     
     let explanation = "";
     if (activeTab === 'channels') {
@@ -562,7 +659,7 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                         </button>
                     </div>
                     <div className="text-xs text-gray-500 bg-gray-800/50 px-2 py-1 rounded-md border border-gray-700">
-                        📅 데이터 기준: {lastUpdated || '불러오는 중...'} (일일 스냅샷)
+                        📅 데이터 기준: {lastUpdated || '미조회'} (일일 스냅샷)
                     </div>
                 </div>
                 
@@ -629,6 +726,13 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                             </div>
                         </div>
                         
+                        <button
+                            onClick={handleSearchClick}
+                            className="px-6 py-1.5 text-xs font-bold rounded-md bg-green-600 hover:bg-green-700 text-white shadow-md transform hover:scale-105 transition-all"
+                        >
+                            순위 조회
+                        </button>
+
                         <button
                             onClick={handleOpenCompareModal}
                             disabled={Object.keys(selectedChannels).length < 2}
