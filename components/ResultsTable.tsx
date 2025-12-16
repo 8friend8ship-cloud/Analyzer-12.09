@@ -1,6 +1,4 @@
 
-
-
 // This component has been repurposed to act as the main Results Table
 import React, { useState } from 'react';
 import type { VideoData } from '../types';
@@ -29,6 +27,7 @@ const MoneyIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w
 
 
 const formatNumber = (num: number, compact = false): string => {
+  if (num === undefined || num === null) return '0'; // Safety check
   if (compact) {
     if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
     if (num >= 10000) return `${(num / 1000).toFixed(1)}K`;
@@ -37,7 +36,12 @@ const formatNumber = (num: number, compact = false): string => {
 };
 
 const formatDate = (dateString: string) => {
-    return new Date(dateString).toISOString().split('T')[0];
+    if (!dateString) return '-';
+    try {
+        return new Date(dateString).toISOString().split('T')[0];
+    } catch (e) {
+        return '-';
+    }
 }
 
 const GradeBadge: React.FC<{ grade: string }> = ({ grade }) => {
@@ -69,7 +73,7 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onShowChannelDetail
         });
     };
 
-    if (videos.length === 0) {
+    if (!videos || videos.length === 0) {
         return (
             <div className="text-center py-20 text-gray-500">
                 <p>결과가 없습니다.</p>
@@ -111,7 +115,11 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onShowChannelDetail
                         </thead>
                         <tbody className="divide-y divide-gray-700/50">
                             {videos.map((video, index) => {
+                                // Safety guard: skip invalid items to prevent crash
+                                if (!video || !video.id) return null;
+                                
                                 const countryLabel = video.channelCountry ? (COUNTRY_FLAGS[video.channelCountry] || video.channelCountry) : '';
+                                
                                 return (
                                 <tr key={video.id} className="hover:bg-gray-800/50">
                                     <td className="px-4 py-3 align-top">
@@ -149,10 +157,10 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onShowChannelDetail
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-4 py-3 align-middle whitespace-nowrap"><div className="flex flex-col space-y-1.5 text-xs"><div className="flex items-center gap-1.5 text-gray-300" title="조회수"><span className="text-gray-400"><EyeIcon /></span><span className="font-bold text-base text-white">{formatNumber(video.viewCount)}</span></div><div className="flex items-center gap-1.5 text-gray-300" title="시간당 조회수"><span className="text-gray-400"><FireIcon /></span><span className="font-semibold">{formatNumber(video.viewsPerHour)}</span></div><div className="flex items-center gap-1.5 text-gray-300" title="게시일"><span className="text-gray-400"><CalendarIcon /></span><span>{formatDate(video.publishedAt)}</span></div><div className="flex items-center gap-1.5 text-gray-300" title="영상 추정 수익"><span className="text-gray-400"><MoneyIcon /></span><span className="font-semibold text-green-400">${formatNumber(video.estimatedRevenue)}</span></div></div></td>
-                                    <td className="px-4 py-3 align-middle whitespace-nowrap"><div className="flex flex-col space-y-1.5 text-xs"><div className="flex items-center gap-1.5 text-gray-300" title="좋아요"><span className="text-gray-400"><ThumbsUpIcon /></span><span>{formatNumber(video.likeCount)}</span></div><div className="flex items-center gap-1.5 text-gray-300" title="댓글"><span className="text-gray-400"><ChatBubbleIcon /></span><span>{formatNumber(video.commentCount)}</span></div><div className="flex items-center gap-1.5 text-gray-300" title="참여율"><span className="text-gray-400"><TrendingUpIcon /></span><span className="font-bold text-blue-400">{video.engagementRate.toFixed(1)}%</span></div></div></td>
-                                    <td className="px-4 py-3 align-middle text-center"><GradeBadge grade={video.grade} /><div className="text-xs mt-2 space-y-1"><p><span className="text-gray-400">성과:</span> <span className="font-semibold text-white">{video.performanceRatio.toFixed(2)}</span></p><p><span className="text-gray-400">만족:</span> <span className="font-semibold text-white">{formatNumber(video.satisfactionScore)}</span></p></div></td>
-                                    <td className="px-4 py-3 align-middle text-center"><div className="text-xs flex flex-col items-center justify-center space-y-2"><div className="flex items-center gap-1.5" title="영상 길이"><span className="text-gray-400"><ClockIcon /></span><span className="font-semibold text-white">{Math.floor(video.durationMinutes)}분</span></div><div className="flex items-center gap-1.5" title="채널 구독자 수"><span className="text-gray-400"><UsersIcon /></span><span className="font-semibold text-white">{formatNumber(video.subscribers)}</span></div></div></td>
+                                    <td className="px-4 py-3 align-middle whitespace-nowrap"><div className="flex flex-col space-y-1.5 text-xs"><div className="flex items-center gap-1.5 text-gray-300" title="조회수"><span className="text-gray-400"><EyeIcon /></span><span className="font-bold text-base text-white">{formatNumber(video.viewCount)}</span></div><div className="flex items-center gap-1.5 text-gray-300" title="시간당 조회수"><span className="text-gray-400"><FireIcon /></span><span className="font-semibold">{formatNumber(video.viewsPerHour)}</span></div><div className="flex items-center gap-1.5 text-gray-400" title="게시일"><span className="text-gray-400"><CalendarIcon /></span><span>{formatDate(video.publishedAt)}</span></div><div className="flex items-center gap-1.5 text-gray-300" title="영상 추정 수익"><span className="text-gray-400"><MoneyIcon /></span><span className="font-semibold text-green-400">${formatNumber(video.estimatedRevenue)}</span></div></div></td>
+                                    <td className="px-4 py-3 align-middle whitespace-nowrap"><div className="flex flex-col space-y-1.5 text-xs"><div className="flex items-center gap-1.5 text-gray-300" title="좋아요"><span className="text-gray-400"><ThumbsUpIcon /></span><span>{formatNumber(video.likeCount)}</span></div><div className="flex items-center gap-1.5 text-gray-300" title="댓글"><span className="text-gray-400"><ChatBubbleIcon /></span><span>{formatNumber(video.commentCount)}</span></div><div className="flex items-center gap-1.5 text-gray-300" title="참여율"><span className="text-gray-400"><TrendingUpIcon /></span><span className="font-bold text-blue-400">{video.engagementRate ? video.engagementRate.toFixed(1) : 0}%</span></div></div></td>
+                                    <td className="px-4 py-3 align-middle text-center"><GradeBadge grade={video.grade} /><div className="text-xs mt-2 space-y-1"><p><span className="text-gray-400">성과:</span> <span className="font-semibold text-white">{video.performanceRatio ? video.performanceRatio.toFixed(2) : '0.00'}</span></p><p><span className="text-gray-400">만족:</span> <span className="font-semibold text-white">{formatNumber(video.satisfactionScore)}</span></p></div></td>
+                                    <td className="px-4 py-3 align-middle text-center"><div className="text-xs flex flex-col items-center justify-center space-y-2"><div className="flex items-center gap-1.5" title="영상 길이"><span className="text-gray-400"><ClockIcon /></span><span className="font-semibold text-white">{Math.floor(video.durationMinutes || 0)}분</span></div><div className="flex items-center gap-1.5" title="채널 구독자 수"><span className="text-gray-400"><UsersIcon /></span><span className="font-semibold text-white">{formatNumber(video.subscribers)}</span></div></div></td>
                                     <td className="px-4 py-3 align-middle"><div className="flex flex-col items-center space-y-1.5"><button className="px-2 py-1.5 text-xs font-semibold rounded bg-purple-600 hover:bg-purple-700 text-white w-20 text-center" onClick={() => onShowVideoDetail(video.id)}>상세 분석</button><button onClick={() => onOpenCommentModal({id: video.id, title: video.title})} className="px-2 py-1.5 text-xs font-semibold rounded bg-gray-600 hover:bg-gray-500 text-white w-20 text-center">댓글 분석</button><button onClick={() => onShowChannelDetail(video.channelId)} className="px-2 py-1.5 text-xs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white w-20 text-center">채널 분석</button></div></td>
                                 </tr>
                             )})}
@@ -164,7 +172,10 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onShowChannelDetail
             {/* Mobile Card View (visible on mobile) */}
             <div className="md:hidden space-y-3">
                 {videos.map((video, index) => {
+                    // Safety guard for mobile view
+                    if (!video || !video.id) return null;
                     const countryLabel = video.channelCountry ? (COUNTRY_FLAGS[video.channelCountry] || video.channelCountry) : '';
+                    
                     return (
                     <div key={video.id} className="bg-gray-800/80 rounded-lg p-3 border border-gray-700/50">
                         <div className="flex items-start space-x-3 mb-3">
@@ -207,8 +218,8 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onShowChannelDetail
                            <div className="space-y-1.5">
                                <MetricItem icon={<ThumbsUpIcon />} label="좋아요" value={formatNumber(video.likeCount)} />
                                <MetricItem icon={<ChatBubbleIcon />} label="댓글" value={formatNumber(video.commentCount)} />
-                               <MetricItem icon={<TrendingUpIcon />} label="참여율" value={<span className="font-bold text-blue-400">{video.engagementRate.toFixed(1)}%</span>} />
-                               <MetricItem icon={<ClockIcon />} label="영상 길이" value={`${Math.floor(video.durationMinutes)}분`} />
+                               <MetricItem icon={<TrendingUpIcon />} label="참여율" value={<span className="font-bold text-blue-400">{video.engagementRate ? video.engagementRate.toFixed(1) : 0}%</span>} />
+                               <MetricItem icon={<ClockIcon />} label="영상 길이" value={`${Math.floor(video.durationMinutes || 0)}분`} />
                            </div>
                         </div>
                         
@@ -216,7 +227,7 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onShowChannelDetail
                             <div className="flex items-center gap-3">
                                 <GradeBadge grade={video.grade} />
                                 <div className="text-xs">
-                                   <p><span className="text-gray-400">성과:</span> <span className="font-semibold text-white">{video.performanceRatio.toFixed(2)}</span></p>
+                                   <p><span className="text-gray-400">성과:</span> <span className="font-semibold text-white">{video.performanceRatio ? video.performanceRatio.toFixed(2) : '0.00'}</span></p>
                                    <p><span className="text-gray-400">만족:</span> <span className="font-semibold text-white">{formatNumber(video.satisfactionScore)}</span></p>
                                 </div>
                             </div>

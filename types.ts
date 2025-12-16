@@ -1,4 +1,41 @@
 
+declare global {
+    interface Window {
+        env: {
+            FIREBASE_API_KEY?: string;
+            FIREBASE_AUTH_DOMAIN?: string;
+            FIREBASE_PROJECT_ID?: string;
+            FIREBASE_STORAGE_BUCKET?: string;
+            FIREBASE_MESSAGING_SENDER_ID?: string;
+            FIREBASE_APP_ID?: string;
+            ADMIN_EMAIL?: string;
+            API_KEY?: string; // Gemini API Key
+            [key: string]: string | undefined;
+        };
+        // For Google Sign-In
+        google?: {
+            accounts: {
+                id: {
+                    initialize: (config: { client_id: string; callback: (response: any) => void; }) => void;
+                    renderButton: (
+                        parent: HTMLElement,
+                        options: {
+                            type: string;
+                            theme: string;
+                            size: string;
+                            text: string;
+                            shape: string;
+                            logo_alignment: string;
+                            width: string;
+                        }
+                    ) => void;
+                };
+            };
+        };
+        // For HTML2PDF
+        html2pdf?: () => { from: (element: HTMLElement) => { set: (opt: any) => { save: () => Promise<void> } } };
+    }
+}
 
 export interface VideoData {
   id: string;

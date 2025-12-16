@@ -641,6 +641,7 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
 
                 const views = parseInt(stats.viewCount || '0');
                 const duration = parseISO8601Duration(content.duration);
+                // Ensure sub count is safe number, default to 0 if missing
                 const subscriberCount = channelMap.get(snippet.channelId)?.subscribers || 0;
                 
                 const revenue = calculateEstimatedRevenue(

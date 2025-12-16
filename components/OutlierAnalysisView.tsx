@@ -53,6 +53,9 @@ const formatNumber = (num: number): string => {
 };
 
 const OutlierVideoRow: React.FC<{ video: VideoData; averageViews: number; onShowVideoDetail: (id: string) => void; onShowChannelDetail: (id: string) => void }> = ({ video, averageViews, onShowVideoDetail, onShowChannelDetail }) => {
+    // Safety check for invalid video data
+    if (!video || !video.id) return null;
+
     const multiplier = averageViews > 0 ? (video.viewCount / averageViews) : 0;
     return (
         <div className="grid grid-cols-12 items-center gap-4 px-4 py-3 hover:bg-gray-700/40">
@@ -480,7 +483,13 @@ const OutlierAnalysisView: React.FC<OutlierAnalysisViewProps> = ({ user, appSett
                                     </div>
                                     <div className="divide-y divide-gray-700/50">
                                         {outlierVideos.map(video => (
-                                            <OutlierVideoRow key={video.id} video={video} averageViews={displayStats?.averageViews || 0} onShowVideoDetail={onShowVideoDetail} onShowChannelDetail={onShowChannelDetail}/>
+                                            <OutlierVideoRow 
+                                                key={video.id} 
+                                                video={video} 
+                                                averageViews={displayStats?.averageViews || 0} 
+                                                onShowVideoDetail={onShowVideoDetail} 
+                                                onShowChannelDetail={onShowChannelDetail}
+                                            />
                                         ))}
                                     </div>
                                  </div>

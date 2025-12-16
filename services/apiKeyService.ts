@@ -22,19 +22,30 @@ export function setUserGeminiApiKey(key: string | null) {
 }
 
 /**
- * Gets the currently active Gemini API key, prioritizing user key > system key > environment variable.
+ * Gets the currently active Gemini API key, prioritizing user key > system key > runtime env > build env.
  * @returns The Gemini API key string.
  * @throws {Error} if no key is configured anywhere.
  */
 export function getGeminiApiKey(): string {
+    // 1. User Setting
+    if (userGeminiKey) return userGeminiKey;
+    
+    // 2. System Setting (Admin Dashboard)
+    if (systemGeminiKey) return systemGeminiKey;
+
+    // 3. Runtime Environment (Cloud Run Injection)
+    // @ts-ignore
+    if (typeof window !== 'undefined' && window.env && window.env.API_KEY) {
+        // @ts-ignore
+        return window.env.API_KEY;
+    }
+
+    // 4. Build-time Environment (.env file)
     // vite.config.ts의 define에 의해 process.env.API_KEY는 실제 값으로 치환됩니다.
-    // 만약 치환되지 않았다면(빌드 오류 등), 빈 문자열이 반환될 수 있으므로 체크합니다.
     const envKey = process.env.API_KEY || "";
     
-    const key = userGeminiKey || systemGeminiKey || envKey;
-    if (!key) {
-        console.error("Gemini API Key is not configured. Please set it in admin settings or user account settings.");
-        throw new Error("Gemini API Key is not configured.");
-    }
-    return key;
+    if (envKey) return envKey;
+
+    console.error("Gemini API Key is not configured. Please set it in admin settings or user account settings.");
+    throw new Error("Gemini API Key is not configured.");
 }

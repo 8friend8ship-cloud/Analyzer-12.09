@@ -74,6 +74,7 @@ const RankChange: React.FC<{ change: number }> = ({ change }) => {
 };
 
 const PerformanceBadge: React.FC<{ ratio: number }> = ({ ratio }) => {
+    // Safety check for NaN or Infinity to prevent crashes
     if (typeof ratio !== 'number' || isNaN(ratio) || !isFinite(ratio)) {
         return <span className="text-xs text-gray-500">-</span>;
     }
@@ -130,7 +131,17 @@ const formatNumber = (num: number): string => {
     return num.toLocaleString();
 };
 
-// --- Sub-components to prevent rendering crashes ---
+// --- Type Guards ---
+// These functions prevent rendering crashes by checking if the data object matches the expected type.
+const isChannelItem = (item: any): item is ChannelRankingData => {
+    return item && typeof item === 'object' && 'subscriberCount' in item && !('channelSubscriberCount' in item);
+};
+
+const isVideoItem = (item: any): item is VideoRankingData => {
+    return item && typeof item === 'object' && 'channelSubscriberCount' in item;
+};
+
+// --- Sub-components ---
 
 const ChannelRow: React.FC<{ 
     item: ChannelRankingData; 
@@ -186,9 +197,12 @@ const VideoRow: React.FC<{
     const categoryName = item.categoryId ? YOUTUBE_CATEGORIES_KR[item.categoryId] : null;
     const countryLabel = COUNTRY_FLAGS[item.channelCountry || ''] || item.channelCountry;
     
+    // Safety Calculation: Avoid Division by Zero
     let performanceRatio = 0;
-    if (item.channelSubscriberCount > 0) {
+    if (item && item.channelSubscriberCount > 0 && item.viewCount > 0) {
         performanceRatio = item.viewCount / item.channelSubscriberCount;
+    } else if (item.channelSubscriberCount === 0 && item.viewCount > 0) {
+        performanceRatio = 99.9; // Max cap for missing sub count
     }
 
     return (
@@ -303,9 +317,12 @@ const VideoCardMobile: React.FC<{
 }> = ({ item, rank, isPerformance, isSelected, onSelect, onShowDetail }) => {
     const categoryName = item.categoryId ? YOUTUBE_CATEGORIES_KR[item.categoryId] : null;
     
+    // Safety Calculation
     let performanceRatio = 0;
-    if (item.channelSubscriberCount > 0) {
+    if (item && item.channelSubscriberCount > 0 && item.viewCount > 0) {
         performanceRatio = item.viewCount / item.channelSubscriberCount;
+    } else if (item && item.channelSubscriberCount === 0 && item.viewCount > 0) {
+        performanceRatio = 99.9;
     }
 
     return (
@@ -420,28 +437,37 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
     
     const processPerformanceData = (rawData: VideoRankingData[]) => {
         if (!Array.isArray(rawData)) return [];
-        return rawData
-            .filter(video => 
-                video && 
-                typeof video.channelSubscriberCount === 'number' && 
-                video.channelSubscriberCount >= 1000 && 
-                typeof video.viewCount === 'number' &&
-                video.viewCount >= 10000
-            )
-            .sort((a, b) => {
-                const subA = a.channelSubscriberCount || 1;
-                const subB = b.channelSubscriberCount || 1;
-                const ratioA = a.viewCount / subA;
-                const ratioB = b.viewCount / subB;
-                return ratioB - ratioA;
-            });
+        
+        try {
+            return rawData
+                .filter(video => 
+                    video && 
+                    typeof video === 'object' &&
+                    video.id &&
+                    // NOTE: Relaxed filter to allow fetching data where subs might be missing, handled in UI
+                    typeof video.viewCount === 'number' &&
+                    video.viewCount >= 10000
+                )
+                .sort((a, b) => {
+                    const subA = a.channelSubscriberCount || 1;
+                    const subB = b.channelSubscriberCount || 1;
+                    const ratioA = a.viewCount / subA;
+                    const ratioB = b.viewCount / subB;
+                    // Handle Infinity or NaN during sort
+                    if (!isFinite(ratioA)) return 1;
+                    if (!isFinite(ratioB)) return -1;
+                    return ratioB - ratioA;
+                });
+        } catch (e) {
+            console.error("Error processing performance data:", e);
+            return [];
+        }
     };
 
-    // The core fetching logic
     const fetchData = async (targetTab: ActiveTab) => {
         setIsLoading(true);
         setError(null);
-        setResults([]); // Clear results first to avoid type mismatch during render
+        setResults([]); // **CRITICAL FIX**: Clear results immediately to prevent type mismatch rendering
         setHasSearched(true); 
 
         const filters = { 
@@ -490,13 +516,13 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
         setActiveTab(tab);
         setSelectedChannels({});
         setVideoFormat('all');
+        setResults([]); // **CRITICAL FIX**: Reset results on tab change
         fetchData(tab);
     };
 
     const handleSearchClick = () => {
         fetchData(activeTab);
     };
-    
     
     const renderResults = () => {
         if (!hasSearched && !isLoading) {
@@ -549,34 +575,44 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                     <div className="divide-y divide-gray-700/50">
                         {results.map((item, index) => {
                             if (!item) return null;
-                            const isChannel = activeTab === 'channels';
+                            const isChannelTab = activeTab === 'channels';
                             const isPerformance = activeTab === 'performance';
                             
-                            // Type Guard: Ensure we are rendering the correct component for the data type
-                            if (isChannel && 'subscriberCount' in item) {
-                                return (
-                                    <ChannelRow 
-                                        key={item.id} 
-                                        item={item as ChannelRankingData} 
-                                        rank={index + 1}
-                                        isSelected={!!selectedChannels[item.id]}
-                                        onSelect={(val) => handleChannelSelect({id: item.id, name: item.name}, val)}
-                                        onShowDetail={onShowChannelDetail}
-                                    />
-                                );
-                            } else if (!isChannel && 'channelSubscriberCount' in item) {
-                                return (
-                                    <VideoRow 
-                                        key={item.id} 
-                                        item={item as VideoRankingData} 
-                                        rank={index + 1}
-                                        isPerformance={isPerformance}
-                                        isSelected={!!selectedChannels[(item as VideoRankingData).channelId]}
-                                        onSelect={(val) => handleChannelSelect({id: (item as VideoRankingData).channelId, name: (item as VideoRankingData).channelName}, val)}
-                                        onShowDetail={onShowVideoDetail}
-                                        onShowChannel={onShowChannelDetail}
-                                    />
-                                );
+                            // **CRITICAL FIX**: Type Guard to prevent crash during tab switching
+                            // If current tab is channels, but item is VideoRankingData, skip render
+                            if (isChannelTab && !isChannelItem(item)) return null;
+                            // If current tab is videos/performance, but item is ChannelRankingData, skip render
+                            if (!isChannelTab && !isVideoItem(item)) return null;
+
+                            try {
+                                if (isChannelTab && isChannelItem(item)) {
+                                    return (
+                                        <ChannelRow 
+                                            key={item.id} 
+                                            item={item} 
+                                            rank={index + 1}
+                                            isSelected={!!selectedChannels[item.id]}
+                                            onSelect={(val) => handleChannelSelect({id: item.id, name: item.name}, val)}
+                                            onShowDetail={onShowChannelDetail}
+                                        />
+                                    );
+                                } else if (!isChannelTab && isVideoItem(item)) {
+                                    return (
+                                        <VideoRow 
+                                            key={item.id} 
+                                            item={item} 
+                                            rank={index + 1}
+                                            isPerformance={isPerformance}
+                                            isSelected={!!selectedChannels[item.channelId]}
+                                            onSelect={(val) => handleChannelSelect({id: item.channelId, name: item.channelName}, val)}
+                                            onShowDetail={onShowVideoDetail}
+                                            onShowChannel={onShowChannelDetail}
+                                        />
+                                    );
+                                }
+                            } catch (e) {
+                                console.warn("Skipping bad row:", item, e);
+                                return null;
                             }
                             return null;
                         })}
@@ -587,32 +623,40 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
                 <div className="md:hidden space-y-3">
                     {results.map((item, index) => {
                         if (!item) return null;
-                        const isChannel = activeTab === 'channels';
+                        const isChannelTab = activeTab === 'channels';
                         const isPerformance = activeTab === 'performance';
 
-                        if (isChannel && 'subscriberCount' in item) {
-                            return (
-                                <ChannelCardMobile 
-                                    key={item.id}
-                                    item={item as ChannelRankingData}
-                                    rank={index + 1}
-                                    isSelected={!!selectedChannels[item.id]}
-                                    onSelect={(val) => handleChannelSelect({id: item.id, name: item.name}, val)}
-                                    onShowDetail={onShowChannelDetail}
-                                />
-                            );
-                        } else if (!isChannel && 'channelSubscriberCount' in item) {
-                            return (
-                                <VideoCardMobile 
-                                    key={item.id}
-                                    item={item as VideoRankingData}
-                                    rank={index + 1}
-                                    isPerformance={isPerformance}
-                                    isSelected={!!selectedChannels[(item as VideoRankingData).channelId]}
-                                    onSelect={(val) => handleChannelSelect({id: (item as VideoRankingData).channelId, name: (item as VideoRankingData).channelName}, val)}
-                                    onShowDetail={onShowVideoDetail}
-                                />
-                            );
+                        // **CRITICAL FIX**: Type Guard for Mobile
+                        if (isChannelTab && !isChannelItem(item)) return null;
+                        if (!isChannelTab && !isVideoItem(item)) return null;
+
+                        try {
+                            if (isChannelTab && isChannelItem(item)) {
+                                return (
+                                    <ChannelCardMobile 
+                                        key={item.id}
+                                        item={item}
+                                        rank={index + 1}
+                                        isSelected={!!selectedChannels[item.id]}
+                                        onSelect={(val) => handleChannelSelect({id: item.id, name: item.name}, val)}
+                                        onShowDetail={onShowChannelDetail}
+                                    />
+                                );
+                            } else if (!isChannelTab && isVideoItem(item)) {
+                                return (
+                                    <VideoCardMobile 
+                                        key={item.id}
+                                        item={item}
+                                        rank={index + 1}
+                                        isPerformance={isPerformance}
+                                        isSelected={!!selectedChannels[item.channelId]}
+                                        onSelect={(val) => handleChannelSelect({id: item.channelId, name: item.channelName}, val)}
+                                        onShowDetail={onShowVideoDetail}
+                                    />
+                                );
+                            }
+                        } catch (e) {
+                            return null;
                         }
                         return null;
                     })}

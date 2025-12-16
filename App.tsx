@@ -54,9 +54,17 @@ function App() {
   const handleLogin = useCallback((credentials: { googleUser?: { name: string; email: string }; email?: string; password?: string }) => {
     let userToSet: User | null = null;
     
-    // vite.config.ts에서 주입된 환경변수 사용
-    // 값이 없으면 기본 이메일로 대체
-    const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '8friend8ship@hanmail.net';
+    // 런타임 환경변수(window.env) 우선 체크, 없으면 빌드타임(process.env) 체크
+    const getAdminEmail = () => {
+        // @ts-ignore
+        if (typeof window !== 'undefined' && window.env && window.env.ADMIN_EMAIL) {
+            // @ts-ignore
+            return window.env.ADMIN_EMAIL;
+        }
+        return process.env.ADMIN_EMAIL || '8friend8ship@hanmail.net';
+    };
+
+    const ADMIN_EMAIL = getAdminEmail();
     
     if (credentials.googleUser) {
         const { name, email } = credentials.googleUser;

@@ -2,32 +2,47 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
-// Configuration
-// vite.config.ts의 define 설정에 의해 'process.env.KEY' 문자열 자체가 빌드 시점에 실제 값(문자열)으로 바뀝니다.
+// Configuration logic: 
+// 1. Runtime Injection (window.env via env-config.js) -> For Cloud Run / Production
+// 2. Build-time Injection (process.env via Vite) -> For Local Dev
+const getEnv = (key: string) => {
+    // @ts-ignore
+    if (typeof window !== 'undefined' && window.env && window.env[key]) {
+        // @ts-ignore
+        return window.env[key];
+    }
+    // Fallback to Vite define replacement
+    return process.env[key];
+}
+
 const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY,
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.FIREBASE_APP_ID
+  apiKey: getEnv('FIREBASE_API_KEY'),
+  authDomain: getEnv('FIREBASE_AUTH_DOMAIN'),
+  projectId: getEnv('FIREBASE_PROJECT_ID'),
+  storageBucket: getEnv('FIREBASE_STORAGE_BUCKET'),
+  messagingSenderId: getEnv('FIREBASE_MESSAGING_SENDER_ID'),
+  appId: getEnv('FIREBASE_APP_ID')
 };
 
 let db: any = null;
 
+// Initialize Firebase only if valid config exists
 try {
-    // 키 유효성 검사 및 초기화
-    // 빈 문자열("")이나 기본값("YOUR_API_KEY")이 아닐 때만 초기화
     const apiKey = firebaseConfig.apiKey;
-    if (apiKey && apiKey !== "" && apiKey !== "YOUR_API_KEY" && !apiKey.includes("YOUR_")) {
+    // Check for valid API key (not empty, not default placeholder)
+    const isValidKey = apiKey && apiKey.trim() !== "" && !apiKey.includes("YOUR_") && apiKey !== "undefined";
+
+    if (isValidKey) {
         const app = initializeApp(firebaseConfig);
         db = getFirestore(app);
-        console.log("[Firebase] Initialized successfully with Cloud Run config.");
+        console.log("[Firebase] Initialized successfully with runtime config.");
     } else {
-        console.warn("[Firebase] Environment variables missing. Firestore features (Central Cache) are disabled. (Current Key Status: " + (apiKey ? "Present" : "Missing") + ")");
+        // Silently disable Firestore if keys are missing (prevents scary warnings causing confusion)
+        console.warn("[Firebase] Config missing or invalid. Cache disabled. Key exists:", !!apiKey);
+        db = null;
     }
 } catch (e) {
-    console.error("[Firebase] Initialization failed:", e);
+    console.error("[Firebase] Initialization error (Cache disabled):", e);
     db = null;
 }
 
