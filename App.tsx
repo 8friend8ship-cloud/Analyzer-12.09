@@ -6,24 +6,22 @@ import Dashboard from './components/Dashboard';
 import Registration from './components/Registration';
 import AccountSettings from './components/AccountSettings';
 import { clearCache } from './services/cacheService';
+import { getStoredSettings, saveStoredSettings, getStoredUsers, upsertUser, findUserByEmail, saveStoredUsers } from './services/storageService';
 import type { User, AppSettings } from './types';
 import { setSystemGeminiApiKey, setUserGeminiApiKey } from './services/apiKeyService';
 import Spinner from './components/common/Spinner';
 
 // Helper to safely get environment variables (Runtime > Build)
-// Checks for KEY, VITE_KEY in window.env, then import.meta.env
 const getEnvVar = (key: string): string => {
     const runtimeEnv = (window as any).env;
     
     if (runtimeEnv) {
         if (runtimeEnv[key]) return runtimeEnv[key];
         if (runtimeEnv[`VITE_${key}`]) return runtimeEnv[`VITE_${key}`];
-        // Handle case where input key has VITE_ but env var doesn't
         const strippedKey = key.replace(/^VITE_/, '');
         if (runtimeEnv[strippedKey]) return runtimeEnv[strippedKey];
     }
 
-    // Check import.meta.env (Build)
     // @ts-ignore
     if (import.meta && import.meta.env) {
         // @ts-ignore
@@ -35,15 +33,14 @@ const getEnvVar = (key: string): string => {
     return "";
 }
 
-// Initial settings with environment variable fallback for system keys
-const initialAppSettings: AppSettings = {
+// Default settings (used if nothing in storage)
+const defaultAppSettings: AppSettings = {
     freePlanLimit: 30,
     plans: {
         pro: { name: 'Pro', analyses: 100, price: 19000 },
         biz: { name: 'Biz', analyses: 200, price: 29000 },
     },
     apiKeys: {
-        // Check both standard name and VITE_ prefixed name to be safe
         youtube: getEnvVar('YOUTUBE_API_KEY') || getEnvVar('VITE_YOUTUBE_API_KEY'), 
         analytics: '',
         reporting: '',
@@ -55,22 +52,59 @@ const initialAppSettings: AppSettings = {
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<'landing' | 'login' | 'register' | 'dashboard' | 'account'>('landing');
-  const [appSettings, setAppSettings] = useState<AppSettings>(initialAppSettings);
+  // Initialize from storage or default
+  const [appSettings, setAppSettings] = useState<AppSettings>(() => getStoredSettings(defaultAppSettings));
   const [initializing, setInitializing] = useState(true);
+
+  // Save settings whenever they change
+  useEffect(() => {
+      saveStoredSettings(appSettings);
+      setSystemGeminiApiKey(appSettings.apiKeys.gemini);
+  }, [appSettings]);
 
   // Initialize App & Restore Session
   useEffect(() => {
     const initializeApp = () => {
-      // Check for saved user session
-      const savedUser = localStorage.getItem('content_os_user_session');
+      // 1. Ensure Admin User exists in "Database" (Storage)
+      const adminEmail = getEnvVar('ADMIN_EMAIL') || '8friend8ship@hanmail.net';
+      let adminUser = findUserByEmail(adminEmail);
       
-      if (savedUser) {
+      if (!adminUser) {
+          adminUser = {
+            id: 'admin_001',
+            name: 'Master Admin',
+            email: adminEmail,
+            isAdmin: true,
+            plan: 'Biz',
+            usage: 0,
+            planExpirationDate: '2099-12-31'
+          };
+          upsertUser(adminUser);
+      } else if (!adminUser.isAdmin) {
+          // Fix admin rights if lost
+          adminUser.isAdmin = true;
+          upsertUser(adminUser);
+      }
+
+      // 2. Restore Session
+      const savedSession = localStorage.getItem('content_os_user_session');
+      if (savedSession) {
           try {
-              const parsedUser = JSON.parse(savedUser);
-              setUser(parsedUser);
-              setView('dashboard');
+              const sessionUser = JSON.parse(savedSession);
+              // Re-fetch fresh user data from storage to get latest plan/usage info
+              const freshUser = getStoredUsers().find(u => u.id === sessionUser.id);
+              
+              if (freshUser) {
+                  setUser(freshUser);
+                  setView('dashboard');
+              } else {
+                  // Session invalid (user deleted?)
+                  localStorage.removeItem('content_os_user_session');
+                  setUser(null);
+                  setView('landing');
+              }
           } catch (e) {
-              console.error("Failed to restore user session", e);
+              console.error("Failed to restore session", e);
               localStorage.removeItem('content_os_user_session');
               setUser(null);
               setView('landing');
@@ -85,95 +119,110 @@ function App() {
     initializeApp();
   }, []);
 
-  useEffect(() => {
-    setSystemGeminiApiKey(appSettings.apiKeys.gemini);
-  }, [appSettings.apiKeys.gemini]);
-
+  // Update Gemini Key based on user
   useEffect(() => {
     setUserGeminiApiKey(user?.apiKeyGemini || null);
   }, [user?.apiKeyGemini]);
 
 
   const handleLogin = useCallback((credentials: { googleUser?: { name: string; email: string }; email?: string; password?: string }) => {
-    let userToSet: User | null = null;
+    let targetUser: User | null = null;
     
-    const getAdminEmail = () => {
-        // Safe access to runtime env
-        const runtimeEmail = (window as any).env?.ADMIN_EMAIL;
-        if (runtimeEmail) return runtimeEmail;
-        return process.env.ADMIN_EMAIL || '8friend8ship@hanmail.net';
-    };
-
-    const ADMIN_EMAIL = getAdminEmail();
-    
+    // 1. Google Login
     if (credentials.googleUser) {
         const { name, email } = credentials.googleUser;
-        const userId = 'gu_' + email.replace(/@.*/, '');
-        const isAdmin = email === ADMIN_EMAIL;
-        const plan = isAdmin ? 'Biz' : 'Free';
-        const expirationDate = new Date();
-        expirationDate.setMonth(expirationDate.getMonth() + 1);
+        const existingUser = findUserByEmail(email);
 
-        userToSet = {
-            id: userId,
-            name: name,
-            email: email,
-            isAdmin: isAdmin,
-            plan: plan,
-            usage: 0,
-            apiKeyYoutube: '',
-            apiKeyGemini: '',
-            planExpirationDate: (plan !== 'Free') ? expirationDate.toISOString().split('T')[0] : undefined,
-        };
-        const storedKeys = localStorage.getItem(`user_api_keys_${userId}`);
-        if (storedKeys) {
-            const { apiKeyYoutube, apiKeyGemini } = JSON.parse(storedKeys);
-            if(apiKeyYoutube) userToSet.apiKeyYoutube = apiKeyYoutube;
-            if(apiKeyGemini) userToSet.apiKeyGemini = apiKeyGemini;
+        if (existingUser) {
+            targetUser = existingUser;
+        } else {
+            // Register new Google user
+            const newUser: User = {
+                id: 'gu_' + email.replace(/@.*/, '') + '_' + Date.now().toString(36),
+                name: name,
+                email: email,
+                isAdmin: false,
+                plan: 'Free',
+                usage: 0,
+            };
+            targetUser = upsertUser(newUser);
         }
-
-    } else if (credentials.email && credentials.password) {
+    } 
+    // 2. Email/Password Login
+    else if (credentials.email && credentials.password) {
         const { email, password } = credentials;
-        const isAdmin = email === 'admin@corp.com' || email === ADMIN_EMAIL;
-        const plan = isAdmin ? 'Biz' : 'Free';
-        const expirationDate = new Date();
-        expirationDate.setMonth(expirationDate.getMonth() + 1);
-
-        userToSet = {
-            id: 'form_' + email.replace(/@.*/, ''),
-            name: email.split('@')[0],
-            email: email,
-            password: password,
-            isAdmin: isAdmin,
-            plan: plan,
-            usage: 0,
-            apiKeyYoutube: '',
-            apiKeyGemini: '',
-            planExpirationDate: (plan !== 'Free') ? expirationDate.toISOString().split('T')[0] : undefined,
-        };
+        const existingUser = findUserByEmail(email);
+        
+        if (existingUser) {
+            // In a real app, verify password hash here. 
+            // For this demo, we assume match if user exists (or simple check if we stored pwd)
+            if (existingUser.password && existingUser.password !== password) {
+                alert("비밀번호가 일치하지 않습니다.");
+                return;
+            }
+            targetUser = existingUser;
+        } else {
+            // Admin backdoor for hardcoded admin email if not in storage yet (fallback)
+            const adminEmail = getEnvVar('ADMIN_EMAIL') || '8friend8ship@hanmail.net';
+            if (email === adminEmail || email === 'admin@corp.com') {
+                 targetUser = {
+                    id: 'admin_temp',
+                    name: 'Admin',
+                    email: email,
+                    isAdmin: true,
+                    plan: 'Biz',
+                    usage: 0
+                };
+                upsertUser(targetUser);
+            } else {
+                alert("등록되지 않은 사용자입니다. 회원가입을 진행해주세요.");
+                return;
+            }
+        }
     }
-    
-    if (userToSet) {
-        setUser(userToSet);
-        // Persist session
-        localStorage.setItem('content_os_user_session', JSON.stringify(userToSet));
+
+    if (targetUser) {
+        setUser(targetUser);
+        localStorage.setItem('content_os_user_session', JSON.stringify(targetUser));
         setView('dashboard');
     }
+  }, []);
+
+  const handleRegister = useCallback((userInfo: { email: string; password: string }) => {
+      const existingUser = findUserByEmail(userInfo.email);
+      if (existingUser) {
+          alert("이미 가입된 이메일입니다. 로그인해주세요.");
+          setView('login');
+          return;
+      }
+
+      const newUser: User = {
+          id: 'user_' + Date.now().toString(36),
+          name: userInfo.email.split('@')[0],
+          email: userInfo.email,
+          password: userInfo.password, // In real app, hash this!
+          isAdmin: false,
+          plan: 'Free',
+          usage: 0,
+          planExpirationDate: undefined
+      };
+
+      upsertUser(newUser);
+      
+      // Auto login
+      setUser(newUser);
+      localStorage.setItem('content_os_user_session', JSON.stringify(newUser));
+      setView('dashboard');
+      alert("회원가입이 완료되었습니다!");
   }, []);
 
   const handleUpdateUser = useCallback((updatedUser: Partial<User>) => {
       setUser(prevUser => {
           if (!prevUser) return null;
           const newUser = { ...prevUser, ...updatedUser };
-
-          // Persist API Keys specifically
-          if (newUser.id.startsWith('gu_')) {
-              const keysToStore = {
-                  apiKeyYoutube: newUser.apiKeyYoutube,
-                  apiKeyGemini: newUser.apiKeyGemini,
-              };
-              localStorage.setItem(`user_api_keys_${newUser.id}`, JSON.stringify(keysToStore));
-          }
+          
+          // Update in storage ("Database")
+          upsertUser(newUser);
           
           // Update Session
           localStorage.setItem('content_os_user_session', JSON.stringify(newUser));
@@ -183,7 +232,11 @@ function App() {
   }, []);
 
   const handleUpdateAppSettings = useCallback((updatedSettings: Partial<AppSettings>) => {
-      setAppSettings(prev => ({...prev, ...updatedSettings}));
+      setAppSettings(prev => {
+          const next = { ...prev, ...updatedSettings };
+          saveStoredSettings(next);
+          return next;
+      });
   }, []);
   
   const handleLogout = useCallback(() => {
@@ -237,7 +290,7 @@ function App() {
             case 'login':
                 return <Login onLogin={handleLogin} onNavigate={navigateTo} />;
             case 'register':
-                return <Registration onRegister={() => handleLogin({email: 'new@user.com', password: 'password'})} onNavigate={navigateTo} />;
+                return <Registration onRegister={handleRegister} onNavigate={navigateTo} />;
             default:
                 setView('landing');
                 return <LandingPage onStart={() => setView('login')} />;

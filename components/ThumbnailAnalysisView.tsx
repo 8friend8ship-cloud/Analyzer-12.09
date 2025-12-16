@@ -11,6 +11,9 @@ interface ThumbnailAnalysisViewProps {
   onBack: () => void;
   savedState: ThumbnailViewState | null;
   onSaveState: (state: ThumbnailViewState) => void;
+  onUpdateUser: (updatedUser: Partial<User>) => void;
+  onUpgradeRequired: () => void;
+  planLimit: number;
 }
 
 const analysisFilters: FilterState = {
@@ -24,7 +27,16 @@ const analysisFilters: FilterState = {
   category: 'all',
 };
 
-const ThumbnailAnalysisView: React.FC<ThumbnailAnalysisViewProps> = ({ user, appSettings, onBack, savedState, onSaveState }) => {
+const ThumbnailAnalysisView: React.FC<ThumbnailAnalysisViewProps> = ({ 
+    user, 
+    appSettings, 
+    onBack, 
+    savedState, 
+    onSaveState,
+    onUpdateUser,
+    onUpgradeRequired,
+    planLimit
+}) => {
   const [query, setQuery] = useState(savedState?.query || '');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +53,12 @@ const ThumbnailAnalysisView: React.FC<ThumbnailAnalysisViewProps> = ({ user, app
   }, [query, thumbnails, insights, onSaveState]);
 
   const handleAnalysis = useCallback(async (searchQuery: string) => {
+    // Usage Limit Check
+    if (user.usage >= planLimit) {
+        onUpgradeRequired();
+        return;
+    }
+
     if (!searchQuery.trim()) {
       setError("분석할 키워드를 입력해주세요.");
       return;
@@ -80,13 +98,16 @@ const ThumbnailAnalysisView: React.FC<ThumbnailAnalysisViewProps> = ({ user, app
 
       setThumbnails(scoredVideoData);
       setInsights(aiInsights);
+      
+      // Deduct usage
+      onUpdateUser({ usage: user.usage + 1 });
 
     } catch (err) {
       setError(err instanceof Error ? err.message : "썸네일 분석 중 오류가 발생했습니다.");
     } finally {
       setIsLoading(false);
     }
-  }, [user, appSettings]);
+  }, [user, appSettings, onUpgradeRequired, onUpdateUser, planLimit]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

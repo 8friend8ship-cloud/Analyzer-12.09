@@ -15,6 +15,9 @@ import BenchmarkComparison from './BenchmarkComparison';
 interface MyChannelAnalyticsProps {
     user: User;
     appSettings: AppSettings;
+    onUpdateUser: (updatedUser: Partial<User>) => void;
+    onUpgradeRequired: () => void;
+    planLimit: number;
 }
 
 // --- Helper Functions ---
@@ -403,7 +406,7 @@ const SummaryStep: React.FC<{
 };
 
 
-const MyChannelAnalytics: React.FC<MyChannelAnalyticsProps> = ({ user, appSettings }) => {
+const MyChannelAnalytics: React.FC<MyChannelAnalyticsProps> = ({ user, appSettings, onUpdateUser, onUpgradeRequired, planLimit }) => {
     // State Machine: 'input' -> 'loading' -> 'summary' -> 'dashboard'
     const [viewState, setViewState] = useState<'input' | 'loading' | 'summary' | 'dashboard'>('input');
     const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
@@ -420,6 +423,12 @@ const MyChannelAnalytics: React.FC<MyChannelAnalyticsProps> = ({ user, appSettin
     
     // Handlers for the Entry Flow
     const handleStartAnalysis = async (input: string) => {
+        // Usage Check
+        if (user.usage >= planLimit) {
+            onUpgradeRequired();
+            return;
+        }
+
         setViewState('loading');
         
         try {
@@ -456,6 +465,9 @@ const MyChannelAnalytics: React.FC<MyChannelAnalyticsProps> = ({ user, appSettin
             
             setSummaryData(mockSummaryData);
             setViewState('summary');
+            
+            // Deduct usage
+            onUpdateUser({ usage: user.usage + 1 });
 
         } catch (e) {
             console.error(e);

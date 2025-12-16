@@ -21,6 +21,7 @@ import MyChannelAnalytics from './MyChannelAnalytics';
 import AdAnalysis from './AdAnalysis';
 import AlgorithmFinderView from './AlgorithmFinderView';
 import CollectionView from './CollectionView';
+import TrendRankingView from './TrendRankingView';
 import { logQuery, getPopularQueries, pruneQueries } from '../services/queryAnalyticsService'; 
 import { fetchYouTubeData, resolveChannelId } from '../services/youtubeService';
 import type { VideoData, AnalysisMode, FilterState, User, AppSettings, PopularQuery, OutlierViewState, ThumbnailViewState, RankingViewState } from '../types';
@@ -47,7 +48,7 @@ const initialFilterState: FilterState = {
   category: 'all',
 };
 
-type ViewType = 'main' | 'admin' | 'ranking' | 'channelDetail' | 'workflow' | 'videoDetail' | 'thumbnailAnalysis' | 'outlierAnalysis' | 'myChannel' | 'abTestGame' | 'algorithmFinder' | 'collections';
+type ViewType = 'main' | 'admin' | 'ranking' | 'channelDetail' | 'workflow' | 'videoDetail' | 'thumbnailAnalysis' | 'outlierAnalysis' | 'myChannel' | 'abTestGame' | 'algorithmFinder' | 'collections' | 'trendRanking';
 
 // Navigation State Interface for the History Stack
 interface NavState {
@@ -167,6 +168,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
         });
     }, []);
 
+    const handleUpgradeRequired = useCallback(() => {
+        setIsUpgradeModalOpen(true);
+    }, []);
 
     const handleAnalysis = useCallback(async (searchQuery: string, searchMode: AnalysisMode) => {
         if (user.usage >= planLimit) {
@@ -248,7 +252,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
     const handleOpenHelpModal = useCallback(() => setIsHelpModalOpen(true), []);
     const handleCloseHelpModal = useCallback(() => setIsHelpModalOpen(false), []);
     const handleCloseUpgradeModal = useCallback(() => setIsUpgradeModalOpen(false), []);
-    const handleUpgradeRequired = useCallback(() => setIsUpgradeModalOpen(true), []);
 
     const handleShowChannelDetail = useCallback((channelId: string, tab: 'overview' | 'similarChannels' = 'overview') => {
         navigateTo('channelDetail', { channelId, initialTab: tab });
@@ -271,6 +274,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
     
     const handleWorkflowNavigate = useCallback(async (featureId: string) => {
         const getApiKey = () => user.isAdmin ? appSettings.apiKeys.youtube : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
+
+        // Biz Plan Restriction Logic
+        if (['algorithm_finder', 'collections'].includes(featureId)) {
+            if (user.plan !== 'Biz' && !user.isAdmin) {
+                alert("이 기능은 상위 버전(Biz 요금제)에서만 사용할 수 있습니다. 업그레이드를 통해 AI 심층 분석 기능을 경험해보세요.");
+                return;
+            }
+        }
 
         switch (featureId) {
             case 'channel_analytics':
@@ -310,6 +321,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                 break;
             case 'outliers':
                 navigateTo('outlierAnalysis');
+                break;
+            case 'trend_ranking':
+                navigateTo('trendRanking');
                 break;
             case 'ab_test':
                 navigateTo('abTestGame');
@@ -369,6 +383,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
     );
 
     const renderCurrentView = () => {
+        // Shared props for sub-views that need to track usage
+        const usageProps = {
+            onUpdateUser,
+            onUpgradeRequired: handleUpgradeRequired,
+            planLimit
+        };
+
         switch (view) {
             case 'main':
                 return (
@@ -408,9 +429,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                             onShowVideoDetail={handleShowVideoDetail} 
                             savedState={rankingViewState}
                             onSaveState={setRankingViewState}
+                            {...usageProps}
                         />;
             case 'channelDetail':
                  return <ChannelDetailView 
+                            key={channelDetailId} // Force Remount when channel changes
                             channelId={channelDetailId!} 
                             user={user} 
                             appSettings={appSettings} 
@@ -419,6 +442,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                             onShowVideoDetail={handleShowVideoDetail}
                             onShowChannelDetail={handleShowChannelDetail}
                             initialTab={initialChannelDetailTab}
+                            {...usageProps}
                         />;
             case 'videoDetail':
                 return <VideoDetailView 
@@ -428,6 +452,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                            onBack={handleBack} 
                            onShowChannelDetail={handleShowChannelDetail}
                            previousChannelId={previousChannelId}
+                           {...usageProps}
                        />;
             case 'workflow':
                 return <WorkflowView onNavigate={handleWorkflowNavigate} />;
@@ -438,6 +463,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                     onBack={handleBack}
                     savedState={thumbnailViewState}
                     onSaveState={setThumbnailViewState}
+                    {...usageProps}
                 />;
             case 'outlierAnalysis':
                 return <OutlierAnalysisView
@@ -446,17 +472,39 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                     onBack={handleBack}
                     onShowChannelDetail={handleShowChannelDetail}
                     onShowVideoDetail={handleShowVideoDetail}
-                    onUpgradeRequired={handleUpgradeRequired}
-                    onUpdateUser={onUpdateUser}
                     savedState={outlierViewState}
                     onSaveState={setOutlierViewState}
+                    {...usageProps}
+                />;
+            case 'trendRanking':
+                return <TrendRankingView
+                    user={user}
+                    appSettings={appSettings}
+                    onBack={handleBack}
+                    onShowVideoDetail={handleShowVideoDetail}
+                    onShowChannelDetail={handleShowChannelDetail}
+                    {...usageProps}
                 />;
             case 'abTestGame':
-                return <ABTestGameView user={user} appSettings={appSettings} onBack={handleBack} />;
+                return <ABTestGameView 
+                    user={user} 
+                    appSettings={appSettings} 
+                    onBack={handleBack} 
+                    onUpdateUser={onUpdateUser}
+                    onUpgradeRequired={handleUpgradeRequired}
+                />;
             case 'myChannel':
-                return <MyChannelAnalytics user={user} appSettings={appSettings} />;
+                return <MyChannelAnalytics 
+                    user={user} 
+                    appSettings={appSettings} 
+                    {...usageProps}
+                />;
             case 'algorithmFinder':
-                return <AlgorithmFinderView onBack={handleBack} />;
+                return <AlgorithmFinderView 
+                    user={user}
+                    onBack={handleBack} 
+                    {...usageProps}
+                />;
             case 'collections':
                 return <CollectionView onBack={handleBack} />;
             default:

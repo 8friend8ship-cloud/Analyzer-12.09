@@ -62,6 +62,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
     onLogin({ email, password });
   };
 
+  const handleForgotPassword = (e: React.MouseEvent) => {
+      e.preventDefault();
+      alert("현재 데모 버전에서는 비밀번호 찾기 기능을 지원하지 않습니다.\n관리자(admin) 계정으로 로그인하거나 새 계정을 생성해주세요.");
+  };
+
 
   useEffect(() => {
     // Google's script is loaded async, so we poll for its availability.
@@ -121,7 +126,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                 />
             </div>
             <div className="text-right text-sm">
-                <a href="#" className="font-medium text-blue-400 hover:text-blue-300">비밀번호를 잊으셨나요?</a>
+                <button 
+                    type="button"
+                    onClick={handleForgotPassword}
+                    className="font-medium text-blue-400 hover:text-blue-300 bg-transparent border-none p-0 cursor-pointer focus:outline-none"
+                >
+                    비밀번호를 잊으셨나요?
+                </button>
             </div>
             <div>
                  <button

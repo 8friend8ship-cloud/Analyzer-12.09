@@ -51,14 +51,14 @@ export const translateKeyword = async (keyword: string, targetCountry: string): 
         contents: translationPrompt
     });
 
-    const translatedText = response.text.trim().replace(/"/g, ''); // Clean up quotes
+    const translatedText = response.text?.trim().replace(/"/g, '') || keyword;
     console.log(`Translation successful: ${translatedText}`);
     return translatedText;
 
   } catch (error) {
     console.error("Error calling Gemini API for translation:", error);
     // Fallback to a mock translation
-    return `${keyword} (${targetCountry} translation)`;
+    return `${keyword}`;
   }
 };
 
@@ -97,7 +97,7 @@ export const getAIBenchmarkRecommendations = async (channelName: string, topics:
             },
         });
 
-        const result = JSON.parse(response.text.trim());
+        const result = JSON.parse(response.text?.trim() || "{}");
         return result.channels || [];
 
     } catch (error) {
@@ -164,7 +164,7 @@ export const getAIChannelRecommendations = async (category: string, keyword: str
             },
         });
 
-        const result = JSON.parse(response.text.trim());
+        const result = JSON.parse(response.text?.trim() || "{}");
         return {
             korea: result.korea || [],
             global: result.global || []
@@ -235,7 +235,7 @@ export const getAIInsights = async (videoData: VideoData[], query: string, mode:
       },
     });
 
-    const insights: AIInsights = JSON.parse(response.text.trim());
+    const insights: AIInsights = JSON.parse(response.text?.trim() || "{}");
     return insights;
   } catch (error) {
     console.error("Error calling Gemini API for single analysis:", error);
@@ -310,7 +310,7 @@ export const getAIComparisonInsights = async (channelA: {query: string, videos: 
             }
         });
         
-        const insights: ComparisonInsights = JSON.parse(response.text.trim());
+        const insights: ComparisonInsights = JSON.parse(response.text?.trim() || "{}");
         return insights;
     } catch (error) {
         console.error("Error calling Gemini API for comparison:", error);
@@ -345,7 +345,7 @@ export const getRelatedKeywords = async (keyword: string): Promise<string[]> => 
       },
     });
 
-    const result = JSON.parse(response.text.trim());
+    const result = JSON.parse(response.text?.trim() || "{}");
     return result.keywords || [];
   } catch (error) {
     console.error("Error calling Gemini API for related keywords:", error);
@@ -391,7 +391,7 @@ export const getAIAdKeywords = async (videoData: VideoData[]): Promise<string[]>
       },
     });
 
-    const result = JSON.parse(response.text.trim());
+    const result = JSON.parse(response.text?.trim() || "{}");
     return result.keywords || [];
   } catch (error) {
     console.error("Error calling Gemini API for ad keywords:", error);
@@ -508,7 +508,7 @@ export const getAIChannelComprehensiveAnalysis = async (
             },
         });
 
-        const result = JSON.parse(response.text.trim());
+        const result = JSON.parse(response.text?.trim() || "{}");
         if (!result.overview || !result.audienceProfile) throw new Error("Incomplete AI response");
         return result;
 
@@ -610,7 +610,7 @@ export const getAIChannelDashboardInsights = async (
             }
         });
 
-        return JSON.parse(response.text.trim());
+        return JSON.parse(response.text?.trim() || "{}");
     } catch (error) {
         console.error("Error generating dashboard insights:", error);
         return {};
@@ -696,7 +696,7 @@ export const getAICommentInsights = async (comments: VideoComment[]): Promise<Co
             },
         });
 
-        const insights: CommentInsights = JSON.parse(response.text.trim());
+        const insights: CommentInsights = JSON.parse(response.text?.trim() || "{}");
         return insights;
     } catch (error) {
         console.error("Error calling Gemini API for comment analysis:", error);
@@ -809,7 +809,7 @@ export const getAIVideoDeepDiveInsights = async (video: Omit<VideoDetailData, 'd
       },
     });
 
-    const insights: AIVideoDeepDiveInsights = JSON.parse(response.text.trim());
+    const insights: AIVideoDeepDiveInsights = JSON.parse(response.text?.trim() || "{}");
     return insights;
   } catch (error) {
     console.error("Error calling Gemini API for video deep dive analysis:", error);
@@ -868,7 +868,7 @@ export const getAISimilarChannels = async (channelData: ChannelAnalysisData): Pr
             },
         });
 
-        const result = JSON.parse(response.text.trim());
+        const result = JSON.parse(response.text?.trim() || "{}");
         return result;
 
     } catch (error) {
@@ -965,7 +965,7 @@ export const getAIThumbnailAnalysis = async (
       },
     });
 
-    const finalInsights: AIThumbnailInsights = JSON.parse(fullAnalysisResponse.text.trim());
+    const finalInsights: AIThumbnailInsights = JSON.parse(fullAnalysisResponse.text?.trim() || "{}");
     return finalInsights;
   } catch (error) {
     console.error("Error calling Gemini API for thumbnail analysis:", error);
@@ -1018,7 +1018,7 @@ export const getAIRankingAnalysis = async (
       },
     });
 
-    const result = JSON.parse(response.text.trim());
+    const result = JSON.parse(response.text?.trim() || "{}");
     return result.analysis || [];
   } catch (error) {
     console.error('Error calling Gemini API for ranking analysis:', error);
@@ -1029,60 +1029,114 @@ export const getAIRankingAnalysis = async (
 
 export const getAITrendingInsight = async (
     countryCode: string,
-    trendingVideos: { title: string; channelTitle: string }[],
+    trendingVideos: { title: string; channelTitle: string }[] = [],
     excludedCategories: string[] = [],
     topChannelsList: string[] = []
 ): Promise<{
   summary: string;
   viralFactors: string[];
   topKeywords: string[];
+  sources?: { title: string; url: string }[];
 }> => {
-    console.log(`Generating AI Trending Insight for country: ${countryCode}`);
+    console.log(`Generating AI Trending Insight (with Search Grounding) for country: ${countryCode}`);
     
     const fallback = {
         summary: "트렌드 분석에 실패했습니다. 다시 시도해주세요.",
         viralFactors: [],
         topKeywords: [],
+        sources: []
     };
-
-    if (!trendingVideos || trendingVideos.length === 0) return fallback;
 
     try {
         const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-        // Optimize input data: Just titles and channels, limit to 30
         const prompt = `
-            Analyze top 30 trending videos in ${countryCode}.
-            Excluded topics: ${excludedCategories.join(', ')}.
-            Top Channels context: ${topChannelsList.join(', ')}.
+            Act as a trend analyst.
+            Target Country: ${countryCode}
+            
+            YouTube Context (Trending Videos, for reference):
+            ${trendingVideos.slice(0, 10).map(v => v.title).join(', ')}
 
-            Data: ${JSON.stringify(trendingVideos.slice(0, 30), null, 2)}
+            Task: Use Google Search to find the REAL-TIME top search trends and news events in ${countryCode} right now (today/this week).
+            Combine the YouTube context with Google Search results to explain what is happening.
 
-            1. Root Cause: Why are these specific topics exploding today? (Korean, ignore excluded topics)
-            2. Viral Factors: 3-5 key reasons (e.g., "Seasonality").
-            3. Top Keywords: 10 most recurring keywords.
+            Output Format (Strictly follow this structure in plain text):
+            
+            ## Summary
+            (1-2 sentences explaining the main trends in Korean)
 
-            **Output Language: Korean (Must translate all English terms)**
-            Return JSON.
+            ## Viral Factors
+            - (Factor 1 in Korean)
+            - (Factor 2 in Korean)
+            - (Factor 3 in Korean)
+
+            ## Top Keywords
+            1. (Keyword 1)
+            2. (Keyword 2)
+            ...
+            10. (Keyword 10)
         `;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        summary: { type: Type.STRING },
-                        viralFactors: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        topKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    },
-                    required: ["summary", "viralFactors", "topKeywords"]
-                },
+                tools: [{ googleSearch: {} }],
+                // Note: responseMimeType JSON is NOT supported with tools in some versions/regions, using text parsing.
             },
         });
 
-        return JSON.parse(response.text.trim());
+        const text = response.text || "";
+        const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+
+        // Manual Text Parsing
+        let summary = "트렌드 정보를 분석 중입니다.";
+        const viralFactors: string[] = [];
+        const topKeywords: string[] = [];
+
+        const lines = text.split('\n');
+        let currentSection = '';
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('## Summary')) { currentSection = 'summary'; continue; }
+            if (trimmed.startsWith('## Viral Factors')) { currentSection = 'factors'; continue; }
+            if (trimmed.startsWith('## Top Keywords')) { currentSection = 'keywords'; continue; }
+
+            if (currentSection === 'summary' && trimmed.length > 10) {
+                summary = trimmed;
+                currentSection = ''; // One paragraph usually
+            }
+            if (currentSection === 'factors' && (trimmed.startsWith('-') || trimmed.startsWith('*'))) {
+                viralFactors.push(trimmed.replace(/^[-*]\s*/, ''));
+            }
+            if (currentSection === 'keywords' && trimmed.match(/^\d+\./)) {
+                // Extract "1. Keyword - Desc" -> "Keyword"
+                const kw = trimmed.replace(/^\d+\.\s*/, '').split(/[-–:]/)[0].trim();
+                if (kw) topKeywords.push(kw);
+            }
+        }
+
+        // Clean up keywords list if empty (fallback)
+        if (topKeywords.length === 0) {
+             // Fallback regex scan if section headers failed
+             const matches = text.match(/^\d+\.\s*(.*)$/gm);
+             if (matches) {
+                 matches.slice(0, 10).forEach(m => topKeywords.push(m.replace(/^\d+\.\s*/, '').split(/[-–:]/)[0].trim()));
+             }
+        }
+
+        const sources = groundingChunks
+            .map((chunk: any) => chunk.web)
+            .filter((web: any) => web)
+            .map((web: any) => ({ title: web.title, url: web.uri }));
+
+        return {
+            summary,
+            viralFactors: viralFactors.slice(0, 5),
+            topKeywords: topKeywords.slice(0, 10),
+            sources
+        };
+
     } catch (error) {
         console.error("Error generating AI trending insight:", error);
         return fallback;

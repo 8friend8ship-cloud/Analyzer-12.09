@@ -13,6 +13,9 @@ interface VideoDetailViewProps {
   onBack: () => void;
   onShowChannelDetail: (channelId: string) => void;
   previousChannelId: string | null;
+  onUpdateUser: (updatedUser: Partial<User>) => void;
+  onUpgradeRequired: () => void;
+  planLimit: number;
 }
 
 const formatNumber = (num: number): string => {
@@ -52,7 +55,17 @@ const InsightSection: React.FC<{ title: string; icon: string; children: React.Re
 );
 
 
-const VideoDetailView: React.FC<VideoDetailViewProps> = ({ videoId, user, appSettings, onBack, onShowChannelDetail, previousChannelId }) => {
+const VideoDetailView: React.FC<VideoDetailViewProps> = ({ 
+    videoId, 
+    user, 
+    appSettings, 
+    onBack, 
+    onShowChannelDetail, 
+    previousChannelId,
+    onUpdateUser,
+    onUpgradeRequired,
+    planLimit
+}) => {
     const [data, setData] = useState<VideoDetailData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -78,6 +91,13 @@ const VideoDetailView: React.FC<VideoDetailViewProps> = ({ videoId, user, appSet
                 return;
             }
 
+            // Usage Limit Check before API call
+            if (user.usage >= planLimit) {
+                setIsLoading(false);
+                onUpgradeRequired();
+                return;
+            }
+
             setIsLoading(true);
             setError(null);
             const apiKey = user.isAdmin
@@ -94,6 +114,8 @@ const VideoDetailView: React.FC<VideoDetailViewProps> = ({ videoId, user, appSet
                 setData(result);
                 setInCache(cacheKey, result); // Cache basic details
                 addToCollection(createVideoCollectionItem(result));
+                // Deduct usage
+                onUpdateUser({ usage: user.usage + 1 });
             } catch (err) {
                 setError(err instanceof Error ? err.message : "비디오 정보를 불러올 수 없습니다.");
             } finally {

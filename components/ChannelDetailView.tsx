@@ -18,6 +18,9 @@ interface ChannelDetailViewProps {
   onShowVideoDetail: (videoId: string) => void;
   onShowChannelDetail: (channelId: string) => void;
   initialTab?: 'overview' | 'similarChannels';
+  onUpdateUser: (updatedUser: Partial<User>) => void;
+  onUpgradeRequired: () => void;
+  planLimit: number;
 }
 
 const formatNumber = (num: number, compact = false): string => {
@@ -145,39 +148,52 @@ const SimilarChannelsTab: React.FC<{ channelId: string; user: User; appSettings:
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        let isMounted = true;
         const loadSimilarChannels = async () => {
             const cacheKey = `similar_${channelId}`;
             const cachedData = getFromCache(cacheKey);
             if (cachedData) {
-                setSimilarChannels(cachedData);
-                setIsLoading(false);
+                if (isMounted) {
+                    setSimilarChannels(cachedData);
+                    setIsLoading(false);
+                }
                 return;
             }
 
-            setIsLoading(true);
-            setError(null);
+            if (isMounted) {
+                setIsLoading(true);
+                setError(null);
+            }
+            
             const apiKey = user.isAdmin
                 ? appSettings.apiKeys.youtube
                 : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
 
             if (!apiKey) {
-                setError("유사 채널 추천 기능을 사용하려면 YouTube API 키가 필요합니다.");
-                setIsLoading(false);
+                if (isMounted) {
+                    setError("유사 채널 추천 기능을 사용하려면 YouTube API 키가 필요합니다.");
+                    setIsLoading(false);
+                }
                 return;
             }
 
             try {
                 const data = await fetchSimilarChannels(channelId, apiKey);
-                setSimilarChannels(data);
-                setInCache(cacheKey, data);
+                if (isMounted) {
+                    setSimilarChannels(data);
+                    setInCache(cacheKey, data);
+                }
             } catch (err) {
-                setError(err instanceof Error ? err.message : "유사 채널을 찾는 데 실패했습니다.");
+                if (isMounted) {
+                    setError(err instanceof Error ? err.message : "유사 채널을 찾는 데 실패했습니다.");
+                }
             } finally {
-                setIsLoading(false);
+                if (isMounted) setIsLoading(false);
             }
         };
 
         loadSimilarChannels();
+        return () => { isMounted = false; };
     }, [channelId, user, appSettings]);
 
     if (isLoading) return <div className="flex justify-center py-12"><Spinner /></div>;
@@ -218,7 +234,19 @@ const SimilarChannelsTab: React.FC<{ channelId: string; user: User; appSettings:
 };
 
 
-const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({ channelId, user, appSettings, onBack, onOpenCommentModal, onShowVideoDetail, onShowChannelDetail, initialTab = 'overview' }) => {
+const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({ 
+    channelId, 
+    user, 
+    appSettings, 
+    onBack, 
+    onOpenCommentModal, 
+    onShowVideoDetail, 
+    onShowChannelDetail, 
+    initialTab = 'overview',
+    onUpdateUser,
+    onUpgradeRequired,
+    planLimit
+}) => {
     const [data, setData] = useState<ChannelAnalysisData | null>(null);
     const [isLoading, setIsLoading] = useState(true); // Default to true to start loading immediately
     const [error, setError] = useState<string | null>(null);
@@ -232,6 +260,7 @@ const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({ channelId, user, 
 
     // Auto-fetch data on mount or channelId change
     useEffect(() => {
+        let isMounted = true;
         const loadData = async () => {
             if (!channelId) return;
             
@@ -239,38 +268,60 @@ const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({ channelId, user, 
             const cacheKey = `channel_detail_${channelId}`;
             const cachedData = getFromCache(cacheKey);
             if (cachedData) {
-                setData(cachedData);
-                setIsLoading(false);
+                if (isMounted) {
+                    setData(cachedData);
+                    setIsLoading(false);
+                }
                 return;
             }
 
-            setIsLoading(true);
-            setError(null);
+            // Usage Limit Check before API call
+            if (user.usage >= planLimit) {
+                if (isMounted) {
+                    setIsLoading(false);
+                    onUpgradeRequired();
+                }
+                return;
+            }
+
+            if (isMounted) {
+                setIsLoading(true);
+                setError(null);
+            }
             
             const apiKey = user.isAdmin
               ? appSettings.apiKeys.youtube
               : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
 
             if (!apiKey) {
-                setError(user.isAdmin ? "시스템 API 키가 필요합니다." : "YouTube API 키가 설정되지 않았습니다.");
-                setIsLoading(false);
+                if (isMounted) {
+                    setError(user.isAdmin ? "시스템 API 키가 필요합니다." : "YouTube API 키가 설정되지 않았습니다.");
+                    setIsLoading(false);
+                }
                 return;
             }
             
             try {
                 const result = await fetchChannelAnalysis(channelId, apiKey);
-                setData(result);
-                setInCache(cacheKey, result); // Save to cache
-                addToCollection(createChannelCollectionItem(result));
+                if (isMounted) {
+                    setData(result);
+                    setInCache(cacheKey, result); // Save to cache
+                    addToCollection(createChannelCollectionItem(result));
+                    // Deduct usage
+                    onUpdateUser({ usage: user.usage + 1 });
+                }
             } catch (err) {
                 console.error(err);
-                setError(err instanceof Error ? err.message : "채널 정보를 불러올 수 없습니다.");
+                if (isMounted) {
+                    setError(err instanceof Error ? err.message : "채널 정보를 불러올 수 없습니다.");
+                }
             } finally {
-                setIsLoading(false);
+                if (isMounted) setIsLoading(false);
             }
         };
 
         loadData();
+        return () => { isMounted = false; };
     }, [channelId, user, appSettings]);
 
     const handleTabClick = (tab: 'overview' | 'similarChannels') => {

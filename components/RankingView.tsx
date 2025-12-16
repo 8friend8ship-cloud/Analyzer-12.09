@@ -13,6 +13,9 @@ interface RankingViewProps {
     onShowVideoDetail: (videoId: string) => void;
     savedState: RankingViewState | null;
     onSaveState: (state: RankingViewState) => void;
+    onUpdateUser: (updatedUser: Partial<User>) => void;
+    onUpgradeRequired: () => void;
+    planLimit: number;
 }
 
 type ActiveTab = 'channels' | 'videos' | 'performance';
@@ -62,7 +65,17 @@ const formatNumber = (num: number): string => {
     return num.toLocaleString();
 };
 
-const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChannelDetail, onShowVideoDetail, savedState, onSaveState }) => {
+const RankingView: React.FC<RankingViewProps> = ({ 
+    user, 
+    appSettings, 
+    onShowChannelDetail, 
+    onShowVideoDetail, 
+    savedState, 
+    onSaveState,
+    onUpdateUser,
+    onUpgradeRequired,
+    planLimit
+}) => {
     const [activeTab, setActiveTab] = useState<ActiveTab>(savedState?.activeTab || 'channels');
     const [results, setResults] = useState<(ChannelRankingData | VideoRankingData)[]>(savedState?.results || []);
     const [isLoading, setIsLoading] = useState(false);
@@ -92,6 +105,12 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
     }, [activeTab, country, category, excludedCategories, videoFormat, results, selectedChannels, onSaveState]);
 
     const handleSearchClick = async () => {
+        // Usage Limit Check
+        if (user.usage >= planLimit) {
+            onUpgradeRequired();
+            return;
+        }
+
         setIsLoading(true);
         setError(null);
         setResults([]);
@@ -131,6 +150,10 @@ const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChan
             } else {
                 setResults(data || []);
             }
+            
+            // Deduct usage after successful fetch
+            onUpdateUser({ usage: user.usage + 1 });
+
         } catch (err) {
             console.error("Ranking fetch error:", err);
             setError("데이터를 불러오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");

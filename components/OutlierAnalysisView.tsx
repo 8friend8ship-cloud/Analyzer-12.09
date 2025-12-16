@@ -111,6 +111,7 @@ const OutlierAnalysisView: React.FC<OutlierAnalysisViewProps> = ({ user, appSett
         viralFactors: string[];
         topKeywords: string[];
         topChannels: string[];
+        sources?: { title: string; url: string }[];
     } | null>(savedState?.trendingData || null);
 
     useEffect(() => {
@@ -191,6 +192,7 @@ const OutlierAnalysisView: React.FC<OutlierAnalysisViewProps> = ({ user, appSett
                 .filter(cat => excludedCategories.has(cat.id))
                 .map(cat => cat.label);
 
+             // getAITrendingInsight now uses Google Search Grounding to get trend context
              const insight = await getAITrendingInsight(trendingCountry, videoTitles, excludedLabels, calculatedTopChannels);
              
              setTrendingData({
@@ -223,7 +225,8 @@ const OutlierAnalysisView: React.FC<OutlierAnalysisViewProps> = ({ user, appSett
             Pro: appSettings.plans.pro.analyses, 
             Biz: appSettings.plans.biz.analyses 
         };
-        const currentPlanLimit = planLimits[user.plan];
+        const currentPlanLimit = user.isAdmin ? Infinity : planLimits[user.plan];
+        
         if (user.usage >= currentPlanLimit) {
             onUpgradeRequired();
             return;
@@ -266,6 +269,7 @@ const OutlierAnalysisView: React.FC<OutlierAnalysisViewProps> = ({ user, appSett
             };
 
             const videoData = await fetchYouTubeData(mode, searchQuery, filters, apiKey);
+            // Deduct Usage
             onUpdateUser({ usage: user.usage + 1 });
 
             if (videoData.length === 0) {
@@ -372,6 +376,11 @@ const OutlierAnalysisView: React.FC<OutlierAnalysisViewProps> = ({ user, appSett
                                      </span>
                                  ))}
                              </div>
+                             {trendingData.sources && trendingData.sources.length > 0 && (
+                                <div className="mt-3 text-xs text-gray-500">
+                                    Source: {trendingData.sources[0].title} (Google Search)
+                                </div>
+                             )}
                          </div>
 
                          {/* Top Keywords */}

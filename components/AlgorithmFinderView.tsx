@@ -1,11 +1,16 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import type { AlgorithmStage, AlgorithmResult, AlgorithmOption } from '../types';
+import type { AlgorithmStage, AlgorithmResult, AlgorithmOption, User } from '../types';
 import Button from './common/Button';
 import Spinner from './common/Spinner';
 import { getAIChannelRecommendations } from '../services/geminiService';
 
 interface AlgorithmFinderViewProps {
     onBack: () => void;
+    user: User;
+    onUpdateUser: (updatedUser: Partial<User>) => void;
+    onUpgradeRequired: () => void;
+    planLimit: number;
 }
 
 // --- Data Structures ---
@@ -279,7 +284,7 @@ const generateKeywords = (answers: Record<string, AlgorithmOption>) => {
 };
 
 
-const AlgorithmFinderView: React.FC<AlgorithmFinderViewProps> = ({ onBack }) => {
+const AlgorithmFinderView: React.FC<AlgorithmFinderViewProps> = ({ onBack, user, onUpdateUser, onUpgradeRequired, planLimit }) => {
     const [state, setState] = useState<'intro' | 'loading_quiz' | 'quiz' | 'analyzing' | 'result'>('intro');
     const [activeStages, setActiveStages] = useState<AlgorithmStage[]>([]);
     const [currentStageIdx, setCurrentStageIdx] = useState(0);
@@ -335,6 +340,12 @@ const AlgorithmFinderView: React.FC<AlgorithmFinderViewProps> = ({ onBack }) => 
     };
 
     const analyzeResults = async (answers: Record<string, AlgorithmOption>) => {
+        // Usage Check before final analysis
+        if (user.usage >= planLimit) {
+            onUpgradeRequired();
+            return;
+        }
+
         setState('analyzing');
 
         let score = 100;
@@ -448,6 +459,10 @@ const AlgorithmFinderView: React.FC<AlgorithmFinderViewProps> = ({ onBack }) => 
                 analysisLog: penalties,
                 recommendedChannels: recommendedChannels || { korea: [], global: [] }
             });
+            
+            // Deduct usage
+            onUpdateUser({ usage: user.usage + 1 });
+            
             setState('result');
 
         } catch (error) {
@@ -634,7 +649,7 @@ Content OS - Algorithm Finder
                 </p>
                 <div className="space-y-4 w-full max-w-sm">
                     <Button onClick={handleStart} className="w-full py-4 text-lg font-bold shadow-lg transform transition hover:scale-105 bg-blue-600 hover:bg-blue-500 border-none">
-                        진단 시작하기
+                        진단 시작하기 (1코인 차감)
                     </Button>
                     <Button onClick={onBack} variant="secondary" className="w-full py-3">
                         뒤로 가기
