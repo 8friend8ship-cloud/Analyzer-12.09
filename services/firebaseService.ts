@@ -2,42 +2,43 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
-// Environment Variable Helper
-// 1. window.env (Runtime Injection from env-config.js) -> Priority for Cloud Run
-// 2. import.meta.env (Vite Build) -> Fallback
-// 3. process.env (Standard Node/Webpack) -> Fallback
-const getEnv = (key: string): string => {
-    // Check window.env first (Runtime)
-    // @ts-ignore
-    if (typeof window !== 'undefined' && window.env) {
-        // @ts-ignore
-        const runtimeVal = window.env[key] || window.env[`VITE_${key}`];
-        if (runtimeVal) return runtimeVal;
+// Helper to safely get environment variables
+// Priority: 
+// 1. Runtime window.env (Cloud Run / Docker injection)
+// 2. Build-time import.meta.env (Vite)
+// 3. Fallback (Build-time replacements via define)
+const getEnvVar = (key: string, fallback: string): string => {
+    // 1. Runtime (window.env)
+    // Check for explicit key or VITE_ prefixed key in window.env
+    const runtimeEnv = (window as any).env;
+    if (runtimeEnv) {
+        if (runtimeEnv[key]) return runtimeEnv[key];
+        if (runtimeEnv[`VITE_${key}`]) return runtimeEnv[`VITE_${key}`];
     }
-    
-    // Check Vite's import.meta.env
+
+    // 2. Build-time (import.meta.env)
     // @ts-ignore
     if (import.meta && import.meta.env) {
         // @ts-ignore
-        const metaVal = import.meta.env[key] || import.meta.env[`VITE_${key}`];
-        if (metaVal) return metaVal;
+        if (import.meta.env[key]) return import.meta.env[key];
+        // @ts-ignore
+        if (import.meta.env[`VITE_${key}`]) return import.meta.env[`VITE_${key}`];
     }
 
-    // Fallback to process.env (replaced by Vite define or present in Node env)
-    try {
-        return process.env[key] || process.env[`VITE_${key}`] || "";
-    } catch (e) {
-        return "";
-    }
-}
+    // 3. Fallback (from process.env replacement done by Vite define)
+    return fallback;
+};
 
+// Vite replaces 'process.env.KEY' with the literal string value at build time.
+// We pass these literals as the fallback. 
+// Do NOT use `process.env[key]` dynamically as `process` is not defined in the browser.
 const firebaseConfig = {
-  apiKey: getEnv('FIREBASE_API_KEY'),
-  authDomain: getEnv('FIREBASE_AUTH_DOMAIN'),
-  projectId: getEnv('FIREBASE_PROJECT_ID'),
-  storageBucket: getEnv('FIREBASE_STORAGE_BUCKET'),
-  messagingSenderId: getEnv('FIREBASE_MESSAGING_SENDER_ID'),
-  appId: getEnv('FIREBASE_APP_ID')
+  apiKey: getEnvVar('FIREBASE_API_KEY', process.env.FIREBASE_API_KEY || ""),
+  authDomain: getEnvVar('FIREBASE_AUTH_DOMAIN', process.env.FIREBASE_AUTH_DOMAIN || ""),
+  projectId: getEnvVar('FIREBASE_PROJECT_ID', process.env.FIREBASE_PROJECT_ID || ""),
+  storageBucket: getEnvVar('FIREBASE_STORAGE_BUCKET', process.env.FIREBASE_STORAGE_BUCKET || ""),
+  messagingSenderId: getEnvVar('FIREBASE_MESSAGING_SENDER_ID', process.env.FIREBASE_MESSAGING_SENDER_ID || ""),
+  appId: getEnvVar('FIREBASE_APP_ID', process.env.FIREBASE_APP_ID || "")
 };
 
 let db: any = null;
@@ -45,20 +46,19 @@ let db: any = null;
 // Initialize Firebase only if valid config exists
 try {
     const apiKey = firebaseConfig.apiKey;
-    // Check for valid API key (not empty, not default placeholder, not undefined)
+    // Check for valid API key
     const isValidKey = apiKey && apiKey.trim() !== "" && !apiKey.includes("YOUR_") && apiKey !== "undefined";
 
     if (isValidKey) {
         const app = initializeApp(firebaseConfig);
         db = getFirestore(app);
-        console.log("[Firebase] Initialized successfully with Key:", apiKey.substring(0, 5) + "...");
+        console.log("[Firebase] Initialized successfully.");
     } else {
-        console.warn("[Firebase] Config missing or invalid. Check env-config.js or environment variables.");
-        // Debugging info to help user trace the issue
-        console.debug("[Firebase] Current Config State:", {
-            apiKey: !!firebaseConfig.apiKey,
-            projectId: !!firebaseConfig.projectId,
-            windowEnv: typeof window !== 'undefined' ? (window as any).env : 'undefined'
+        console.warn("[Firebase] Config missing or invalid. Caching will default to session storage.");
+        // Debugging info without exposing full keys
+        console.debug("[Firebase] Config Status:", {
+            apiKeyFound: !!apiKey,
+            projectIdFound: !!firebaseConfig.projectId
         });
         db = null;
     }

@@ -10,17 +10,44 @@ import type { User, AppSettings } from './types';
 import { setSystemGeminiApiKey, setUserGeminiApiKey } from './services/apiKeyService';
 import Spinner from './components/common/Spinner';
 
+// Helper to safely get environment variables (Runtime > Build)
+// Checks for KEY, VITE_KEY in window.env, then import.meta.env
+const getEnvVar = (key: string): string => {
+    const runtimeEnv = (window as any).env;
+    
+    if (runtimeEnv) {
+        if (runtimeEnv[key]) return runtimeEnv[key];
+        if (runtimeEnv[`VITE_${key}`]) return runtimeEnv[`VITE_${key}`];
+        // Handle case where input key has VITE_ but env var doesn't
+        const strippedKey = key.replace(/^VITE_/, '');
+        if (runtimeEnv[strippedKey]) return runtimeEnv[strippedKey];
+    }
+
+    // Check import.meta.env (Build)
+    // @ts-ignore
+    if (import.meta && import.meta.env) {
+        // @ts-ignore
+        if (import.meta.env[key]) return import.meta.env[key];
+        // @ts-ignore
+        if (import.meta.env[`VITE_${key}`]) return import.meta.env[`VITE_${key}`];
+    }
+    
+    return "";
+}
+
+// Initial settings with environment variable fallback for system keys
 const initialAppSettings: AppSettings = {
-    freePlanLimit: 30, // Updated from 10 to 30
+    freePlanLimit: 30,
     plans: {
         pro: { name: 'Pro', analyses: 100, price: 19000 },
         biz: { name: 'Biz', analyses: 200, price: 29000 },
     },
     apiKeys: {
-        youtube: '',
+        // Check both standard name and VITE_ prefixed name to be safe
+        youtube: getEnvVar('YOUTUBE_API_KEY') || getEnvVar('VITE_YOUTUBE_API_KEY'), 
         analytics: '',
         reporting: '',
-        gemini: '',
+        gemini: getEnvVar('API_KEY') || getEnvVar('VITE_GEMINI_API_KEY'),
     },
     analyticsConnection: null,
 };
@@ -53,8 +80,6 @@ function App() {
           setView('landing');
       }
       
-      // We don't clear cache automatically on reload anymore to preserve data continuity
-      // clearCache(); 
       setInitializing(false);
     };
     initializeApp();
@@ -72,13 +97,10 @@ function App() {
   const handleLogin = useCallback((credentials: { googleUser?: { name: string; email: string }; email?: string; password?: string }) => {
     let userToSet: User | null = null;
     
-    // 런타임 환경변수(window.env) 우선 체크, 없으면 빌드타임(process.env) 체크
     const getAdminEmail = () => {
-        // @ts-ignore
-        if (typeof window !== 'undefined' && window.env && window.env.ADMIN_EMAIL) {
-            // @ts-ignore
-            return window.env.ADMIN_EMAIL;
-        }
+        // Safe access to runtime env
+        const runtimeEmail = (window as any).env?.ADMIN_EMAIL;
+        if (runtimeEmail) return runtimeEmail;
         return process.env.ADMIN_EMAIL || '8friend8ship@hanmail.net';
     };
 

@@ -76,11 +76,17 @@ const VideoListItem: React.FC<{ video: ChannelVideo; onOpenCommentModal: (video:
 };
 
 const SurgingVideoCard: React.FC<{video: ChannelVideo, onShowVideoDetail: (id: string) => void}> = ({ video, onShowVideoDetail }) => (
-    <div className="flex items-center gap-3 p-2 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 transition-colors cursor-pointer" onClick={() => onShowVideoDetail(video.id)}>
-        <div className="flex-shrink-0 group overflow-hidden rounded-md">
+    <div className="flex items-center gap-3 p-2 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 transition-colors">
+        <a 
+            href={`https://www.youtube.com/watch?v=${video.id}`} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="flex-shrink-0 group overflow-hidden rounded-md relative block"
+            onClick={(e) => e.stopPropagation()} // Prevent triggering the parent click if any
+        >
           <img src={video.thumbnailUrl} alt={video.title} className="w-24 h-[54px] object-cover transition-transform group-hover:scale-105" />
-        </div>
-        <div className="min-w-0 flex-grow">
+        </a>
+        <div className="min-w-0 flex-grow cursor-pointer" onClick={() => onShowVideoDetail(video.id)}>
             <p className="text-sm font-semibold text-white line-clamp-2 hover:text-blue-400 mb-1">{video.title}</p>
             <p className="text-xs text-blue-400 font-bold">🔥 시간당 {formatNumber(video.viewsPerHour)}회</p>
         </div>
@@ -219,6 +225,11 @@ const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({ channelId, user, 
     const [activeTab, setActiveTab] = useState<'overview' | 'similarChannels'>(initialTab);
     const [showFullDesc, setShowFullDesc] = useState(false);
     
+    // Reset tab when channelId changes or initialTab prop changes
+    useEffect(() => {
+        setActiveTab(initialTab);
+    }, [channelId, initialTab]);
+
     // Auto-fetch data on mount or channelId change
     useEffect(() => {
         const loadData = async () => {

@@ -33,18 +33,25 @@ export function getGeminiApiKey(): string {
     // 2. System Setting (Admin Dashboard)
     if (systemGeminiKey) return systemGeminiKey;
 
-    // 3. Runtime Environment (Cloud Run Injection)
-    // @ts-ignore
-    if (typeof window !== 'undefined' && window.env && window.env.API_KEY) {
-        // @ts-ignore
-        return window.env.API_KEY;
+    // 3. Runtime Environment (Cloud Run Injection) - Priority with Safe Access
+    const runtimeEnv = (window as any).env;
+    if (runtimeEnv) {
+        if (runtimeEnv.API_KEY) return runtimeEnv.API_KEY;
+        if (runtimeEnv.VITE_GEMINI_API_KEY) return runtimeEnv.VITE_GEMINI_API_KEY;
     }
 
-    // 4. Build-time Environment (.env file)
-    // vite.config.ts의 define에 의해 process.env.API_KEY는 실제 값으로 치환됩니다.
-    const envKey = process.env.API_KEY || "";
+    // 4. Build-time Environment fallback (Vite)
+    // @ts-ignore
+    if (import.meta && import.meta.env) {
+        // @ts-ignore
+        if (import.meta.env.VITE_GEMINI_API_KEY) return import.meta.env.VITE_GEMINI_API_KEY;
+        // @ts-ignore
+        if (import.meta.env.API_KEY) return import.meta.env.API_KEY;
+    }
     
-    if (envKey) return envKey;
+    // 5. Process Env (Vite define replacement)
+    // Use string literal to ensure replacement happens
+    if (process.env.API_KEY) return process.env.API_KEY;
 
     console.error("Gemini API Key is not configured. Please set it in admin settings or user account settings.");
     throw new Error("Gemini API Key is not configured.");
