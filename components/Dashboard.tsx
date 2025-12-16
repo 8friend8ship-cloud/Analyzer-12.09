@@ -22,8 +22,8 @@ import AdAnalysis from './AdAnalysis';
 import AlgorithmFinderView from './AlgorithmFinderView';
 import CollectionView from './CollectionView';
 import { logQuery, getPopularQueries, pruneQueries } from '../services/queryAnalyticsService'; 
-import { fetchYouTubeData, resolveChannelId, fetchRankingData } from '../services/youtubeService';
-import type { VideoData, AnalysisMode, FilterState, User, AppSettings, ChannelAnalysisData, PopularQuery, OutlierViewState, ThumbnailViewState, RankingViewState } from '../types';
+import { fetchYouTubeData, resolveChannelId } from '../services/youtubeService';
+import type { VideoData, AnalysisMode, FilterState, User, AppSettings, PopularQuery, OutlierViewState, ThumbnailViewState, RankingViewState } from '../types';
 import LengthChart from './charts/LengthChart';
 import ViewsDistributionChart from './charts/ViewsDistributionChart';
 
@@ -112,32 +112,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
     useEffect(() => {
         pruneQueries(); 
         setPopularQueries(getPopularQueries(5));
-
-        const preFetchData = async () => {
-            console.log("Pre-fetching data to warm up the cache...");
-            try {
-                if (hasAllApiKeys) {
-                    const apiKey = user.isAdmin ? appSettings.apiKeys.youtube : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
-                    // 1. Pre-fetch default rankings
-                    const rankingFilters = { limit: 50, country: 'KR', category: 'all', metric: 'mostPopular', excludedCategories: new Set<string>() };
-                    await fetchRankingData('channels', rankingFilters, apiKey!);
-                    console.log("Ranking pre-fetch complete.");
-
-                    // 2. Pre-fetch popular queries based on user history
-                    const popularQueries: PopularQuery[] = getPopularQueries(3);
-                    if (popularQueries.length > 0) {
-                        const popularQueryPromises = popularQueries.map(pq => 
-                            fetchYouTubeData(pq.mode, pq.query, initialFilterState, apiKey!)
-                        );
-                        await Promise.all(popularQueryPromises);
-                    }
-                }
-            } catch (error) {
-                console.warn("Background pre-fetching failed:", error);
-            }
-        };
-
-        preFetchData();
+        // Removed pre-fetching to prevent automatic API calls on load
     }, []); 
 
     // Enhanced Navigation Function
@@ -302,7 +277,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                 setView('main');
                 setMode('channel');
                 setQuery('');
-                // Small UX touch: Focus input after render?
                 setTimeout(() => document.getElementById('query')?.focus(), 100);
                 break;
             case 'video_analytics':
