@@ -49,7 +49,7 @@ const parseISO8601Duration = (duration: string): number => {
 
 const calculateEstimatedRevenue = (views: number, duration: string | number, categoryId: string, country: string, subscribers: number): number => {
     // Simplified logic for estimation
-    let rpm = 2.0; // Default RPM USD
+    let rpm = 2.0; // Default RPM USD for Longform
     const durationMinutes = typeof duration === 'string' ? parseISO8601Duration(duration) : duration;
     
     // Country adjustment
@@ -64,17 +64,17 @@ const calculateEstimatedRevenue = (views: number, duration: string | number, cat
     // Duration adjustment (Long form ads)
     if (durationMinutes >= 8) rpm *= 1.5;
     
-    // Shorts adjustment
-    if (durationMinutes <= 1) rpm = 0.05;
+    // Shorts adjustment (Updated to 3 minutes per user request)
+    // 3분 이하 영상은 숏폼 수익 모델(낮은 RPM)을 적용합니다.
+    if (durationMinutes <= 3) {
+        rpm = 0.05; // Shorts RPM is significantly lower
+    }
 
     return Math.round((views / 1000) * rpm);
 };
 
 const extractChannelKeywords = (rawKeywords: string): string[] => {
     if (!rawKeywords) return [];
-    // Basic splitting by spaces or quotes handling if needed
-    // Assuming space separated for simplicity if raw string
-    // Or Youtube API returns space separated keywords string
     return rawKeywords.match(/"[^"]+"|[^\s]+/g)?.map(s => s.replace(/"/g, '')) || [];
 };
 
@@ -94,20 +94,6 @@ const calculateStats = (videos: ChannelVideo[]) => {
     };
 };
 
-const aggregateFrequency = (items: any[]): { keyword: string, score: number }[] => {
-    // Implementation for keyword frequency from titles/tags
-    const freq: Record<string, number> = {};
-    items.flat().forEach(item => {
-        if(typeof item === 'string' && item.length > 1) {
-            freq[item] = (freq[item] || 0) + 1;
-        }
-    });
-    return Object.entries(freq)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([k, v]) => ({ keyword: k, score: Math.min(100, v * 10) }));
-};
-
 const filterItemsByExcludedCategories = (items: any[], excludedIds: Set<string> | string[]) => {
     const excludedSet = Array.isArray(excludedIds) ? new Set(excludedIds) : excludedIds;
     if (excludedSet.size === 0) return items;
@@ -117,12 +103,11 @@ const filterItemsByExcludedCategories = (items: any[], excludedIds: Set<string> 
     });
 };
 
-// FIX: Added 'all' to the type of `format` to match its usage in RankingView and prevent a TypeScript error.
 const filterItemsByDuration = (items: any[], format: 'any' | 'all' | 'longform' | 'shorts') => {
     if (format === 'any' || format === 'all') return items;
     return items.filter(item => {
         const duration = parseISO8601Duration(item.contentDetails?.duration || 'PT0S');
-        if (format === 'shorts') return duration <= 3; // <= 3 minutes for shorts bucket in this app context
+        if (format === 'shorts') return duration <= 3; // <= 3 minutes for shorts bucket
         if (format === 'longform') return duration > 3;
         return true;
     });
@@ -133,33 +118,27 @@ const filterItemsByDuration = (items: any[], format: 'any' | 'all' | 'longform' 
 export const resolveChannelId = async (query: string, apiKey: string): Promise<string | null> => {
     if (query.startsWith('UC') && query.length === 24) return query; // Already an ID
     
-    // Handle handle (@username)
     if (query.startsWith('@')) {
         const response = await fetch(`${BASE_URL}/search?part=snippet&type=channel&q=${encodeURIComponent(query)}&key=${apiKey}`);
         const data = await response.json();
         return data.items?.[0]?.snippet?.channelId || null;
     }
     
-    // Handle URL
     if (query.includes('youtube.com/channel/')) {
         return query.split('youtube.com/channel/')[1].split('/')[0].split('?')[0];
     }
     
-    // Handle custom URL or username search
     const response = await fetch(`${BASE_URL}/search?part=snippet&type=channel&q=${encodeURIComponent(query)}&key=${apiKey}`);
     const data = await response.json();
     return data.items?.[0]?.snippet?.channelId || null;
 };
 
 export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filters: FilterState, apiKey: string): Promise<VideoData[]> => {
-    // --- 1. Firestore Cache Check (Optimized) ---
-    // Generate a unique, safe key for Firestore that includes ALL filters
     const safeQuery = query.replace(/[^a-zA-Z0-9가-힣-_]/g, '_');
     const safeFormat = filters.videoFormat || 'any';
     const safePeriod = filters.period || '30';
     const safeSort = filters.sortBy || 'viewCount';
     
-    // Version 2 key to prevent conflicts with old cache structure
     const cacheKey = `search_v2_${mode}_${safeQuery}_${filters.country}_${filters.category}_${safeFormat}_${safePeriod}_${safeSort}`;
     
     try {
@@ -169,7 +148,6 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
             const cachedTime = new Date(cached.timestamp).getTime();
             const hoursDiff = (now - cachedTime) / (1000 * 60 * 60);
             
-            // If cache is younger than 24 hours, return it
             if (hoursDiff < 24) {
                 console.log(`[Search] HIT from Firestore for ${cacheKey} (${hoursDiff.toFixed(1)}h old)`);
                 return cached.data;
@@ -183,13 +161,12 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
         console.warn("[Search] Firestore check failed, proceeding to API", e);
     }
 
-    // --- 2. Live API Call (If cache miss or expired) ---
     let searchUrl = `${BASE_URL}/search?part=snippet&maxResults=${filters.resultsLimit}&key=${apiKey}`;
     
     if (mode === 'channel') {
         const channelId = await resolveChannelId(query, apiKey);
         if (!channelId) throw new Error("Channel not found");
-        searchUrl += `&channelId=${channelId}&order=date`; // Get recent videos
+        searchUrl += `&channelId=${channelId}&order=date`;
     } else {
         searchUrl += `&q=${encodeURIComponent(query)}&type=video&order=${filters.sortBy === 'publishedAt' ? 'date' : 'viewCount'}`;
         if (filters.country && filters.country !== 'WW') {
@@ -200,7 +177,6 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
         }
     }
 
-    // Date filtering for 'period' logic (approximate for search query)
     if (filters.period !== 'any' && mode === 'keyword') {
         const date = new Date();
         if (filters.period === '7') date.setDate(date.getDate() - 7);
@@ -221,7 +197,6 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
 
     if (!statsJson.items) return [];
 
-    // Need channel details for subscriber count to calculate performance ratio
     const channelIds = [...new Set(statsJson.items.map((item: any) => item.snippet.channelId))].join(',');
     const channelsUrl = `${BASE_URL}/channels?part=statistics,snippet&id=${channelIds}&key=${apiKey}`;
     const channelsResponse = await fetch(channelsUrl);
@@ -251,7 +226,7 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
         
         const engagementRate = viewCount > 0 ? ((likeCount + commentCount) / viewCount) * 100 : 0;
         const performanceRatio = channelInfo.subs > 0 ? viewCount / channelInfo.subs : 0;
-        const satisfactionScore = viewCount > 0 ? (likeCount * 5 + commentCount * 10) / viewCount : 0; // Heuristic
+        const satisfactionScore = viewCount > 0 ? (likeCount * 5 + commentCount * 10) / viewCount : 0;
 
         let grade = 'D';
         if (performanceRatio > 5) grade = 'S';
@@ -275,11 +250,11 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
             engagementRate: parseFloat(engagementRate.toFixed(2)),
             performanceRatio: parseFloat(performanceRatio.toFixed(2)),
             satisfactionScore: parseFloat(satisfactionScore.toFixed(4)),
-            cll: 0, // Placeholder
-            cul: 0, // Placeholder
+            cll: 0, 
+            cul: 0, 
             grade: grade,
             estimatedRevenue: calculateEstimatedRevenue(viewCount, duration, item.snippet.categoryId, channelInfo.country, channelInfo.subs),
-            estimatedMonthlyRevenue: 0, // Not available from search
+            estimatedMonthlyRevenue: 0,
             channelCountry: channelInfo.country
         } as VideoData;
     });
@@ -296,13 +271,10 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
         filteredResults = filteredResults.filter((v: VideoData) => v.durationMinutes > 3);
     }
 
-    // Strict filtering for keyword search to prevent country bleeding (e.g., UK videos showing in US search)
-    // Only applies if a specific country is selected (not Worldwide)
     if (mode === 'keyword' && filters.country && filters.country !== 'WW') {
         filteredResults = filteredResults.filter((video: VideoData) => video.channelCountry === filters.country);
     }
 
-    // --- 3. Save to Firestore Cache ---
     if (filteredResults.length > 0) {
         await setSearchResultsInFirestore(cacheKey, filteredResults).catch(err => {
             console.error("[Search] Failed to save to Firestore:", err);
@@ -367,7 +339,8 @@ export const fetchChannelAnalysis = async (channelId: string, apiKey: string): P
                 likeCount: likes,
                 commentCount: comments,
                 engagementRate: views > 0 ? ((likes + comments) / views) * 100 : 0,
-                isShorts: duration <= 1,
+                // **수정됨**: 3분 이하는 숏폼으로 분류
+                isShorts: duration <= 3, 
                 durationMinutes: duration,
                 viewsPerHour: Math.round(views / (Math.max(1, (Date.now() - new Date(v.snippet.publishedAt).getTime()) / (1000 * 60 * 60)))),
                 estimatedRevenue: revenue,
@@ -468,7 +441,6 @@ export const fetchChannelAnalysis = async (channelId: string, apiKey: string): P
         summary: "AI 분석에 실패했습니다. API 키를 확인하거나 잠시 후 다시 시도해주세요.",
         interests: [], genderRatio: [], ageGroups: [], topCountries: []
     };
-    // --- End of AI Analysis ---
 
     return {
         id: channelId,
@@ -698,7 +670,8 @@ export const fetchRankingData = async (type: 'channels' | 'videos', filters: any
                     channelHandle: snippet.customUrl,
                     channelDescription: snippet.description,
                     durationSeconds: Math.floor(duration * 60),
-                    isShorts: duration <= 1,
+                    // **수정됨**: 3분 이하는 숏폼으로 분류
+                    isShorts: duration <= 3, 
                     channelCountry: filters.country
                 } as VideoRankingData;
             });
@@ -792,20 +765,6 @@ export const analyzeVideoDeeply = async (videoData: VideoDetailData, apiKey: str
         getAIVideoDeepDiveInsights({ ...videoData, commentInsights: { summary: '', positivePoints: [], negativePoints: [] } }) // Pass temp empty insights for deep dive prompt context if needed, or update implementation to accept raw comments
     ]);
     
-    // Re-run deep dive if comment summary is crucial (sequential dependence) - for now parallel is faster and usually good enough
-    // Ideally deep dive should take raw comments or generated comment summary. 
-    // In geminiService `getAIVideoDeepDiveInsights` uses `commentsSummary` from input.
-    // So let's actually do sequential if quality matters more.
-    
-    // Note: The parallel call above passed empty summary. Let's fix that by re-calling deep dive with actual summary?
-    // Or just use sequential:
-    /*
-    const comments = await fetchVideoComments(videoData.id, apiKey);
-    const commentInsights = await getAICommentInsights(comments);
-    const deepDiveInsights = await getAIVideoDeepDiveInsights({ ...videoData, commentInsights });
-    return { commentInsights, deepDiveInsights };
-    */
-   
    return { commentInsights, deepDiveInsights };
 };
 
@@ -851,17 +810,14 @@ export const fetchMyChannelAnalytics = async (channelId: string, apiKey: string)
     // 1. Fetch Basic Channel Data
     const channelData = await fetchChannelAnalysis(channelId, apiKey);
     
-    // 2. Fetch Recent Videos (already in channelData but let's be explicit if needed)
-    // We can use channelData.videoList
-    
-    // 3. AI Analysis for Dashboard
+    // 2. AI Analysis for Dashboard
     const aiInsights = await getAIChannelDashboardInsights(
         channelData.name,
         { subscribers: channelData.subscriberCount, totalViews: channelData.totalViews, videoCount: channelData.totalVideos },
         channelData.videoList.slice(0, 10).map(v => ({ title: v.title, views: v.viewCount, publishedAt: v.publishedAt }))
     );
     
-    // 4. Transform to Dashboard Format
+    // 3. Transform to Dashboard Format
     const kpi = {
         viewsLast30d: channelData.overview.uploadPattern.last30Days * channelData.performanceTrend.longFormStats.avgViews, // Rough estimate
         netSubscribersLast30d: Math.round(channelData.subscriberCount * 0.01), // Rough estimate
@@ -916,7 +872,6 @@ export const fetchMyChannelAnalytics = async (channelId: string, apiKey: string)
 };
 
 export const convertPublicDataToKPI = (publicData: ChannelAnalysisData): MyChannelAnalyticsData['kpi'] => {
-    // Helper to approximate KPI from public data for comparison
     return {
         viewsLast30d: publicData.videoList
             .filter(v => new Date(v.publishedAt) >= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
