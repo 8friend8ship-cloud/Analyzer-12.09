@@ -2,17 +2,33 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
-// Configuration logic: 
-// 1. Runtime Injection (window.env via env-config.js) -> For Cloud Run / Production
-// 2. Build-time Injection (process.env via Vite) -> For Local Dev
-const getEnv = (key: string) => {
+// Environment Variable Helper
+// 1. window.env (Runtime Injection from env-config.js) -> Priority for Cloud Run
+// 2. import.meta.env (Vite Build) -> Fallback
+// 3. process.env (Standard Node/Webpack) -> Fallback
+const getEnv = (key: string): string => {
+    // Check window.env first (Runtime)
     // @ts-ignore
-    if (typeof window !== 'undefined' && window.env && window.env[key]) {
+    if (typeof window !== 'undefined' && window.env) {
         // @ts-ignore
-        return window.env[key];
+        const runtimeVal = window.env[key] || window.env[`VITE_${key}`];
+        if (runtimeVal) return runtimeVal;
     }
-    // Fallback to Vite define replacement
-    return process.env[key];
+    
+    // Check Vite's import.meta.env
+    // @ts-ignore
+    if (import.meta && import.meta.env) {
+        // @ts-ignore
+        const metaVal = import.meta.env[key] || import.meta.env[`VITE_${key}`];
+        if (metaVal) return metaVal;
+    }
+
+    // Fallback to process.env (replaced by Vite define or present in Node env)
+    try {
+        return process.env[key] || process.env[`VITE_${key}`] || "";
+    } catch (e) {
+        return "";
+    }
 }
 
 const firebaseConfig = {
@@ -29,16 +45,21 @@ let db: any = null;
 // Initialize Firebase only if valid config exists
 try {
     const apiKey = firebaseConfig.apiKey;
-    // Check for valid API key (not empty, not default placeholder)
+    // Check for valid API key (not empty, not default placeholder, not undefined)
     const isValidKey = apiKey && apiKey.trim() !== "" && !apiKey.includes("YOUR_") && apiKey !== "undefined";
 
     if (isValidKey) {
         const app = initializeApp(firebaseConfig);
         db = getFirestore(app);
-        console.log("[Firebase] Initialized successfully with runtime config.");
+        console.log("[Firebase] Initialized successfully with Key:", apiKey.substring(0, 5) + "...");
     } else {
-        // Silently disable Firestore if keys are missing (prevents scary warnings causing confusion)
-        console.warn("[Firebase] Config missing or invalid. Cache disabled. Key exists:", !!apiKey);
+        console.warn("[Firebase] Config missing or invalid. Check env-config.js or environment variables.");
+        // Debugging info to help user trace the issue
+        console.debug("[Firebase] Current Config State:", {
+            apiKey: !!firebaseConfig.apiKey,
+            projectId: !!firebaseConfig.projectId,
+            windowEnv: typeof window !== 'undefined' ? (window as any).env : 'undefined'
+        });
         db = null;
     }
 } catch (e) {
@@ -49,7 +70,6 @@ try {
 // --- Ranking Logic ---
 
 export const getRankingFromFirestore = async (key: string) => {
-    // Safety check: If DB isn't ready, behave as if data is missing (cache miss)
     if (!db) return null;
     
     try {
@@ -66,7 +86,6 @@ export const getRankingFromFirestore = async (key: string) => {
 };
 
 export const setRankingInFirestore = async (key: string, data: any) => {
-    // Safety check: If DB isn't ready, skip saving
     if (!db) return;
     
     try {
@@ -81,7 +100,7 @@ export const setRankingInFirestore = async (key: string, data: any) => {
     }
 };
 
-// --- Search Result Logic (New) ---
+// --- Search Result Logic ---
 
 export const getSearchResultsFromFirestore = async (key: string) => {
     if (!db) return null;

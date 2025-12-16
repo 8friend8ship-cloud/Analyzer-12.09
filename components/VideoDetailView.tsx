@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchVideoDetails, analyzeVideoDeeply } from '../services/youtubeService';
 import { addToCollection, createVideoCollectionItem } from '../services/collectionService';
+import { getFromCache, setInCache } from '../services/cacheService';
 import type { VideoDetailData, User, AppSettings, VideoComment } from '../types';
 import Spinner from './common/Spinner';
 
@@ -56,11 +57,27 @@ const VideoDetailView: React.FC<VideoDetailViewProps> = ({ videoId, user, appSet
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
+    // Check if we already have detailed analysis (from cache or fetched)
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [hasAnalyzed, setHasAnalyzed] = useState(false);
 
     useEffect(() => {
         const loadData = async () => {
+            // Check cache first
+            const cacheKey = `video_detail_${videoId}`;
+            const cachedData = getFromCache(cacheKey);
+            
+            if (cachedData) {
+                setData(cachedData);
+                // Check if cached data already has deep insights
+                const hasInsights = cachedData.deepDiveInsights?.topicAnalysis?.summary?.length > 0 && 
+                                    cachedData.deepDiveInsights.topicAnalysis.summary !== "AI 분석에 실패했습니다. 잠시 후 다시 시도해주세요." &&
+                                    cachedData.deepDiveInsights.topicAnalysis.summary !== "AI 분석에 실패했습니다.";
+                setHasAnalyzed(!!hasInsights);
+                setIsLoading(false);
+                return;
+            }
+
             setIsLoading(true);
             setError(null);
             const apiKey = user.isAdmin
@@ -75,6 +92,7 @@ const VideoDetailView: React.FC<VideoDetailViewProps> = ({ videoId, user, appSet
             try {
                 const result = await fetchVideoDetails(videoId, apiKey);
                 setData(result);
+                setInCache(cacheKey, result); // Cache basic details
                 addToCollection(createVideoCollectionItem(result));
             } catch (err) {
                 setError(err instanceof Error ? err.message : "비디오 정보를 불러올 수 없습니다.");
@@ -93,11 +111,16 @@ const VideoDetailView: React.FC<VideoDetailViewProps> = ({ videoId, user, appSet
         
         try {
             const { commentInsights, deepDiveInsights } = await analyzeVideoDeeply(data, apiKey!);
-            setData(prev => prev ? {
-                ...prev,
+            const updatedData = {
+                ...data,
                 commentInsights,
                 deepDiveInsights
-            } : null);
+            };
+            setData(updatedData);
+            
+            // Update cache with analysis results so we don't re-run analysis if user comes back
+            setInCache(`video_detail_${videoId}`, updatedData);
+            
             setHasAnalyzed(true);
         } catch (err) {
             console.error("Analysis failed", err);

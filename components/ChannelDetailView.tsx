@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchChannelAnalysis, fetchSimilarChannels } from '../services/youtubeService';
 import { addToCollection, createChannelCollectionItem } from '../services/collectionService';
+import { getFromCache, setInCache } from '../services/cacheService';
 import type { ChannelAnalysisData, User, AppSettings, ChannelVideo, SurgingVideos, SimilarChannelData } from '../types';
 import Spinner from './common/Spinner';
 import PerformanceTrendChart from './charts/PerformanceTrendChart';
@@ -40,10 +41,20 @@ const StatCard: React.FC<{ title: string; value: string; subValue?: string; high
 const VideoListItem: React.FC<{ video: ChannelVideo; onOpenCommentModal: (video: { id: string, title: string }) => void; onShowVideoDetail: (videoId: string) => void; }> = ({ video, onOpenCommentModal, onShowVideoDetail }) => {
     return (
         <div className="flex flex-col md:flex-row items-start md:items-center gap-4 p-3 hover:bg-gray-700/30 rounded-lg transition-colors">
-            <button onClick={() => onShowVideoDetail(video.id)} className="flex-shrink-0 w-full md:w-40 group text-left">
+            {/* 썸네일 클릭 시 유튜브로 이동 (target="_blank") */}
+            <a 
+                href={`https://www.youtube.com/watch?v=${video.id}`} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="flex-shrink-0 w-full md:w-40 group relative block"
+            >
                 <img src={video.thumbnailUrl} alt={video.title} className="w-full h-auto md:h-[90px] object-cover rounded-md transition-transform group-hover:scale-105" />
-            </button>
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 rounded-md transition-opacity">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </div>
+            </a>
             <div className="flex-grow min-w-0 w-full">
+                {/* 제목 클릭 시 내부 상세 분석 페이지로 이동 */}
                 <button onClick={() => onShowVideoDetail(video.id)} className="font-semibold text-white hover:text-blue-400 transition-colors line-clamp-2 text-left w-full text-sm md:text-base">{video.title}</button>
                 <p className="text-xs text-gray-400 mt-1">{new Date(video.publishedAt).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-300">
@@ -129,6 +140,14 @@ const SimilarChannelsTab: React.FC<{ channelId: string; user: User; appSettings:
 
     useEffect(() => {
         const loadSimilarChannels = async () => {
+            const cacheKey = `similar_${channelId}`;
+            const cachedData = getFromCache(cacheKey);
+            if (cachedData) {
+                setSimilarChannels(cachedData);
+                setIsLoading(false);
+                return;
+            }
+
             setIsLoading(true);
             setError(null);
             const apiKey = user.isAdmin
@@ -144,6 +163,7 @@ const SimilarChannelsTab: React.FC<{ channelId: string; user: User; appSettings:
             try {
                 const data = await fetchSimilarChannels(channelId, apiKey);
                 setSimilarChannels(data);
+                setInCache(cacheKey, data);
             } catch (err) {
                 setError(err instanceof Error ? err.message : "유사 채널을 찾는 데 실패했습니다.");
             } finally {
@@ -204,6 +224,15 @@ const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({ channelId, user, 
         const loadData = async () => {
             if (!channelId) return;
             
+            // Check cache first
+            const cacheKey = `channel_detail_${channelId}`;
+            const cachedData = getFromCache(cacheKey);
+            if (cachedData) {
+                setData(cachedData);
+                setIsLoading(false);
+                return;
+            }
+
             setIsLoading(true);
             setError(null);
             
@@ -220,6 +249,7 @@ const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({ channelId, user, 
             try {
                 const result = await fetchChannelAnalysis(channelId, apiKey);
                 setData(result);
+                setInCache(cacheKey, result); // Save to cache
                 addToCollection(createChannelCollectionItem(result));
             } catch (err) {
                 console.error(err);

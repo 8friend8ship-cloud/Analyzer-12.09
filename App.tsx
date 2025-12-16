@@ -31,12 +31,30 @@ function App() {
   const [appSettings, setAppSettings] = useState<AppSettings>(initialAppSettings);
   const [initializing, setInitializing] = useState(true);
 
+  // Initialize App & Restore Session
   useEffect(() => {
     const initializeApp = () => {
-      clearCache();
-      // Old daily cache cleaning removed as we moved to Firestore
-      setUser(null);
-      setView('landing');
+      // Check for saved user session
+      const savedUser = localStorage.getItem('content_os_user_session');
+      
+      if (savedUser) {
+          try {
+              const parsedUser = JSON.parse(savedUser);
+              setUser(parsedUser);
+              setView('dashboard');
+          } catch (e) {
+              console.error("Failed to restore user session", e);
+              localStorage.removeItem('content_os_user_session');
+              setUser(null);
+              setView('landing');
+          }
+      } else {
+          setUser(null);
+          setView('landing');
+      }
+      
+      // We don't clear cache automatically on reload anymore to preserve data continuity
+      // clearCache(); 
       setInitializing(false);
     };
     initializeApp();
@@ -115,6 +133,8 @@ function App() {
     
     if (userToSet) {
         setUser(userToSet);
+        // Persist session
+        localStorage.setItem('content_os_user_session', JSON.stringify(userToSet));
         setView('dashboard');
     }
   }, []);
@@ -124,6 +144,7 @@ function App() {
           if (!prevUser) return null;
           const newUser = { ...prevUser, ...updatedUser };
 
+          // Persist API Keys specifically
           if (newUser.id.startsWith('gu_')) {
               const keysToStore = {
                   apiKeyYoutube: newUser.apiKeyYoutube,
@@ -131,6 +152,10 @@ function App() {
               };
               localStorage.setItem(`user_api_keys_${newUser.id}`, JSON.stringify(keysToStore));
           }
+          
+          // Update Session
+          localStorage.setItem('content_os_user_session', JSON.stringify(newUser));
+          
           return newUser;
       });
   }, []);
@@ -141,6 +166,7 @@ function App() {
   
   const handleLogout = useCallback(() => {
     clearCache();
+    localStorage.removeItem('content_os_user_session');
     setUser(null);
     setView('landing');
   }, []);
@@ -152,7 +178,7 @@ function App() {
   if (initializing) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
-        <Spinner message="Initializing..." />
+        <Spinner message="Content OS 시작 중..." />
       </div>
     );
   }
