@@ -195,14 +195,12 @@ export interface ChannelAnalysisData {
   estimatedMonthlyRevenue: number; // Monthly
 }
 
-// FIX: Add missing AIInsights type definition.
 export interface AIInsights {
   summary: string;
   patterns: string[];
   recommendations: string[];
 }
 
-// FIX: Add missing ComparisonInsights and related ChannelSummary type definitions.
 export interface ChannelSummary {
   name: string;
   strengths: string[];
@@ -293,7 +291,6 @@ export interface VideoDetailData {
   }[];
 }
 
-// FIX: Move User, Plan, and AppSettings here for better organization
 export interface Plan {
     name: string;
     analyses: number;
@@ -373,7 +370,6 @@ export interface VideoRankingData {
     isShorts: boolean;
 }
 
-// FIX: Add missing types for MyChannelAnalytics feature
 export interface RetentionDataPoint {
   time: number;
   retention: number;
@@ -546,6 +542,12 @@ export interface ThumbnailViewState {
     insights: AIThumbnailInsights | null;
 }
 
+// Cached result structure per tab
+export interface RankingTabCache {
+    results: (ChannelRankingData | VideoRankingData)[];
+    params: any; // Store exact parameters used for this result
+}
+
 export interface RankingViewState {
     activeTab: 'channels' | 'videos' | 'performance';
     country: string;
@@ -554,6 +556,11 @@ export interface RankingViewState {
     videoFormat: 'all' | 'longform' | 'shorts';
     results: (ChannelRankingData | VideoRankingData)[];
     selectedChannels: Record<string, { name: string }>;
+    tabCache: {
+        channels?: RankingTabCache;
+        videos?: RankingTabCache;
+        performance?: RankingTabCache;
+    };
 }
 
 // --- Algorithm Finder Types ---

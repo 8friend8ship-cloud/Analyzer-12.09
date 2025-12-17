@@ -7,6 +7,7 @@ const SearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 
 const ChartBarIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>;
 const KeyIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H5v-2H3v-2H1v-4a6 6 0 016-6h4a6 6 0 016 6z" /></svg>;
 const RocketIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>;
+const InfoIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 
 interface HelpModalProps {
   onClose: () => void;
@@ -73,7 +74,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
               <li><b>아웃라이어 분석:</b> 남들보다 5배, 10배 더 조회수가 나온 '대박 영상'만 골라 보여줍니다.</li>
               <li><b>썸네일 & 제목 분석:</b> AI가 잘된 썸네일들의 공통점을 찾아서 "이렇게 만드세요"라고 알려줍니다.</li>
               <li><b>채널 DNA 진단 (추천):</b> 심리 테스트처럼 6가지 질문에 답하면, 내 채널이 나아갈 방향과 딱 맞는 주제를 정해줍니다.</li>
-              <li><b>A/B 테스트 게임:</b> 어떤 썸네일이 더 조회수가 높을지 맞히는 게임이에요. 감각을 키워보세요!</li>
+              <li><b>A/B 테스트 게임:</b> 어떤 썸네일이 더 조회수가 높을까요? 게임을 통해 감각을 키워보세요!</li>
             </ul>
           </HelpSection>
 
@@ -81,12 +82,29 @@ const HelpModal: React.FC<HelpModalProps> = ({ onClose }) => {
             <p>자동차가 달리려면 기름이 필요하듯, Johnson Analyzer가 작동하려면 <b>API 키</b>가 필요합니다.</p>
             <div className="bg-gray-700/30 p-3 rounded-lg mt-2">
                 <p className="mb-2">🔑 <b>API 키가 무엇인가요?</b></p>
-                <p className="text-xs text-gray-400">유튜브와 AI에게 정보를 요청할 수 있는 '디지털 열쇠'입니다. 무료로 발급받을 수 있습니다.</p>
+                <p className="text-xs text-gray-400">유튜브와 AI에게 정보를 요청할 수 있는 '디지털 열쇠'입니다. 구글 클라우드에서 무료로 발급받을 수 있습니다.</p>
             </div>
             <ul className="list-disc list-outside pl-5 space-y-1 mt-3 text-gray-400">
                 <li><b>YouTube API:</b> 영상 정보를 가져오는 데 사용합니다.</li>
                 <li><b>Gemini API:</b> 똑똑한 AI 분석을 하는 데 사용합니다.</li>
                 <li>오른쪽 상단 메뉴의 <b>[계정 설정]</b>에서 '키 발급 받기' 링크를 눌러 쉽게 등록할 수 있습니다.</li>
+            </ul>
+          </HelpSection>
+
+          <HelpSection title="5. 일일 사용량과 제한 (FAQ)" icon={<InfoIcon />} color="text-gray-200">
+            <p>Google은 사용자가 하루에 요청할 수 있는 정보의 양을 정해두었습니다. (일일 쿼터)</p>
+            <ul className="list-disc list-outside pl-5 space-y-2 mt-2 text-gray-400">
+              <li>
+                <b>YouTube 쿼터:</b> 하루에 약 10,000 유닛이 제공됩니다. 검색 1회당 약 100 유닛이 소모되므로, 
+                <span className="text-yellow-400 font-semibold"> 하루에 약 100번 정도의 검색</span>이 가능합니다. 영상 상세 조회는 훨씬 적게 소모됩니다.
+              </li>
+              <li>
+                <b>리셋 시간:</b> 매일 오후 4~5시(한국 시간) 경에 할당량이 초기화됩니다.
+              </li>
+              <li>
+                <b>오류 발생 시:</b> "할당량 초과" 메시지가 뜨면, 해당 계정의 오늘치 YouTube 이용권을 다 쓰신 것입니다. 
+                내일 다시 시도하거나, 다른 구글 계정으로 키를 발급받아 교체하시면 됩니다.
+              </li>
             </ul>
           </HelpSection>
 

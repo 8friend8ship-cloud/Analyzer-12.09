@@ -2,6 +2,9 @@
 import type { CollectionItem, ChannelAnalysisData, VideoDetailData } from '../types';
 
 const COLLECTION_KEY = 'contentOS_collection';
+// 브라우저 성능 및 로컬 스토리지 용량을 고려하여 최대 500개로 제한
+// 서버 비용은 0원이지만, 클라이언트 성능 최적화를 위한 조치입니다.
+export const MAX_COLLECTION_SIZE = 500; 
 
 export const getCollection = (): CollectionItem[] => {
     try {
@@ -18,7 +21,16 @@ export const addToCollection = (item: CollectionItem) => {
         const current = getCollection();
         // Remove duplicate if exists (update with new data)
         const filtered = current.filter(i => i.id !== item.id);
+        
+        // Add new item to the beginning
         const updated = [item, ...filtered];
+        
+        // Limit Check: If exceeds max size, remove the last (oldest) items
+        if (updated.length > MAX_COLLECTION_SIZE) {
+            // Keep only the first MAX_COLLECTION_SIZE items
+            updated.length = MAX_COLLECTION_SIZE;
+        }
+
         localStorage.setItem(COLLECTION_KEY, JSON.stringify(updated));
         // console.log(`[Collection] Added ${item.type}: ${item.title}`);
     } catch (e) {

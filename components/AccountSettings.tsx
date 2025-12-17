@@ -83,14 +83,14 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onNavigate, onU
         }, 500);
     };
     
-    const planLimits = { Free: 10, Pro: 100, Biz: 200 };
+    const planLimits = { Free: 30, Pro: 3000, Biz: Infinity };
     const planLimit = user.isAdmin ? Infinity : planLimits[user.plan];
     const usagePercentage = planLimit === Infinity ? 0 : Math.round((user.usage / planLimit) * 100);
 
     const plans = [
-        { name: 'Free', description: '기본 기능을 체험해보세요.', price: 0, buttonText: '다운그레이드', features: ['월 10회 분석', '기본 데이터 조회'] },
-        { name: 'Pro', description: '개인 크리에이터에게 적합합니다.', price: 19000, buttonText: 'Pro 플랜 시작', features: ['월 100회 분석', 'AI 인사이트', '채널 비교 분석'] },
-        { name: 'Biz', description: '전문가 및 팀을 위한 플랜입니다.', price: 29000, buttonText: 'Biz 플랜 시작', features: ['월 200회 분석', 'Pro 플랜 모든 기능', '상세 시청자 분석'] }
+        { name: 'Free', description: '기본 기능을 체험해보세요.', price: 0, buttonText: '다운그레이드', features: ['월 30회 분석', '기본 데이터 조회'] },
+        { name: 'Pro', description: '본격적인 성장을 원하는 크리에이터', price: 19000, buttonText: 'Pro 플랜 시작', features: ['월 3,000회 (사실상 무제한)', 'AI 인사이트 & 전략 코칭', '채널 비교 분석'] },
+        { name: 'Biz', description: '전문가, 대행사, 팀을 위한 플랜', price: 29000, buttonText: 'Biz 플랜 시작', features: ['무제한 분석 (Infinity)', '알고리즘 파인더 (AI)', '컬렉션 관리 기능', 'Pro 플랜 모든 기능'] }
     ];
 
     return (

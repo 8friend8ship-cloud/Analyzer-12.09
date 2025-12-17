@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { getCollection, removeFromCollection, clearCollection, exportCollectionToCSV } from '../services/collectionService';
+import { getCollection, removeFromCollection, clearCollection, exportCollectionToCSV, MAX_COLLECTION_SIZE } from '../services/collectionService';
 import type { CollectionItem } from '../types';
 import Button from './common/Button';
 
@@ -39,6 +39,7 @@ const CollectionView: React.FC<CollectionViewProps> = ({ onBack }) => {
 
     const channels = items.filter(i => i.type === 'channel');
     const videos = items.filter(i => i.type === 'video');
+    const usagePercentage = Math.round((items.length / MAX_COLLECTION_SIZE) * 100);
 
     const ItemRow: React.FC<{ item: CollectionItem }> = ({ item }) => (
         <div className="flex items-center gap-4 p-4 bg-gray-800 border border-gray-700 rounded-lg hover:border-gray-600 transition-colors">
@@ -65,7 +66,7 @@ const CollectionView: React.FC<CollectionViewProps> = ({ onBack }) => {
     return (
         <div className="p-4 md:p-6 lg:p-8">
             <div className="max-w-5xl mx-auto">
-                <div className="flex justify-between items-center mb-8">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                     <div>
                         <button onClick={onBack} className="mb-2 text-sm text-gray-400 hover:text-white flex items-center gap-1">
                             ← 워크플로우로 돌아가기
@@ -73,15 +74,23 @@ const CollectionView: React.FC<CollectionViewProps> = ({ onBack }) => {
                         <h1 className="text-3xl font-bold text-white flex items-center gap-3">
                             <span className="text-4xl">🗂️</span> 컬렉션 (Daily Collection)
                         </h1>
-                        <p className="text-gray-400 mt-1 text-sm">오늘 분석한 채널과 영상을 자동으로 모아두었습니다. 엑셀로 다운로드하여 관리하세요.</p>
+                        <p className="text-gray-400 mt-1 text-sm">오늘 분석한 채널과 영상을 자동으로 모아두었습니다. (브라우저 저장소 사용)</p>
                     </div>
-                    <div className="flex gap-2">
-                        <Button onClick={handleClearAll} variant="secondary" disabled={items.length === 0}>
-                            전체 삭제
-                        </Button>
-                        <Button onClick={exportCollectionToCSV} className="bg-green-600 hover:bg-green-700" disabled={items.length === 0}>
-                            엑셀/구글시트 다운로드 (CSV)
-                        </Button>
+                    
+                    <div className="flex flex-col items-end gap-2 w-full md:w-auto">
+                        <div className="flex items-center gap-2 text-sm text-gray-400 bg-gray-800 px-3 py-1.5 rounded-full border border-gray-700">
+                            <span>저장 공간:</span>
+                            <span className={`font-bold ${usagePercentage > 90 ? 'text-red-400' : 'text-blue-400'}`}>{items.length}</span>
+                            <span>/ {MAX_COLLECTION_SIZE}</span>
+                        </div>
+                        <div className="flex gap-2 w-full md:w-auto">
+                            <Button onClick={handleClearAll} variant="secondary" disabled={items.length === 0} className="text-xs md:text-sm whitespace-nowrap">
+                                전체 삭제
+                            </Button>
+                            <Button onClick={exportCollectionToCSV} className="bg-green-600 hover:bg-green-700 text-xs md:text-sm whitespace-nowrap" disabled={items.length === 0}>
+                                엑셀 다운로드 (CSV)
+                            </Button>
+                        </div>
                     </div>
                 </div>
 

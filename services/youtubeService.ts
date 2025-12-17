@@ -1,4 +1,3 @@
-
 import type { 
     VideoData, 
     ChannelAnalysisData, 
@@ -284,6 +283,42 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
     return filteredResults;
 };
 
+export const generateTrendData = (videos: ChannelVideo[], days: number): TrendPoint[] => {
+    const dailyTrendsMap = new Map<string, TrendPoint>();
+    const now = new Date();
+    const utcToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(utcToday);
+        d.setUTCDate(utcToday.getUTCDate() - i);
+        const isoDate = d.toISOString().split('T')[0];
+        const displayDate = `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+        dailyTrendsMap.set(isoDate, {
+            date: displayDate,
+            views: 0,
+            engagements: 0,
+            likes: 0,
+            thumbnails: []
+        });
+    }
+
+    videos.forEach(video => {
+        const pubDate = video.publishedAt.split('T')[0];
+        if (dailyTrendsMap.has(pubDate)) {
+            const stat = dailyTrendsMap.get(pubDate)!;
+            stat.views += video.viewCount; 
+            stat.likes += video.likeCount;
+            stat.engagements += video.likeCount + video.commentCount;
+            if (!stat.thumbnails) stat.thumbnails = [];
+            if (stat.thumbnails.length < 5 && video.thumbnailUrl) {
+                stat.thumbnails.push(video.thumbnailUrl);
+            }
+        }
+    });
+    
+    return Array.from(dailyTrendsMap.values());
+};
+
 export const fetchChannelAnalysis = async (channelId: string, apiKey: string): Promise<ChannelAnalysisData> => {
     const channelResponse = await fetch(`${BASE_URL}/channels?part=snippet,statistics,contentDetails,brandingSettings&id=${channelId}&key=${apiKey}`);
     const channelJson = await channelResponse.json();
@@ -355,37 +390,7 @@ export const fetchChannelAnalysis = async (channelId: string, apiKey: string): P
     
     const recentUploads = videoList.filter(v => new Date(v.publishedAt) >= oneMonthAgo).length;
 
-    const dailyTrendsMap = new Map<string, TrendPoint>();
-    const utcToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    
-    for (let i = 29; i >= 0; i--) {
-        const d = new Date(utcToday);
-        d.setUTCDate(utcToday.getUTCDate() - i);
-        const isoDate = d.toISOString().split('T')[0];
-        const displayDate = `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
-        dailyTrendsMap.set(isoDate, {
-            date: displayDate,
-            views: 0,
-            engagements: 0,
-            likes: 0,
-            thumbnails: []
-        });
-    }
-
-    videoList.forEach(video => {
-        const pubDate = video.publishedAt.split('T')[0];
-        if (dailyTrendsMap.has(pubDate)) {
-            const stat = dailyTrendsMap.get(pubDate)!;
-            stat.views += video.viewCount; 
-            stat.likes += video.likeCount;
-            stat.engagements += video.likeCount + video.commentCount;
-            if (!stat.thumbnails) stat.thumbnails = [];
-            if (stat.thumbnails.length < 5 && video.thumbnailUrl) {
-                stat.thumbnails.push(video.thumbnailUrl);
-            }
-        }
-    });
-    const dailyTrends = Array.from(dailyTrendsMap.values());
+    const dailyTrends = generateTrendData(videoList, 30);
     
     const shortsVideos = videoList.filter(v => v.isShorts);
     const longformVideos = videoList.filter(v => !v.isShorts);

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Spinner from './common/Spinner';
 import { fetchRankingData } from '../services/youtubeService';
-import type { User, AppSettings, ChannelRankingData, VideoRankingData, RankingViewState } from '../types';
+import type { User, AppSettings, ChannelRankingData, VideoRankingData, RankingViewState, RankingTabCache } from '../types';
 import { YOUTUBE_CATEGORY_OPTIONS } from '../types';
 import ComparisonModal from './ComparisonModal';
 
@@ -82,6 +82,7 @@ const RankingView: React.FC<RankingViewProps> = ({
     const [error, setError] = useState<string | null>(null);
     const [hasSearched, setHasSearched] = useState(!!savedState?.results.length);
 
+    // Filters
     const [country, setCountry] = useState(savedState?.country || 'KR');
     const [category, setCategory] = useState(savedState?.category || 'all');
     const [excludedCategories, setExcludedCategories] = useState<Set<string>>(
@@ -89,9 +90,18 @@ const RankingView: React.FC<RankingViewProps> = ({
     );
     const [videoFormat, setVideoFormat] = useState<'all' | 'longform' | 'shorts'>(savedState?.videoFormat || 'all');
     
+    // UI State
     const [selectedChannels, setSelectedChannels] = useState<Record<string, { name: string }>>(savedState?.selectedChannels || {});
     const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
 
+    // Cache per tab
+    const [tabCache, setTabCache] = useState<{
+        channels?: RankingTabCache;
+        videos?: RankingTabCache;
+        performance?: RankingTabCache;
+    }>(savedState?.tabCache || {});
+
+    // Save State on Change
     useEffect(() => {
         onSaveState({
             activeTab,
@@ -100,9 +110,10 @@ const RankingView: React.FC<RankingViewProps> = ({
             excludedCategories: Array.from(excludedCategories),
             videoFormat,
             results,
-            selectedChannels
+            selectedChannels,
+            tabCache // Persist the cache
         });
-    }, [activeTab, country, category, excludedCategories, videoFormat, results, selectedChannels, onSaveState]);
+    }, [activeTab, country, category, excludedCategories, videoFormat, results, selectedChannels, tabCache, onSaveState]);
 
     const handleSearchClick = async () => {
         // Usage Limit Check
@@ -111,6 +122,31 @@ const RankingView: React.FC<RankingViewProps> = ({
             return;
         }
 
+        // Current parameters snapshot
+        const currentParams = {
+            limit: 50,
+            country,
+            category,
+            excludedCategories: Array.from(excludedCategories).sort(), // Sort for consistent comparison
+            videoFormat,
+            metric: 'mostPopular',
+            tab: activeTab // Include tab in params to differentiate
+        };
+
+        // 1. Check for Duplicate Search (Prevent Credit Deduction)
+        // If the parameters are exactly the same as the last successful search for this tab, skip API call.
+        const cached = tabCache[activeTab];
+        if (cached && JSON.stringify(cached.params) === JSON.stringify(currentParams)) {
+            // Already have these results, just show them (even if they are already showing)
+            // This prevents usage deduction on repeated clicks
+            console.log("Duplicate search detected. Using cached results.");
+            if (results !== cached.results) {
+                setResults(cached.results);
+            }
+            return; 
+        }
+
+        // 2. Proceed with API Call
         setIsLoading(true);
         setError(null);
         setResults([]);
@@ -125,33 +161,43 @@ const RankingView: React.FC<RankingViewProps> = ({
         }
 
         try {
-            const filters = {
+            const apiFilters = { 
                 limit: 50,
                 country,
                 category,
-                excludedCategories,
+                excludedCategories: Array.from(excludedCategories),
                 videoFormat,
                 metric: 'mostPopular',
-                skipCache: activeTab === 'performance'
+                skipCache: activeTab === 'performance' 
             };
-
+            
             const fetchType = activeTab === 'channels' ? 'channels' : 'videos';
-            const data = await fetchRankingData(fetchType, filters, apiKey);
+            const data = await fetchRankingData(fetchType, apiFilters, apiKey);
+
+            let finalResults = data || [];
 
             if (activeTab === 'performance') {
-                const processed = (data as VideoRankingData[])
+                finalResults = (data as VideoRankingData[])
                     .filter(v => v.viewCount > 10000)
                     .sort((a, b) => {
                         const ratioA = a.viewCount / (a.channelSubscriberCount || 1);
                         const ratioB = b.viewCount / (b.channelSubscriberCount || 1);
                         return ratioB - ratioA;
                     });
-                setResults(processed);
-            } else {
-                setResults(data || []);
             }
             
-            // Deduct usage after successful fetch
+            setResults(finalResults);
+            
+            // Update Cache with new results and the exact params used
+            setTabCache(prev => ({
+                ...prev,
+                [activeTab]: {
+                    results: finalResults,
+                    params: currentParams // Store params to compare later
+                }
+            }));
+            
+            // Deduct usage only on successful fresh fetch
             onUpdateUser({ usage: user.usage + 1 });
 
         } catch (err) {
@@ -165,9 +211,19 @@ const RankingView: React.FC<RankingViewProps> = ({
     const handleTabChange = (tab: ActiveTab) => {
         if (tab === activeTab) return;
         setActiveTab(tab);
-        setResults([]);
-        setHasSearched(false);
         setSelectedChannels({});
+
+        // Restore from cache if available (Maintains state between tabs)
+        if (tabCache[tab]) {
+            setResults(tabCache[tab]!.results);
+            setHasSearched(true);
+            // We do NOT update the filter UI (Country/Category) to match the cache here,
+            // to allow users to apply current filters to the new tab easily.
+            // But the displayed results will match the *previous search* on that tab until they click 'Search' again.
+        } else {
+            setResults([]);
+            setHasSearched(false);
+        }
     };
 
     const handleCheckboxChange = (id: string, name: string, checked: boolean) => {
@@ -247,9 +303,12 @@ const RankingView: React.FC<RankingViewProps> = ({
                         <button onClick={() => onShowVideoDetail(item.id)} className="font-semibold text-white text-sm line-clamp-2 text-left mb-1 w-full hover:text-blue-400">
                             {item.name}
                         </button>
-                        <button onClick={() => onShowChannelDetail(item.channelId)} className="text-xs text-gray-400 truncate block w-full text-left hover:text-white">
-                            {item.channelName}
-                        </button>
+                        <div className="flex justify-between items-center text-xs">
+                            <button onClick={() => onShowChannelDetail(item.channelId)} className="text-gray-400 truncate block text-left hover:text-white max-w-[120px]">
+                                {item.channelName}
+                            </button>
+                            <span className="text-gray-500">구독 {formatNumber(item.channelSubscriberCount)}</span>
+                        </div>
                     </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center text-xs border-t border-gray-700/50 pt-3">
@@ -315,7 +374,8 @@ const RankingView: React.FC<RankingViewProps> = ({
                                 <tr>
                                     <th className="px-4 py-3 text-center w-16">순위</th>
                                     <th className="px-4 py-3">{activeTab === 'channels' ? '채널 정보' : '영상 정보'}</th>
-                                    <th className="px-4 py-3 text-center">{activeTab === 'channels' ? '구독자' : '조회수'}</th>
+                                    <th className="px-4 py-3 text-center">구독자</th>
+                                    <th className="px-4 py-3 text-center">조회수</th>
                                     <th className="px-4 py-3 text-center">{activeTab === 'performance' ? '성과지표' : '추정 수익'}</th>
                                     <th className="px-4 py-3 text-center">분석</th>
                                 </tr>
@@ -341,12 +401,13 @@ const RankingView: React.FC<RankingViewProps> = ({
                                                             <img src={ch.thumbnailUrl} alt="" className="w-10 h-10 rounded-full" />
                                                             <div>
                                                                 <div className="font-semibold text-white hover:text-blue-400 transition-colors">{ch.name}</div>
-                                                                <div className="text-xs text-gray-400">조회수 {formatNumber(ch.viewsInPeriod)}</div>
+                                                                {/* Move view info to Views column for clarity */}
                                                             </div>
                                                         </button>
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-3 text-center font-medium">{formatNumber(ch.subscriberCount)}</td>
+                                                <td className="px-4 py-3 text-center font-medium text-gray-300">{formatNumber(ch.viewCount)}</td>
                                                 <td className="px-4 py-3 text-center text-green-400 font-medium">${formatNumber(ch.estimatedMonthlyRevenue)}</td>
                                                 <td className="px-4 py-3 text-center">
                                                     <button onClick={() => onShowChannelDetail(ch.id)} className="text-blue-400 hover:text-blue-300 text-xs border border-blue-500/30 px-2 py-1 rounded">상세</button>
@@ -376,7 +437,8 @@ const RankingView: React.FC<RankingViewProps> = ({
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="px-4 py-3 text-center font-medium">{formatNumber(vd.viewCount)}</td>
+                                                <td className="px-4 py-3 text-center font-medium text-gray-400">{formatNumber(vd.channelSubscriberCount)}</td>
+                                                <td className="px-4 py-3 text-center font-medium text-white">{formatNumber(vd.viewCount)}</td>
                                                 <td className="px-4 py-3 text-center">
                                                     {activeTab === 'performance' ? (
                                                         <PerformanceBadge ratio={ratio} />

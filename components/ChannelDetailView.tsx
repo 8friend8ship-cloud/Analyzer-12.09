@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchChannelAnalysis, fetchSimilarChannels } from '../services/youtubeService';
+import React, { useState, useEffect, useMemo } from 'react';
+import { fetchChannelAnalysis, fetchSimilarChannels, generateTrendData } from '../services/youtubeService';
 import { addToCollection, createChannelCollectionItem } from '../services/collectionService';
 import { getFromCache, setInCache } from '../services/cacheService';
 import type { ChannelAnalysisData, User, AppSettings, ChannelVideo, SurgingVideos, SimilarChannelData } from '../types';
@@ -248,23 +248,61 @@ const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({
     planLimit
 }) => {
     const [data, setData] = useState<ChannelAnalysisData | null>(null);
-    const [isLoading, setIsLoading] = useState(true); // Default to true to start loading immediately
+    const [isLoading, setIsLoading] = useState(true); 
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'overview' | 'similarChannels'>(initialTab);
     const [showFullDesc, setShowFullDesc] = useState(false);
     
-    // Reset tab when channelId changes or initialTab prop changes
+    // --- Trend States ---
+    // Fixed 30-day data for the main chart
+    const trendData30 = useMemo(() => {
+        if (!data?.videoList) return [];
+        return generateTrendData(data.videoList, 30);
+    }, [data]);
+
+    // Long-term period selector state
+    const [longTermPeriod, setLongTermPeriod] = useState<90 | 180 | 365>(90);
+
+    // Calculate long-term trend data with filtering
+    const longTermTrendData = useMemo(() => {
+        if (!data?.videoList) return null;
+        
+        // 1. Check if there are any videos in the selected period
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - longTermPeriod);
+        const activeVideos = data.videoList.filter(v => new Date(v.publishedAt) >= cutoff);
+        
+        if (activeVideos.length === 0) return null; // "None" case
+
+        // 2. Generate the base trend data points
+        const trends = generateTrendData(data.videoList, longTermPeriod);
+
+        // 3. Smart Filtering: Calculate average views for this period
+        const totalViews = activeVideos.reduce((acc, v) => acc + v.viewCount, 0);
+        const averageViews = activeVideos.length > 0 ? totalViews / activeVideos.length : 0;
+        
+        // Threshold: Only show dots for videos that performed significantly better than average (e.g., > 1.2x)
+        const threshold = averageViews * 1.2;
+
+        return trends.map(t => {
+            // Check daily total views against threshold. 
+            // If the day's views are low, clear thumbnails to hide the dot on the chart.
+            if (t.views < threshold) {
+                return { ...t, thumbnails: [] }; 
+            }
+            return t;
+        });
+    }, [data, longTermPeriod]);
+
     useEffect(() => {
         setActiveTab(initialTab);
     }, [channelId, initialTab]);
 
-    // Auto-fetch data on mount or channelId change
     useEffect(() => {
         let isMounted = true;
         const loadData = async () => {
             if (!channelId) return;
             
-            // Check cache first
             const cacheKey = `channel_detail_${channelId}`;
             const cachedData = getFromCache(cacheKey);
             if (cachedData) {
@@ -275,7 +313,6 @@ const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({
                 return;
             }
 
-            // Usage Limit Check before API call
             if (user.usage >= planLimit) {
                 if (isMounted) {
                     setIsLoading(false);
@@ -305,9 +342,8 @@ const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({
                 const result = await fetchChannelAnalysis(channelId, apiKey);
                 if (isMounted) {
                     setData(result);
-                    setInCache(cacheKey, result); // Save to cache
+                    setInCache(cacheKey, result);
                     addToCollection(createChannelCollectionItem(result));
-                    // Deduct usage
                     onUpdateUser({ usage: user.usage + 1 });
                 }
             } catch (err) {
@@ -328,43 +364,22 @@ const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({
         setActiveTab(tab);
     };
 
-    if (isLoading) {
-        return <ChannelDetailSkeleton />;
-    }
-    
-    if (error) {
-        return <div className="p-8 text-center text-red-400 bg-red-900/10 rounded-lg m-4 border border-red-900/20">
-            <p className="text-lg font-semibold mb-2">오류 발생</p>
-            <p className="mb-6">{error}</p>
-            <button onClick={onBack} className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-white transition-colors">← 뒤로 가기</button>
-        </div>;
-    }
-    
-    if (!data) return null; // Should not happen given logic above
+    if (isLoading) return <ChannelDetailSkeleton />;
+    if (error) return <div className="p-8 text-center text-red-400 bg-red-900/10 rounded-lg m-4 border border-red-900/20"><p className="text-lg font-semibold mb-2">오류 발생</p><p className="mb-6">{error}</p><button onClick={onBack} className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-white transition-colors">← 뒤로 가기</button></div>;
+    if (!data) return null;
 
-    const uploadFrequencyValue = data.overview.uploadPattern.last30Days > 0
-        ? `${(30 / data.overview.uploadPattern.last30Days).toFixed(1)}일/1회`
-        : '없음';
-    const subConversionRateValue = data.totalViews > 0
-        ? `${((data.subscriberCount / data.totalViews) * 100).toFixed(2)}%`
-        : 'N/A';
-    const subsPerVideoValue = data.totalVideos > 0
-        ? `${(data.subscriberCount / data.totalVideos).toFixed(1)}명`
-        : 'N/A';
+    const uploadFrequencyValue = data.overview.uploadPattern.last30Days > 0 ? `${(30 / data.overview.uploadPattern.last30Days).toFixed(1)}일/1회` : '없음';
+    const subConversionRateValue = data.totalViews > 0 ? `${((data.subscriberCount / data.totalViews) * 100).toFixed(2)}%` : 'N/A';
+    const subsPerVideoValue = data.totalVideos > 0 ? `${(data.subscriberCount / data.totalVideos).toFixed(1)}명` : 'N/A';
 
     return (
         <div className="p-4 md:p-6 lg:p-8 animate-fade-in">
-            <button onClick={onBack} className="mb-4 px-4 py-2 text-sm font-semibold rounded-md bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-              목록으로
-            </button>
+            <button onClick={onBack} className="mb-4 px-4 py-2 text-sm font-semibold rounded-md bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>목록으로</button>
             
             <header className="flex flex-col sm:flex-row items-center gap-6 mb-8 bg-gray-800/50 p-6 rounded-2xl border border-gray-700/50">
                 <a href={`https://www.youtube.com/channel/${data.id}`} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 group relative">
                     <img src={data.thumbnailUrl} alt={data.name} className="w-24 h-24 md:w-32 md:h-32 rounded-full ring-4 ring-gray-700 group-hover:ring-blue-500 transition-all" />
-                    <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                    </div>
+                    <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg></div>
                 </a>
                 <div className="flex-grow text-center sm:text-left w-full">
                     <div className="flex flex-col sm:flex-row items-center sm:items-baseline gap-2 mb-1">
@@ -376,191 +391,102 @@ const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({
                         <span>총 영상: {formatNumber(data.totalVideos)}개</span>
                     </div>
                     <div className="flex items-center justify-center sm:justify-start gap-4">
-                        <div className="bg-gray-900/60 px-4 py-2 rounded-lg text-center min-w-[100px]">
-                            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">구독자</p>
-                            <p className="text-xl font-bold text-white">{formatNumber(data.subscriberCount, true)}</p>
-                        </div>
-                         <div className="bg-gray-900/60 px-4 py-2 rounded-lg text-center min-w-[100px]">
-                            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">총 조회수</p>
-                            <p className="text-xl font-bold text-white">{formatNumber(data.totalViews, true)}</p>
-                        </div>
+                        <div className="bg-gray-900/60 px-4 py-2 rounded-lg text-center min-w-[100px]"><p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">구독자</p><p className="text-xl font-bold text-white">{formatNumber(data.subscriberCount, true)}</p></div>
+                         <div className="bg-gray-900/60 px-4 py-2 rounded-lg text-center min-w-[100px]"><p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">총 조회수</p><p className="text-xl font-bold text-white">{formatNumber(data.totalViews, true)}</p></div>
                     </div>
                 </div>
             </header>
             
             <nav className="mb-6 border-b border-gray-700">
                 <div className="flex space-x-6">
-                    <button
-                        onClick={() => handleTabClick('overview')}
-                        className={`pb-3 text-sm font-medium border-b-2 transition-colors px-2 ${activeTab === 'overview' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
-                    >
-                        종합 분석
-                    </button>
-                    <button
-                        onClick={() => handleTabClick('similarChannels')}
-                        className={`pb-3 text-sm font-medium border-b-2 transition-colors px-2 ${activeTab === 'similarChannels' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
-                    >
-                        유사 채널 탐색
-                    </button>
+                    <button onClick={() => handleTabClick('overview')} className={`pb-3 text-sm font-medium border-b-2 transition-colors px-2 ${activeTab === 'overview' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>종합 분석</button>
+                    <button onClick={() => handleTabClick('similarChannels')} className={`pb-3 text-sm font-medium border-b-2 transition-colors px-2 ${activeTab === 'similarChannels' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>유사 채널 탐색</button>
                 </div>
             </nav>
 
             {activeTab === 'overview' && (
               <div className="space-y-8">
-                {/* Key Metrics */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <StatCard 
-                        title="월 추정 수익 (현재)" 
-                        value={`$${formatNumber(data.estimatedMonthlyRevenue, true)}`}
-                        subValue={data.subscriberCount < 1000 ? "수익 창출 미달 가능성" : "최근 조회수 기반"}
-                        highlight={true}
-                    />
-                    <StatCard 
-                        title="총 누적 수익 (추산)" 
-                        value={`$${formatNumber(data.estimatedTotalRevenue, true)}`}
-                        subValue={data.subscriberCount < 1000 ? "수익 창출 미달 가능성" : "전체 누적 조회수 기반"}
-                    />
-                     <StatCard 
-                        title="최근 30일 업로드" 
-                        value={`${data.overview.uploadPattern.last30Days} 개`}
-                        subValue={data.overview.uploadPattern.last30Days > 0 ? "활발히 활동 중" : "활동 저조"}
-                    />
-                     <StatCard 
-                        title="평균 조회수 (롱폼)" 
-                        value={formatNumber(data.performanceTrend.longFormStats.avgViews, true)} 
-                        subValue="최근 30일 영상 기준"
-                    />
+                    <StatCard title="월 추정 수익 (현재)" value={`$${formatNumber(data.estimatedMonthlyRevenue, true)}`} subValue={data.subscriberCount < 1000 ? "수익 창출 미달 가능성" : "최근 조회수 기반"} highlight={true} />
+                    <StatCard title="총 누적 수익 (추산)" value={`$${formatNumber(data.estimatedTotalRevenue, true)}`} subValue={data.subscriberCount < 1000 ? "수익 창출 미달 가능성" : "전체 누적 조회수 기반"} />
+                     <StatCard title="최근 30일 업로드" value={`${data.overview.uploadPattern.last30Days} 개`} subValue={data.overview.uploadPattern.last30Days > 0 ? "활발히 활동 중" : "활동 저조"} />
+                     <StatCard title="평균 조회수 (롱폼)" value={formatNumber(data.performanceTrend.longFormStats.avgViews, true)} subValue="최근 30일 영상 기준" />
                 </div>
 
-                {/* Channel Profile & Health */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <section className="lg:col-span-2 bg-gray-800 rounded-lg p-5 border border-gray-700">
                         <h2 className="text-lg font-bold mb-3 flex items-center gap-2 text-white">📢 채널 정보</h2>
-                        
                         <div className="mb-4 bg-gray-900/50 p-4 rounded-lg">
                             <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">채널 설명</h4>
-                            <div className={`text-sm text-gray-300 leading-relaxed whitespace-pre-line ${!showFullDesc && 'line-clamp-3'}`}>
-                                {data.description}
-                            </div>
-                            {data.description.length > 150 && (
-                                <button 
-                                    onClick={() => setShowFullDesc(!showFullDesc)} 
-                                    className="text-xs text-blue-400 hover:text-blue-300 mt-2 font-medium"
-                                >
-                                    {showFullDesc ? "접기" : "더보기"}
-                                </button>
-                            )}
+                            <div className={`text-sm text-gray-300 leading-relaxed whitespace-pre-line ${!showFullDesc && 'line-clamp-3'}`}>{data.description}</div>
+                            {data.description.length > 150 && (<button onClick={() => setShowFullDesc(!showFullDesc)} className="text-xs text-blue-400 hover:text-blue-300 mt-2 font-medium">{showFullDesc ? "접기" : "더보기"}</button>)}
                         </div>
-
                         <div>
                             <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">채널 태그 (Keywords)</h4>
-                            {data.channelKeywords.length > 0 ? (
-                                <div className="flex flex-wrap gap-2">
-                                    {data.channelKeywords.map((keyword, i) => (
-                                        <span key={i} className="px-2.5 py-1 bg-gray-700 text-gray-300 text-xs rounded-full border border-gray-600 hover:bg-gray-600 transition-colors cursor-default">
-                                            #{keyword}
-                                        </span>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="text-xs text-gray-500">설정된 채널 키워드가 없습니다.</p>
-                            )}
+                            {data.channelKeywords.length > 0 ? (<div className="flex flex-wrap gap-2">{data.channelKeywords.map((keyword, i) => (<span key={i} className="px-2.5 py-1 bg-gray-700 text-gray-300 text-xs rounded-full border border-gray-600 hover:bg-gray-600 transition-colors cursor-default">#{keyword}</span>))}</div>) : (<p className="text-xs text-gray-500">설정된 채널 키워드가 없습니다.</p>)}
                         </div>
                     </section>
 
                     <section className="bg-gray-800 rounded-lg p-5 border border-gray-700 flex flex-col justify-between">
                         <h2 className="text-lg font-bold mb-4 text-white">🩺 채널 건강도 진단</h2>
                         <div className="space-y-4">
-                            <div className="flex justify-between items-center border-b border-gray-700 pb-3">
-                                <span className="text-sm text-gray-400">업로드 빈도</span>
-                                <span className="font-bold text-white">{uploadFrequencyValue}</span>
-                            </div>
-                            <div className="flex justify-between items-center border-b border-gray-700 pb-3">
-                                <span className="text-sm text-gray-400">구독 전환율</span>
-                                <span className="font-bold text-white">{subConversionRateValue}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm text-gray-400">영상당 평균 구독자</span>
-                                <span className="font-bold text-white">{subsPerVideoValue}</span>
-                            </div>
+                            <div className="flex justify-between items-center border-b border-gray-700 pb-3"><span className="text-sm text-gray-400">업로드 빈도</span><span className="font-bold text-white">{uploadFrequencyValue}</span></div>
+                            <div className="flex justify-between items-center border-b border-gray-700 pb-3"><span className="text-sm text-gray-400">구독 전환율</span><span className="font-bold text-white">{subConversionRateValue}</span></div>
+                            <div className="flex justify-between items-center"><span className="text-sm text-gray-400">영상당 평균 구독자</span><span className="font-bold text-white">{subsPerVideoValue}</span></div>
                         </div>
-                        <div className="mt-4 pt-4 border-t border-gray-700">
-                            <p className="text-xs text-gray-500 text-center">
-                                * 구독 전환율이 1.5% 이상이면 매우 우수합니다.
-                            </p>
-                        </div>
+                        <div className="mt-4 pt-4 border-t border-gray-700"><p className="text-xs text-gray-500 text-center">* 구독 전환율이 1.5% 이상이면 매우 우수합니다.</p></div>
                     </section>
                 </div>
 
                 <section>
                     <h2 className="text-xl font-bold mb-4 flex items-center gap-2">📈 최근 30일 성과 트렌드</h2>
                     <div className="bg-gray-800 p-4 rounded-lg h-80 border border-gray-700">
-                        <PerformanceTrendChart data={data.performanceTrend.dailyTrends} />
+                        {trendData30.length > 0 ? (
+                            <PerformanceTrendChart data={trendData30} />
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-gray-500">데이터가 부족합니다.</div>
+                        )}
                     </div>
                 </section>
-                
-                <section>
-                    <SurgingVideosSection surgingVideos={data.surgingVideos} onShowVideoDetail={onShowVideoDetail} />
-                </section>
-                
-                <section className="grid grid-cols-1 gap-6">
-                     <div>
-                        <h2 className="text-xl font-bold mb-4 flex items-center gap-2">👥 AI 시청자 분석</h2>
-                        <AudienceCharts profile={data.audienceProfile} totalViews={data.totalViews} />
-                     </div>
-                     <div className="bg-gradient-to-r from-gray-800 to-gray-900 p-6 rounded-lg border border-gray-700 relative overflow-hidden">
-                         <div className="absolute top-0 right-0 p-4 opacity-10">
-                             <svg className="w-32 h-32 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
-                         </div>
-                         <h4 className="font-bold text-lg mb-2 text-yellow-400 flex items-center gap-2">
-                             <span className="text-xl">🤖</span> AI 요약 리포트
-                         </h4>
-                         <p className="text-sm text-gray-300 leading-relaxed relative z-10">{data.audienceProfile.summary}</p>
-                     </div>
-                </section>
 
-                 <section>
-                     <h2 className="text-xl font-bold mb-4">채널 주요 토픽 (최근 10개 영상)</h2>
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-gray-800 p-5 rounded-lg border border-gray-700">
-                            <h3 className="font-semibold mb-4 text-gray-200 border-b border-gray-700 pb-2">🔥 인기 키워드 (빈도)</h3>
-                             <ul className="space-y-3">
-                                {data.overview.popularKeywords.map(({ keyword, score }) => (
-                                  <li key={keyword} className="flex items-center justify-between text-sm">
-                                    <span className="text-gray-300 font-medium">{keyword}</span>
-                                    <div className="flex items-center gap-2 w-1/2">
-                                        <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                                            <div className="h-full bg-blue-500 rounded-full" style={{width: `${score}%`}}></div>
-                                        </div>
-                                        <span className="text-xs text-gray-500 w-8 text-right">{score}%</span>
-                                    </div>
-                                  </li>
-                                ))}
-                             </ul>
-                        </div>
-                         <div className="bg-gray-800 p-5 rounded-lg border border-gray-700">
-                            <h3 className="font-semibold mb-4 text-gray-200 border-b border-gray-700 pb-2">🏷️ 주요 태그</h3>
-                             <div className="flex flex-wrap gap-2">
-                                {data.overview.competitiveness.tags.slice(0, 15).map(tag => (
-                                    <span key={tag} className="px-3 py-1.5 text-xs bg-gray-700 text-gray-200 rounded-md border border-gray-600">
-                                        {tag}
-                                    </span>
-                                ))}
-                             </div>
-                        </div>
-                     </div>
-                </section>
-
-                <section>
-                    <h2 className="text-xl font-bold mb-4">최근 업로드 영상</h2>
-                    <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-                        <div className="divide-y divide-gray-700">
-                            {data.videoList.map(video => (
-                                <VideoListItem key={video.id} video={video} onOpenCommentModal={onOpenCommentModal} onShowVideoDetail={onShowVideoDetail} />
+                <section className="mt-8">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-bold flex items-center gap-2">🗓️ 장기 성과 분석 (Top Videos)</h2>
+                        <div className="flex bg-gray-700/50 p-1 rounded-lg">
+                            {[90, 180, 365].map(days => (
+                                <button
+                                    key={days}
+                                    onClick={() => setLongTermPeriod(days as any)}
+                                    className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${longTermPeriod === days ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                                >
+                                    {days === 90 ? '3개월' : days === 180 ? '6개월' : '1년'}
+                                </button>
                             ))}
                         </div>
                     </div>
+                    <div className="bg-gray-800 p-4 rounded-lg h-80 border border-gray-700">
+                        {longTermTrendData ? (
+                            <PerformanceTrendChart data={longTermTrendData} />
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                                <p className="text-lg font-semibold mb-1">활동 기록 없음</p>
+                                <p className="text-sm">해당 기간 동안 업로드된 영상이 없습니다.</p>
+                            </div>
+                        )}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2 text-right">* 장기 분석에서는 평균 성과를 상회하는 주요 영상만 포인트(●)로 표시됩니다.</p>
                 </section>
+                
+                <section><SurgingVideosSection surgingVideos={data.surgingVideos} onShowVideoDetail={onShowVideoDetail} /></section>
+                <section className="grid grid-cols-1 gap-6"><div><h2 className="text-xl font-bold mb-4 flex items-center gap-2">👥 AI 시청자 분석</h2><AudienceCharts profile={data.audienceProfile} totalViews={data.totalViews} /></div><div className="bg-gradient-to-r from-gray-800 to-gray-900 p-6 rounded-lg border border-gray-700 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><svg className="w-32 h-32 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg></div><h4 className="font-bold text-lg mb-2 text-yellow-400 flex items-center gap-2"><span className="text-xl">🤖</span> AI 요약 리포트</h4><p className="text-sm text-gray-300 leading-relaxed relative z-10">{data.audienceProfile.summary}</p></div></section>
+                 <section>
+                     <h2 className="text-xl font-bold mb-4">채널 주요 토픽 (최근 10개 영상)</h2>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-gray-800 p-5 rounded-lg border border-gray-700"><h3 className="font-semibold mb-4 text-gray-200 border-b border-gray-700 pb-2">🔥 인기 키워드 (빈도)</h3><ul className="space-y-3">{data.overview.popularKeywords.map(({ keyword, score }) => (<li key={keyword} className="flex items-center justify-between text-sm"><span className="text-gray-300 font-medium">{keyword}</span><div className="flex items-center gap-2 w-1/2"><div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full" style={{width: `${score}%`}}></div></div><span className="text-xs text-gray-500 w-8 text-right">{score}%</span></div></li>))}</ul></div>
+                         <div className="bg-gray-800 p-5 rounded-lg border border-gray-700"><h3 className="font-semibold mb-4 text-gray-200 border-b border-gray-700 pb-2">🏷️ 주요 태그</h3><div className="flex flex-wrap gap-2">{data.overview.competitiveness.tags.slice(0, 15).map(tag => (<span key={tag} className="px-3 py-1.5 text-xs bg-gray-700 text-gray-200 rounded-md border border-gray-600">{tag}</span>))}</div></div>
+                     </div>
+                </section>
+                <section><h2 className="text-xl font-bold mb-4">최근 업로드 영상</h2><div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden"><div className="divide-y divide-gray-700">{data.videoList.map(video => (<VideoListItem key={video.id} video={video} onOpenCommentModal={onOpenCommentModal} onShowVideoDetail={onShowVideoDetail} />))}</div></div></section>
               </div>
             )}
             {activeTab === 'similarChannels' && (

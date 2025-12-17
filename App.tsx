@@ -37,8 +37,8 @@ const getEnvVar = (key: string): string => {
 const defaultAppSettings: AppSettings = {
     freePlanLimit: 30,
     plans: {
-        pro: { name: 'Pro', analyses: 100, price: 19000 },
-        biz: { name: 'Biz', analyses: 200, price: 29000 },
+        pro: { name: 'Pro', analyses: 3000, price: 19000 }, // Increased to 3000 (virtual unlimited)
+        biz: { name: 'Biz', analyses: Infinity, price: 29000 }, // Truly unlimited
     },
     apiKeys: {
         youtube: getEnvVar('YOUTUBE_API_KEY') || getEnvVar('VITE_YOUTUBE_API_KEY'), 

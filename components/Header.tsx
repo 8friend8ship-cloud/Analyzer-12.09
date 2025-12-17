@@ -116,7 +116,7 @@ const Header: React.FC<HeaderProps> = ({ user, planLimit, onLogout, onOpenHelpMo
                         </div>
 
                         <div className="px-3 py-1.5 text-sm bg-[#2C2F3B] rounded-lg">
-                            <span className="text-gray-400">오늘 사용량: </span>
+                            <span className="text-gray-400">월간 사용량: </span>
                             <span className="font-semibold text-white">{user.usage} / {planLimit === Infinity ? '무제한' : planLimit}</span>
                         </div>
                     </div>
