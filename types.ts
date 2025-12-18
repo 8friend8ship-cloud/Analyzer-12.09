@@ -12,7 +12,6 @@ declare global {
             API_KEY?: string; // Gemini API Key
             [key: string]: string | undefined;
         };
-        // For Google Sign-In
         google?: {
             accounts: {
                 id: {
@@ -32,7 +31,6 @@ declare global {
                 };
             };
         };
-        // For HTML2PDF
         html2pdf?: () => { from: (element: HTMLElement) => { set: (opt: any) => { save: () => Promise<void> } } };
     }
 }
@@ -43,23 +41,26 @@ export interface VideoData {
   title: string;
   thumbnailUrl: string;
   channelTitle: string;
-  publishedAt: string; // ISO 8061 string
+  publishedAt: string;
   subscribers: number;
   viewCount: number;
   viewsPerHour: number;
   likeCount: number;
   commentCount: number;
   durationMinutes: number;
-  engagementRate: number; // (likes + comments) / views
-  performanceRatio: number; // views / subscribers
-  satisfactionScore: number; // (likes*5 + comments*10) / views
-  cll: number; // Custom metric
-  cul: number; // Custom metric
-  grade: string; // S, A, B, C, D
-  estimatedRevenue: number; // Lifetime revenue
-  estimatedMonthlyRevenue: number; // Projected monthly revenue based on current VPH
+  engagementRate: number;
+  performanceRatio: number;
+  satisfactionScore: number;
+  cll: number;
+  cul: number;
+  grade: string;
+  estimatedRevenue: number;
+  estimatedMonthlyRevenue: number;
   aiThumbnailScore?: number;
-  channelCountry?: string; // Added for country flag display
+  aiThumbnailReason?: string;
+  aiThumbnailHook?: string;
+  aiKeywordScore?: number;
+  channelCountry?: string;
 }
 
 export type AnalysisMode = 'keyword' | 'channel';
@@ -76,7 +77,7 @@ export interface FilterState {
   period: Period;
   sortBy: SortBy;
   resultsLimit: number;
-  country: string; // e.g., 'KR', 'US', 'JP'
+  country: string;
   category: string;
 }
 
@@ -95,9 +96,8 @@ export const YOUTUBE_CATEGORY_OPTIONS = [
 ];
 
 export const COUNTRY_FLAGS: { [key: string]: string } = {
-    WW: '🌍', KR: '🇰🇷', US: '🇺🇸', JP: '🇯🇵', NZ: '🇳🇿', TW: '🇹🇼', DE: '🇩🇪', RU: '🇷🇺', MY: '🇲🇾', MX: '🇲🇽', VN: '🇻🇳', BN: '🇧🇳', SG: '🇸🇬', GB: '🇬🇧', IN: '🇮🇳', ID: '🇮🇩', CN: '🇨🇳', CL: '🇨🇱', CA: '🇨🇦', TH: '🇹🇭', PG: '🇵🇬', PE: '🇵🇪', FR: '🇫🇷', PH: '🇵🇭', AU: '🇦🇺', HK: '🇭🇰', BR: '🇧🇷'
+    WW: '🌍', KR: '🇰🇷', US: '🇺🇸', JP: '🇯🇵', NZ: '🇳🇿', TW: '🇹🇼', DE: '🇩🇪', RU: '🇷🇺', MY: '🇲🇾', MX: '🇲🇽', VN: '🇻🇳', BN: '🇧🇳', SG: '🇸🇬', GB: '🇬🇧', IN: '🇮🇳', ID: '🇮🇩', CN: 'CN', CL: 'CL', CA: 'CA', TH: 'TH', PG: 'PG', PE: 'PE', FR: 'FR', PH: 'PH', AU: 'AU', HK: 'HK', BR: 'BR'
 };
-
 
 export interface ChannelDetails {
   id: string;
@@ -106,9 +106,9 @@ export interface ChannelDetails {
   subscriberCount: number;
   videoCount: number;
   viewCount: number;
-  publishedAt: string; // ISO 8601 string for channel creation
+  publishedAt: string;
   avgViews: number;
-  recentUploads: number; // e.g., in the last 30 days
+  recentUploads: number;
 }
 
 export interface ChannelVideo {
@@ -125,13 +125,13 @@ export interface ChannelVideo {
   viewsPerHour: number;
   estimatedRank?: string;
   estimatedRevenue: number;
-  tags?: string[]; // Added optional tags for internal processing
+  tags?: string[];
 }
 
 export interface SurgingVideos {
   monthly: { longform: ChannelVideo[]; shorts: ChannelVideo[] };
   weekly: { longform: ChannelVideo[]; shorts: ChannelVideo[] };
-  daily: { longform: ChannelVideo[]; shorts: ChannelVideo[] };
+  threeMonths: { longform: ChannelVideo[]; shorts: ChannelVideo[] };
 }
 
 export interface FormatStats {
@@ -143,7 +143,7 @@ export interface FormatStats {
 }
 
 export interface TrendPoint {
-  date: string; // e.g., '10/26'
+  date: string;
   views: number;
   engagements: number;
   likes: number;
@@ -191,8 +191,8 @@ export interface ChannelAnalysisData {
   surgingVideos: SurgingVideos;
   performanceTrend: PerformanceTrendData;
   audienceProfile: AudienceProfile;
-  estimatedTotalRevenue: number; // Lifetime
-  estimatedMonthlyRevenue: number; // Monthly
+  estimatedTotalRevenue: number;
+  estimatedMonthlyRevenue: number;
 }
 
 export interface AIInsights {
@@ -257,6 +257,12 @@ export interface AIVideoDeepDiveInsights {
     contentStrategy: string;
     newTopics: string[];
     growthStrategy: string;
+    bestUploadTime?: {
+        day: string;
+        time: string;
+        reason: string;
+        weeklySchedule: { day: string; hour: number; reason: string }[];
+    };
   };
   thumbnailAnalysis?: {
       score: number;
@@ -303,7 +309,7 @@ export interface User {
   email: string;
   isAdmin: boolean;
   plan: 'Free' | 'Pro' | 'Biz';
-  usage: number; // monthly analyses used
+  usage: number;
   apiKeyYoutube?: string;
   apiKeyGemini?: string;
   password?: string;
@@ -340,8 +346,8 @@ export interface ChannelRankingData {
     viewCount: number;
     rank: number;
     rankChange: number;
-    estimatedTotalRevenue: number; // Lifetime
-    estimatedMonthlyRevenue: number; // Monthly
+    estimatedTotalRevenue: number;
+    estimatedMonthlyRevenue: number;
     categoryId?: string;
     description?: string;
     channelCountry?: string;
@@ -355,13 +361,13 @@ export interface VideoRankingData {
     channelId: string;
     thumbnailUrl: string;
     publishedDate: string;
-    viewCount: number; // Total views
+    viewCount: number;
     viewsPerHour: number;
     rankChange: number;
     channelTotalViews: number;
     channelSubscriberCount: number;
-    estimatedRevenue: number; // Lifetime
-    estimatedMonthlyRevenue: number; // Monthly
+    estimatedRevenue: number;
+    estimatedMonthlyRevenue: number;
     categoryId?: string;
     channelHandle?: string;
     channelDescription?: string;
@@ -464,12 +470,11 @@ export interface SimilarChannelData {
   thumbnailUrl: string;
   subscriberCount: number;
   videoCount: number;
-  reason: string; // From AI
+  reason: string;
 }
 
 export interface AIThumbnailInsights {
   analysis: {
-    // THUMBNAIL
     focalPoint: string;
     colorContrast: string;
     faceEmotionCTR: string;
@@ -477,13 +482,11 @@ export interface AIThumbnailInsights {
     brandingConsistency: string;
     mobileReadability: string;
     categoryRelevance: string;
-    // TITLE
     titlePatterns: string;
     titleLength: string;
     titleCredibility: string;
   };
   results: {
-    // THUMBNAIL
     thumbnailSummary: string;
     improvedConcepts: { concept: string; description: string; }[];
     textCandidates: string[];
@@ -492,16 +495,17 @@ export interface AIThumbnailInsights {
       fonts: string;
       layout: string;
     };
-    // TITLE
     titleSummary: string;
     titleSuggestions: { title: string; reason: string; }[];
   };
   scoredThumbnails?: {
     id: string;
     totalScore: number;
+    hook: string;
+    keywordScore: number;
+    reason: string;
   }[];
 }
-
 
 export interface ChatMessage {
   role: 'user' | 'model';
@@ -531,6 +535,7 @@ export interface OutlierViewState {
         viralFactors: string[];
         topKeywords: string[];
         topChannels: string[];
+        sources?: { title: string; url: string }[];
     } | null;
     excludedCategories: string[];
     multiplier: number;
@@ -542,10 +547,9 @@ export interface ThumbnailViewState {
     insights: AIThumbnailInsights | null;
 }
 
-// Cached result structure per tab
 export interface RankingTabCache {
     results: (ChannelRankingData | VideoRankingData)[];
-    params: any; // Store exact parameters used for this result
+    params: any;
 }
 
 export interface RankingViewState {
@@ -563,60 +567,61 @@ export interface RankingViewState {
     };
 }
 
-// --- Algorithm Finder Types ---
 export interface AlgorithmOption {
-    text: string; // The "Thumbnail" text
+    text: string;
     traits: {
-        category: string; // e.g. 'Music', 'Movie', 'Comedy', 'Life', 'Knowledge'
-        age: string; // e.g. '10-15', '16-19', '20-24', '30-39' (Detailed)
-        tone: string; // e.g. 'Fun', 'Healing', 'Info', 'Shock'
-        keyword: string; // e.g. 'Kpop', 'Vlog', 'Money'
-        gender?: 'Male' | 'Female' | 'Neutral'; // New trait
+        category: string;
+        age: string;
+        tone: string;
+        keyword: string;
+        gender?: 'Male' | 'Female' | 'Neutral';
     };
 }
 
 export interface AlgorithmStage {
-    id: string; // A, B, C, D, E, F
+    id: string;
     title: string;
     description: string;
     options: AlgorithmOption[];
 }
 
 export interface AlgorithmResult {
-    score: number; // 0-100 Consistency Score
+    score: number;
     profile: {
         category: string;
         age: string;
         tone: string;
         keyword: string;
-        persona: string; // Detailed description
-        gender?: string; // e.g. "여성향", "남성향"
+        persona: string;
+        gender?: string;
     };
     seriesRecommendations: {
         title: string;
         concept: string;
     }[];
-    recommendedKeywords: { // New field for Core/Side keywords
+    recommendedKeywords: {
         core: string[];
         side: string[];
     };
     statusMessage: string;
     strategy: string;
-    analysisLog: string[]; // Reasons for score deductions
+    analysisLog: string[];
     recommendedChannels: {
         korea: { name: string; reason: string; }[];
         global: { name: string; reason: string; }[];
     };
 }
 
+export type CollectionType = 'channel' | 'video' | 'outlier' | 'trend' | 'thumbnail' | 'algorithm' | 'myChannel';
+
 export interface CollectionItem {
     id: string;
-    type: 'channel' | 'video';
+    type: CollectionType;
     title: string;
     thumbnailUrl: string;
-    metric1: string; // e.g. Subscribers or Views
-    metric2: string; // e.g. Video Count or Likes
-    date: string; // ISO String
-    url: string;
-    raw: any; // Store raw data for potential re-analysis or detail view
+    metric1: string; // Dynamic label based on type
+    metric2: string; // Dynamic label based on type
+    date: string; // ISO String of saved time
+    url: string; // Direct link if available
+    raw: any; // Full analysis object for point-in-time rendering
 }

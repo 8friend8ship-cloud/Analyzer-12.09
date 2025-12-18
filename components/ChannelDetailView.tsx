@@ -44,7 +44,6 @@ const StatCard: React.FC<{ title: string; value: string; subValue?: string; high
 const VideoListItem: React.FC<{ video: ChannelVideo; onOpenCommentModal: (video: { id: string, title: string }) => void; onShowVideoDetail: (videoId: string) => void; }> = ({ video, onOpenCommentModal, onShowVideoDetail }) => {
     return (
         <div className="flex flex-col md:flex-row items-start md:items-center gap-4 p-3 hover:bg-gray-700/30 rounded-lg transition-colors">
-            {/* 썸네일 클릭 시 유튜브로 이동 (target="_blank") */}
             <a 
                 href={`https://www.youtube.com/watch?v=${video.id}`} 
                 target="_blank" 
@@ -57,7 +56,6 @@ const VideoListItem: React.FC<{ video: ChannelVideo; onOpenCommentModal: (video:
                 </div>
             </a>
             <div className="flex-grow min-w-0 w-full">
-                {/* 제목 클릭 시 내부 상세 분석 페이지로 이동 */}
                 <button onClick={() => onShowVideoDetail(video.id)} className="font-semibold text-white hover:text-blue-400 transition-colors line-clamp-2 text-left w-full text-sm md:text-base">{video.title}</button>
                 <p className="text-xs text-gray-400 mt-1">{new Date(video.publishedAt).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-300">
@@ -85,7 +83,7 @@ const SurgingVideoCard: React.FC<{video: ChannelVideo, onShowVideoDetail: (id: s
             target="_blank" 
             rel="noopener noreferrer" 
             className="flex-shrink-0 group overflow-hidden rounded-md relative block"
-            onClick={(e) => e.stopPropagation()} // Prevent triggering the parent click if any
+            onClick={(e) => e.stopPropagation()}
         >
           <img src={video.thumbnailUrl} alt={video.title} className="w-24 h-[54px] object-cover transition-transform group-hover:scale-105" />
         </a>
@@ -98,12 +96,13 @@ const SurgingVideoCard: React.FC<{video: ChannelVideo, onShowVideoDetail: (id: s
 
 
 const SurgingVideosSection: React.FC<{surgingVideos: SurgingVideos, onShowVideoDetail: (id: string) => void}> = ({ surgingVideos, onShowVideoDetail }) => {
-    const [activeTab, setActiveTab] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
+    // [FIX] 'daily' 제거, 'threeMonths' 추가
+    const [activeTab, setActiveTab] = useState<'weekly' | 'monthly' | 'threeMonths'>('monthly');
 
     const tabs = {
-        monthly: { label: '월간', data: surgingVideos.monthly },
         weekly: { label: '주간', data: surgingVideos.weekly },
-        daily: { label: '일간', data: surgingVideos.daily },
+        monthly: { label: '월간', data: surgingVideos.monthly },
+        threeMonths: { label: '3개월', data: surgingVideos.threeMonths },
     };
 
     const currentData = tabs[activeTab].data;
@@ -128,13 +127,13 @@ const SurgingVideosSection: React.FC<{surgingVideos: SurgingVideos, onShowVideoD
                 <div>
                     <h4 className="font-semibold text-center mb-3 text-gray-400 text-sm uppercase tracking-wide">롱폼 비디오</h4>
                     <div className="space-y-2">
-                        {currentData.longform.length > 0 ? currentData.longform.map(v => <SurgingVideoCard key={v.id} video={v} onShowVideoDetail={onShowVideoDetail} />) : <p className="text-center text-xs text-gray-500 py-8 bg-gray-900/30 rounded-lg">해당 기간 데이터 없음</p>}
+                        {currentData.longform && currentData.longform.length > 0 ? currentData.longform.map(v => <SurgingVideoCard key={v.id} video={v} onShowVideoDetail={onShowVideoDetail} />) : <p className="text-center text-xs text-gray-500 py-8 bg-gray-900/30 rounded-lg">해당 기간 데이터 없음</p>}
                     </div>
                 </div>
                  <div>
                     <h4 className="font-semibold text-center mb-3 text-gray-400 text-sm uppercase tracking-wide">Shorts</h4>
                      <div className="space-y-2">
-                        {currentData.shorts.length > 0 ? currentData.shorts.map(v => <SurgingVideoCard key={v.id} video={v} onShowVideoDetail={onShowVideoDetail} />) : <p className="text-center text-xs text-gray-500 py-8 bg-gray-900/30 rounded-lg">해당 기간 데이터 없음</p>}
+                        {currentData.shorts && currentData.shorts.length > 0 ? currentData.shorts.map(v => <SurgingVideoCard key={v.id} video={v} onShowVideoDetail={onShowVideoDetail} />) : <p className="text-center text-xs text-gray-500 py-8 bg-gray-900/30 rounded-lg">해당 기간 데이터 없음</p>}
                     </div>
                 </div>
             </div>
@@ -165,10 +164,7 @@ const SimilarChannelsTab: React.FC<{ channelId: string; user: User; appSettings:
                 setError(null);
             }
             
-            const apiKey = user.isAdmin
-                ? appSettings.apiKeys.youtube
-                : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
-
+            const apiKey = user.isAdmin ? appSettings.apiKeys.youtube : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
             if (!apiKey) {
                 if (isMounted) {
                     setError("유사 채널 추천 기능을 사용하려면 YouTube API 키가 필요합니다.");
@@ -176,7 +172,6 @@ const SimilarChannelsTab: React.FC<{ channelId: string; user: User; appSettings:
                 }
                 return;
             }
-
             try {
                 const data = await fetchSimilarChannels(channelId, apiKey);
                 if (isMounted) {
@@ -184,17 +179,14 @@ const SimilarChannelsTab: React.FC<{ channelId: string; user: User; appSettings:
                     setInCache(cacheKey, data);
                 }
             } catch (err) {
-                if (isMounted) {
-                    setError(err instanceof Error ? err.message : "유사 채널을 찾는 데 실패했습니다.");
-                }
+                if (isMounted) setError("유사 채널을 찾는 데 실패했습니다.");
             } finally {
                 if (isMounted) setIsLoading(false);
             }
         };
-
         loadSimilarChannels();
         return () => { isMounted = false; };
-    }, [channelId, user, appSettings]);
+    }, [channelId]);
 
     if (isLoading) return <div className="flex justify-center py-12"><Spinner /></div>;
     if (error) return <div className="text-center text-red-400 p-4 bg-red-900/50 rounded-lg">{error}</div>;
@@ -209,25 +201,17 @@ const SimilarChannelsTab: React.FC<{ channelId: string; user: User; appSettings:
                                 <img src={channel.thumbnailUrl} alt={channel.name} className="w-20 h-20 rounded-full mb-3 ring-2 ring-gray-700 group-hover:ring-blue-500 transition-all" />
                                 <h3 className="font-bold text-white line-clamp-2 group-hover:text-blue-400 transition-colors">{channel.name}</h3>
                             </button>
-                            <div className="text-xs text-gray-400 my-3 w-full space-y-1">
-                                <div className="flex justify-between px-2 bg-gray-900/30 py-1 rounded"><span>구독자</span> <span>{formatNumber(channel.subscriberCount, true)}</span></div>
-                                <div className="flex justify-between px-2 bg-gray-900/30 py-1 rounded"><span>영상수</span> <span>{formatNumber(channel.videoCount)}</span></div>
+                            <div className="text-xs text-gray-400 my-3 w-full space-y-1 text-left bg-gray-900/30 p-2 rounded">
+                                <div className="flex justify-between"><span>구독자</span> <span>{formatNumber(channel.subscriberCount, true)}</span></div>
+                                <div className="flex justify-between"><span>영상수</span> <span>{formatNumber(channel.videoCount)}</span></div>
                             </div>
-                            <p className="text-xs text-gray-300 flex-grow bg-gray-900/50 p-2 rounded-md w-full text-left leading-relaxed mb-3">
-                                <span className="block text-gray-500 text-[10px] mb-1">추천 이유</span>
-                                "{channel.reason}"
-                            </p>
-                            <button 
-                                onClick={() => onShowChannelDetail(channel.id)}
-                                className="w-full px-3 py-2 text-xs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors"
-                            >
-                                채널 분석
-                            </button>
+                            <p className="text-xs text-gray-300 flex-grow bg-gray-900/50 p-2 rounded-md w-full text-left leading-relaxed mb-3">"{channel.reason}"</p>
+                            <button onClick={() => onShowChannelDetail(channel.id)} className="w-full px-3 py-2 text-xs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors">채널 분석</button>
                         </div>
                     ))}
                 </div>
             ) : (
-                <p className="text-center text-gray-500 py-12">AI가 추천할 만한 유사 채널을 찾지 못했습니다.</p>
+                <p className="text-center text-gray-500 py-12">추천 채널을 찾지 못했습니다.</p>
             )}
         </div>
     );
@@ -235,109 +219,53 @@ const SimilarChannelsTab: React.FC<{ channelId: string; user: User; appSettings:
 
 
 const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({ 
-    channelId, 
-    user, 
-    appSettings, 
-    onBack, 
-    onOpenCommentModal, 
-    onShowVideoDetail, 
-    onShowChannelDetail, 
-    initialTab = 'overview',
-    onUpdateUser,
-    onUpgradeRequired,
-    planLimit
+    channelId, user, appSettings, onBack, onOpenCommentModal, onShowVideoDetail, onShowChannelDetail, initialTab = 'overview', onUpdateUser, onUpgradeRequired, planLimit
 }) => {
     const [data, setData] = useState<ChannelAnalysisData | null>(null);
     const [isLoading, setIsLoading] = useState(true); 
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'overview' | 'similarChannels'>(initialTab);
     const [showFullDesc, setShowFullDesc] = useState(false);
-    
-    // --- Trend States ---
-    // Fixed 30-day data for the main chart
+    const [longTermPeriod, setLongTermPeriod] = useState<90 | 180 | 365>(90);
+
     const trendData30 = useMemo(() => {
         if (!data?.videoList) return [];
         return generateTrendData(data.videoList, 30);
     }, [data]);
 
-    // Long-term period selector state
-    const [longTermPeriod, setLongTermPeriod] = useState<90 | 180 | 365>(90);
-
-    // Calculate long-term trend data with filtering
     const longTermTrendData = useMemo(() => {
         if (!data?.videoList) return null;
-        
-        // 1. Check if there are any videos in the selected period
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - longTermPeriod);
         const activeVideos = data.videoList.filter(v => new Date(v.publishedAt) >= cutoff);
-        
-        if (activeVideos.length === 0) return null; // "None" case
-
-        // 2. Generate the base trend data points
+        if (activeVideos.length === 0) return null;
         const trends = generateTrendData(data.videoList, longTermPeriod);
-
-        // 3. Smart Filtering: Calculate average views for this period
         const totalViews = activeVideos.reduce((acc, v) => acc + v.viewCount, 0);
         const averageViews = activeVideos.length > 0 ? totalViews / activeVideos.length : 0;
-        
-        // Threshold: Only show dots for videos that performed significantly better than average (e.g., > 1.2x)
         const threshold = averageViews * 1.2;
-
-        return trends.map(t => {
-            // Check daily total views against threshold. 
-            // If the day's views are low, clear thumbnails to hide the dot on the chart.
-            if (t.views < threshold) {
-                return { ...t, thumbnails: [] }; 
-            }
-            return t;
-        });
+        return trends.map(t => t.views < threshold ? { ...t, thumbnails: [] } : t);
     }, [data, longTermPeriod]);
-
-    useEffect(() => {
-        setActiveTab(initialTab);
-    }, [channelId, initialTab]);
 
     useEffect(() => {
         let isMounted = true;
         const loadData = async () => {
             if (!channelId) return;
-            
             const cacheKey = `channel_detail_${channelId}`;
             const cachedData = getFromCache(cacheKey);
             if (cachedData) {
-                if (isMounted) {
-                    setData(cachedData);
-                    setIsLoading(false);
-                }
+                if (isMounted) { setData(cachedData); setIsLoading(false); }
                 return;
             }
-
             if (user.usage >= planLimit) {
-                if (isMounted) {
-                    setIsLoading(false);
-                    onUpgradeRequired();
-                }
+                if (isMounted) { setIsLoading(false); onUpgradeRequired(); }
                 return;
             }
-
-            if (isMounted) {
-                setIsLoading(true);
-                setError(null);
-            }
-            
-            const apiKey = user.isAdmin
-              ? appSettings.apiKeys.youtube
-              : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
-
+            if (isMounted) { setIsLoading(true); setError(null); }
+            const apiKey = user.isAdmin ? appSettings.apiKeys.youtube : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
             if (!apiKey) {
-                if (isMounted) {
-                    setError(user.isAdmin ? "시스템 API 키가 필요합니다." : "YouTube API 키가 설정되지 않았습니다.");
-                    setIsLoading(false);
-                }
+                if (isMounted) { setError("YouTube API 키가 설정되지 않았습니다."); setIsLoading(false); }
                 return;
             }
-            
             try {
                 const result = await fetchChannelAnalysis(channelId, apiKey);
                 if (isMounted) {
@@ -347,33 +275,21 @@ const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({
                     onUpdateUser({ usage: user.usage + 1 });
                 }
             } catch (err) {
-                console.error(err);
-                if (isMounted) {
-                    setError(err instanceof Error ? err.message : "채널 정보를 불러올 수 없습니다.");
-                }
+                if (isMounted) setError("데이터를 로드하는 중 오류가 발생했습니다.");
             } finally {
                 if (isMounted) setIsLoading(false);
             }
         };
-
         loadData();
         return () => { isMounted = false; };
-    }, [channelId, user, appSettings]);
-
-    const handleTabClick = (tab: 'overview' | 'similarChannels') => {
-        setActiveTab(tab);
-    };
+    }, [channelId]);
 
     if (isLoading) return <ChannelDetailSkeleton />;
-    if (error) return <div className="p-8 text-center text-red-400 bg-red-900/10 rounded-lg m-4 border border-red-900/20"><p className="text-lg font-semibold mb-2">오류 발생</p><p className="mb-6">{error}</p><button onClick={onBack} className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-white transition-colors">← 뒤로 가기</button></div>;
+    if (error) return <div className="p-20 text-center"><p className="text-red-400 mb-6 text-xl font-bold">{error}</p><button onClick={onBack} className="px-6 py-2 bg-gray-700 rounded text-white">뒤로 가기</button></div>;
     if (!data) return null;
 
-    const uploadFrequencyValue = data.overview.uploadPattern.last30Days > 0 ? `${(30 / data.overview.uploadPattern.last30Days).toFixed(1)}일/1회` : '없음';
-    const subConversionRateValue = data.totalViews > 0 ? `${((data.subscriberCount / data.totalViews) * 100).toFixed(2)}%` : 'N/A';
-    const subsPerVideoValue = data.totalVideos > 0 ? `${(data.subscriberCount / data.totalVideos).toFixed(1)}명` : 'N/A';
-
     return (
-        <div className="p-4 md:p-6 lg:p-8 animate-fade-in">
+        <div className="p-4 md:p-6 lg:p-8 animate-fade-in text-gray-100">
             <button onClick={onBack} className="mb-4 px-4 py-2 text-sm font-semibold rounded-md bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>목록으로</button>
             
             <header className="flex flex-col sm:flex-row items-center gap-6 mb-8 bg-gray-800/50 p-6 rounded-2xl border border-gray-700/50">
@@ -392,25 +308,25 @@ const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({
                     </div>
                     <div className="flex items-center justify-center sm:justify-start gap-4">
                         <div className="bg-gray-900/60 px-4 py-2 rounded-lg text-center min-w-[100px]"><p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">구독자</p><p className="text-xl font-bold text-white">{formatNumber(data.subscriberCount, true)}</p></div>
-                         <div className="bg-gray-900/60 px-4 py-2 rounded-lg text-center min-w-[100px]"><p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">총 조회수</p><p className="text-xl font-bold text-white">{formatNumber(data.totalViews, true)}</p></div>
+                        <div className="bg-gray-900/60 px-4 py-2 rounded-lg text-center min-w-[100px]"><p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">총 조회수</p><p className="text-xl font-bold text-white">{formatNumber(data.totalViews, true)}</p></div>
                     </div>
                 </div>
             </header>
             
             <nav className="mb-6 border-b border-gray-700">
                 <div className="flex space-x-6">
-                    <button onClick={() => handleTabClick('overview')} className={`pb-3 text-sm font-medium border-b-2 transition-colors px-2 ${activeTab === 'overview' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>종합 분석</button>
-                    <button onClick={() => handleTabClick('similarChannels')} className={`pb-3 text-sm font-medium border-b-2 transition-colors px-2 ${activeTab === 'similarChannels' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>유사 채널 탐색</button>
+                    <button onClick={() => setActiveTab('overview')} className={`pb-3 text-sm font-medium border-b-2 transition-colors px-2 ${activeTab === 'overview' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>종합 분석</button>
+                    <button onClick={() => setActiveTab('similarChannels')} className={`pb-3 text-sm font-medium border-b-2 transition-colors px-2 ${activeTab === 'similarChannels' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}>유사 채널 탐색</button>
                 </div>
             </nav>
 
             {activeTab === 'overview' && (
               <div className="space-y-8">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <StatCard title="월 추정 수익 (현재)" value={`$${formatNumber(data.estimatedMonthlyRevenue, true)}`} subValue={data.subscriberCount < 1000 ? "수익 창출 미달 가능성" : "최근 조회수 기반"} highlight={true} />
-                    <StatCard title="총 누적 수익 (추산)" value={`$${formatNumber(data.estimatedTotalRevenue, true)}`} subValue={data.subscriberCount < 1000 ? "수익 창출 미달 가능성" : "전체 누적 조회수 기반"} />
-                     <StatCard title="최근 30일 업로드" value={`${data.overview.uploadPattern.last30Days} 개`} subValue={data.overview.uploadPattern.last30Days > 0 ? "활발히 활동 중" : "활동 저조"} />
-                     <StatCard title="평균 조회수 (롱폼)" value={formatNumber(data.performanceTrend.longFormStats.avgViews, true)} subValue="최근 30일 영상 기준" />
+                    <StatCard title="월 추정 수익 (현재)" value={`$${formatNumber(data.estimatedMonthlyRevenue, true)}`} subValue="최근 조회수 기반" highlight={true} />
+                    <StatCard title="총 누적 수익 (추산)" value={`$${formatNumber(data.estimatedTotalRevenue, true)}`} subValue="전체 누적 조회수 기반" />
+                    <StatCard title="최근 30일 업로드" value={`${data.overview.uploadPattern.last30Days} 개`} subValue="활발히 활동 중" />
+                    <StatCard title="평균 조회수 (롱폼)" value={formatNumber(data.performanceTrend.longFormStats.avgViews, true)} subValue="최근 30일 영상 기준" />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -423,16 +339,16 @@ const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({
                         </div>
                         <div>
                             <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">채널 태그 (Keywords)</h4>
-                            {data.channelKeywords.length > 0 ? (<div className="flex flex-wrap gap-2">{data.channelKeywords.map((keyword, i) => (<span key={i} className="px-2.5 py-1 bg-gray-700 text-gray-300 text-xs rounded-full border border-gray-600 hover:bg-gray-600 transition-colors cursor-default">#{keyword}</span>))}</div>) : (<p className="text-xs text-gray-500">설정된 채널 키워드가 없습니다.</p>)}
+                            {data.channelKeywords.length > 0 ? (<div className="flex flex-wrap gap-2">{data.channelKeywords.map((keyword, i) => (<span key={i} className="px-2.5 py-1 bg-gray-700 text-gray-300 text-xs rounded-full border border-gray-600">#{keyword}</span>))}</div>) : (<p className="text-xs text-gray-500">정보 없음</p>)}
                         </div>
                     </section>
 
                     <section className="bg-gray-800 rounded-lg p-5 border border-gray-700 flex flex-col justify-between">
                         <h2 className="text-lg font-bold mb-4 text-white">🩺 채널 건강도 진단</h2>
                         <div className="space-y-4">
-                            <div className="flex justify-between items-center border-b border-gray-700 pb-3"><span className="text-sm text-gray-400">업로드 빈도</span><span className="font-bold text-white">{uploadFrequencyValue}</span></div>
-                            <div className="flex justify-between items-center border-b border-gray-700 pb-3"><span className="text-sm text-gray-400">구독 전환율</span><span className="font-bold text-white">{subConversionRateValue}</span></div>
-                            <div className="flex justify-between items-center"><span className="text-sm text-gray-400">영상당 평균 구독자</span><span className="font-bold text-white">{subsPerVideoValue}</span></div>
+                            <div className="flex justify-between items-center border-b border-gray-700 pb-3"><span className="text-sm text-gray-400">업로드 빈도</span><span className="font-bold text-white">{data.overview.uploadPattern.last30Days > 0 ? `${(30 / data.overview.uploadPattern.last30Days).toFixed(1)}일/1회` : '없음'}</span></div>
+                            <div className="flex justify-between items-center border-b border-gray-700 pb-3"><span className="text-sm text-gray-400">구독 전환율</span><span className="font-bold text-white">{data.totalViews > 0 ? `${((data.subscriberCount / data.totalViews) * 100).toFixed(2)}%` : '0%'}</span></div>
+                            <div className="flex justify-between items-center"><span className="text-sm text-gray-400">영상당 평균 구독자</span><span className="font-bold text-white">{data.totalVideos > 0 ? `${(data.subscriberCount / data.totalVideos).toFixed(1)}명` : '0명'}</span></div>
                         </div>
                         <div className="mt-4 pt-4 border-t border-gray-700"><p className="text-xs text-gray-500 text-center">* 구독 전환율이 1.5% 이상이면 매우 우수합니다.</p></div>
                     </section>
@@ -441,57 +357,56 @@ const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({
                 <section>
                     <h2 className="text-xl font-bold mb-4 flex items-center gap-2">📈 최근 30일 성과 트렌드</h2>
                     <div className="bg-gray-800 p-4 rounded-lg h-80 border border-gray-700">
-                        {trendData30.length > 0 ? (
-                            <PerformanceTrendChart data={trendData30} />
-                        ) : (
-                            <div className="flex items-center justify-center h-full text-gray-500">데이터가 부족합니다.</div>
-                        )}
+                        {trendData30.length > 0 ? (<PerformanceTrendChart data={trendData30} />) : (<div className="flex items-center justify-center h-full text-gray-500">데이터가 부족합니다.</div>)}
                     </div>
                 </section>
 
-                <section className="mt-8">
+                <section>
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-xl font-bold flex items-center gap-2">🗓️ 장기 성과 분석 (Top Videos)</h2>
                         <div className="flex bg-gray-700/50 p-1 rounded-lg">
                             {[90, 180, 365].map(days => (
-                                <button
-                                    key={days}
-                                    onClick={() => setLongTermPeriod(days as any)}
-                                    className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${longTermPeriod === days ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
-                                >
+                                <button key={days} onClick={() => setLongTermPeriod(days as any)} className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${longTermPeriod === days ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}>
                                     {days === 90 ? '3개월' : days === 180 ? '6개월' : '1년'}
                                 </button>
                             ))}
                         </div>
                     </div>
                     <div className="bg-gray-800 p-4 rounded-lg h-80 border border-gray-700">
-                        {longTermTrendData ? (
-                            <PerformanceTrendChart data={longTermTrendData} />
-                        ) : (
-                            <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                                <p className="text-lg font-semibold mb-1">활동 기록 없음</p>
-                                <p className="text-sm">해당 기간 동안 업로드된 영상이 없습니다.</p>
-                            </div>
-                        )}
+                        {longTermTrendData ? (<PerformanceTrendChart data={longTermTrendData} />) : (<div className="flex items-center justify-center h-full text-gray-500">해당 기간 데이터 없음</div>)}
                     </div>
-                    <p className="text-xs text-gray-500 mt-2 text-right">* 장기 분석에서는 평균 성과를 상회하는 주요 영상만 포인트(●)로 표시됩니다.</p>
                 </section>
                 
                 <section><SurgingVideosSection surgingVideos={data.surgingVideos} onShowVideoDetail={onShowVideoDetail} /></section>
-                <section className="grid grid-cols-1 gap-6"><div><h2 className="text-xl font-bold mb-4 flex items-center gap-2">👥 AI 시청자 분석</h2><AudienceCharts profile={data.audienceProfile} totalViews={data.totalViews} /></div><div className="bg-gradient-to-r from-gray-800 to-gray-900 p-6 rounded-lg border border-gray-700 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><svg className="w-32 h-32 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg></div><h4 className="font-bold text-lg mb-2 text-yellow-400 flex items-center gap-2"><span className="text-xl">🤖</span> AI 요약 리포트</h4><p className="text-sm text-gray-300 leading-relaxed relative z-10">{data.audienceProfile.summary}</p></div></section>
-                 <section>
+                
+                <section>
+                    <h2 className="text-xl font-bold mb-4 flex items-center gap-2">👥 AI 시청자 분석</h2>
+                    <div className="space-y-6">
+                        <AudienceCharts profile={data.audienceProfile} totalViews={data.totalViews} />
+                        <div className="bg-gradient-to-r from-gray-800 to-gray-900 p-6 rounded-lg border border-gray-700 relative overflow-hidden">
+                            <h4 className="font-bold text-lg mb-2 text-yellow-400 flex items-center gap-2">🤖 AI 요약 리포트</h4>
+                            <p className="text-sm text-gray-300 leading-relaxed relative z-10">{data.audienceProfile.summary}</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section>
                      <h2 className="text-xl font-bold mb-4">채널 주요 토픽 (최근 10개 영상)</h2>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="bg-gray-800 p-5 rounded-lg border border-gray-700"><h3 className="font-semibold mb-4 text-gray-200 border-b border-gray-700 pb-2">🔥 인기 키워드 (빈도)</h3><ul className="space-y-3">{data.overview.popularKeywords.map(({ keyword, score }) => (<li key={keyword} className="flex items-center justify-between text-sm"><span className="text-gray-300 font-medium">{keyword}</span><div className="flex items-center gap-2 w-1/2"><div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full" style={{width: `${score}%`}}></div></div><span className="text-xs text-gray-500 w-8 text-right">{score}%</span></div></li>))}</ul></div>
-                         <div className="bg-gray-800 p-5 rounded-lg border border-gray-700"><h3 className="font-semibold mb-4 text-gray-200 border-b border-gray-700 pb-2">🏷️ 주요 태그</h3><div className="flex flex-wrap gap-2">{data.overview.competitiveness.tags.slice(0, 15).map(tag => (<span key={tag} className="px-3 py-1.5 text-xs bg-gray-700 text-gray-200 rounded-md border border-gray-600">{tag}</span>))}</div></div>
+                        <div className="bg-gray-800 p-5 rounded-lg border border-gray-700"><h3 className="font-semibold mb-4 text-gray-200 border-b border-gray-700 pb-2">🏷️ 주요 태그</h3><div className="flex flex-wrap gap-2">{data.overview.competitiveness.tags.slice(0, 15).map(tag => (<span key={tag} className="px-3 py-1.5 text-xs bg-gray-700 text-gray-200 rounded-md border border-gray-600">{tag}</span>))}</div></div>
                      </div>
                 </section>
-                <section><h2 className="text-xl font-bold mb-4">최근 업로드 영상</h2><div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden"><div className="divide-y divide-gray-700">{data.videoList.map(video => (<VideoListItem key={video.id} video={video} onOpenCommentModal={onOpenCommentModal} onShowVideoDetail={onShowVideoDetail} />))}</div></div></section>
+
+                <section>
+                    <h2 className="text-xl font-bold mb-4">최근 업로드 영상</h2>
+                    <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden divide-y divide-gray-700">
+                        {data.videoList.map(video => (<VideoListItem key={video.id} video={video} onOpenCommentModal={onOpenCommentModal} onShowVideoDetail={onShowVideoDetail} />))}
+                    </div>
+                </section>
               </div>
             )}
-            {activeTab === 'similarChannels' && (
-                <SimilarChannelsTab channelId={channelId} user={user} appSettings={appSettings} onShowChannelDetail={onShowChannelDetail} />
-            )}
+            {activeTab === 'similarChannels' && <SimilarChannelsTab channelId={channelId} user={user} appSettings={appSettings} onShowChannelDetail={onShowChannelDetail} />}
         </div>
     );
 };

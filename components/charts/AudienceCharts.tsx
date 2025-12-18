@@ -47,7 +47,11 @@ const AudienceCharts: React.FC<AudienceChartsProps> = ({ profile, totalViews }) 
                           <Cell key={`cell-${index}`} fill={COLORS_GENDER[index % COLORS_GENDER.length]} />
                         ))}
                     </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: '#1A202C', border: '1px solid #4A5568' }} />
+                    <Tooltip 
+                        contentStyle={{ backgroundColor: '#1A202C', border: '1px solid #4A5568', borderRadius: '8px' }} 
+                        itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                        formatter={(value: number) => [`${value}%`, '비중']}
+                    />
                     <Legend iconSize={10} wrapperStyle={{fontSize: "12px", bottom: 0}}/>
                 </PieChart>
             </ResponsiveContainer>

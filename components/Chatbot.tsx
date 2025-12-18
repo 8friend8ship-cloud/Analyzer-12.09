@@ -1,5 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { startChatSession } from '../services/geminiService';
+import { getCollection } from '../services/collectionService';
 import type { ChatMessage } from '../types';
 
 interface ChatbotProps {
@@ -12,7 +14,7 @@ const UserIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-
 
 const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([
-        { role: 'model', text: "안녕하세요! 'Johnson'입니다. 유튜브 분석에 대해 무엇이든 물어보세요." }
+        { role: 'model', text: "안녕하세요! 전략 파트너 'Johnson'입니다. 분석 데이터나 금고에 보관된 전략 자산에 대해 궁금한 점이 있으신가요?" }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -34,11 +36,15 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose }) => {
         setIsLoading(true);
 
         try {
-            const responseStream = await chatSession.sendMessageStream({ message: input });
+            // [BIZ] Inject user collection summary into context
+            const collection = getCollection();
+            const collectionSummary = collection.length > 0 
+                ? `[System Note: User has ${collection.length} items in Strategic Vault. Recent: ${collection.slice(0, 5).map(i => `'${i.title}'`).join(', ')}]`
+                : "";
+
+            const responseStream = await chatSession.sendMessageStream({ message: `${collectionSummary} ${input}` });
             let responseText = '';
             
-            // This is tricky. We need to find the loading message and update it.
-            // A more robust way would be using message IDs. For simplicity, we'll update the last one.
             let firstChunk = true;
             for await (const chunk of responseStream) {
                  responseText += chunk.text;
@@ -65,7 +71,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose }) => {
             }
         } catch (error) {
             console.error("Chatbot error:", error);
-            setMessages(prev => [...prev.filter(m => !m.isLoading), { role: 'model', text: "죄송합니다, 오류가 발생했습니다. 다시 시도해주세요." }]);
+            setMessages(prev => [...prev.filter(m => !m.isLoading), { role: 'model', text: "죄송합니다, 통신 오류가 발생했습니다. 다시 시도해주세요." }]);
         } finally {
             setIsLoading(false);
         }
@@ -74,37 +80,38 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed bottom-24 right-5 w-full max-w-sm h-[60vh] z-40" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-gray-800 border border-gray-700 rounded-lg shadow-xl w-full h-full flex flex-col">
-                <header className="flex justify-between items-center p-3 border-b border-gray-700 bg-gray-900/50 rounded-t-lg">
-                    <h2 className="text-lg font-semibold flex items-center gap-2">
+        <div className="fixed bottom-24 right-5 w-full max-w-sm h-[65vh] z-40 animate-fade-in" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[#1A1C23] border border-gray-700 rounded-2xl shadow-2xl w-full h-full flex flex-col overflow-hidden">
+                <header className="flex justify-between items-center p-4 border-b border-gray-700 bg-gray-900/80">
+                    <h2 className="text-lg font-bold flex items-center gap-2">
                         <BotIcon /> Johnson AI 챗봇
                     </h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
                 </header>
-                <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                <div className="flex-1 p-4 overflow-y-auto space-y-4 custom-scrollbar">
                     {messages.map((msg, index) => (
-                        <div key={index} className={`flex items-start gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
-                            {msg.role === 'model' && <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0"><BotIcon/></div>}
-                            <div className={`max-w-[80%] rounded-lg px-4 py-2 text-sm ${msg.role === 'user' ? 'bg-blue-600' : 'bg-gray-700'}`}>
-                                {msg.isLoading ? <div className="animate-pulse">...</div> : msg.text.split('\n').map((line, i) => <p key={i}>{line}</p>)}
+                        <div key={index} className={`flex items-start gap-2.5 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                            {msg.role === 'model' && <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/20"><BotIcon/></div>}
+                            <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-gray-800 text-gray-200 rounded-tl-none border border-gray-700'}`}>
+                                {msg.isLoading ? <div className="flex gap-1 py-1"><div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce"></div><div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce [animation-delay:0.2s]"></div><div className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce [animation-delay:0.4s]"></div></div> : msg.text.split('\n').map((line, i) => <p key={i} className={i > 0 ? 'mt-2' : ''}>{line}</p>)}
                             </div>
-                            {msg.role === 'user' && <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center flex-shrink-0"><UserIcon/></div>}
                         </div>
                     ))}
                     <div ref={messagesEndRef} />
                 </div>
-                <form onSubmit={handleSendMessage} className="p-3 border-t border-gray-700 flex gap-2">
+                <form onSubmit={handleSendMessage} className="p-3 border-t border-gray-700 bg-gray-900/50 flex gap-2">
                     <input
                         type="text"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        placeholder="메시지를 입력하세요..."
-                        className="flex-grow bg-gray-700 border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm p-2"
+                        placeholder="분석이나 전략에 대해 질문하세요..."
+                        className="flex-grow bg-gray-800 border border-gray-700 rounded-xl py-2 px-4 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
                         disabled={isLoading}
                     />
-                    <button type="submit" disabled={isLoading || !input.trim()} className="px-4 py-2 text-sm font-semibold rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
-                        전송
+                    <button type="submit" disabled={isLoading || !input.trim()} className="w-10 h-10 flex items-center justify-center rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-lg shadow-blue-500/20">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
                     </button>
                 </form>
             </div>

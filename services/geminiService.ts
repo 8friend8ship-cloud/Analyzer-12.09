@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type, Chat, Schema } from "@google/genai";
+import { GoogleGenAI, Type, Chat } from "@google/genai";
 import type { VideoData, AIInsights, AnalysisMode, ComparisonInsights, VideoComment, CommentInsights, ChannelAnalysisData, AudienceProfile, VideoDetailData, AIVideoDeepDiveInsights, AIThumbnailInsights, ChannelRankingData, VideoRankingData, MyChannelAnalyticsData } from '../types';
 import { getGeminiApiKey } from './apiKeyService';
 
@@ -729,18 +729,21 @@ export const getAIVideoDeepDiveInsights = async (video: Omit<VideoDetailData, 'd
   };
 
   try {
-    // Changed model from gemini-3-pro-preview to gemini-2.5-flash for stability and cost
     const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
     const prompt = `
-      Analyze YouTube video data. Return JSON strategy report in Korean.
+      Act as a world-class YouTube growth consultant. Analyze this video data to provide a "Level 10" impact strategic report.
       Data: ${JSON.stringify(videoDataForPrompt)}
 
-      Sections:
-      1. Topic/Success Factors
-      2. Audience Analysis
-      3. Performance Analysis (Sources, Sub Impact)
-      4. Retention Strategy (Improvement Points)
-      5. Strategic Recommendations (Content Strategy, New Topics, Growth Strategy)
+      Deliver high-impact insights in Korean for these sections:
+      1. Topic/Success Factors (Deep logical analysis)
+      2. Audience Analysis (Who they are and why they stayed)
+      3. Performance Analysis (Why the algorithm picked or dropped this)
+      4. Retention Strategy (Specific editing/production tips to maximize '1' experience)
+      5. Strategic Recommendations:
+         - Overall Content Strategy
+         - New Topics
+         - Growth Strategy
+         - **Best Upload Time/Day**: Provide a detailed reason and a **Weekly 7-day recommended schedule** (Day and Hour 0-23) based on the content's niche behavior.
     `;
 
     const response = await ai.models.generateContent({
@@ -801,8 +804,29 @@ export const getAIVideoDeepDiveInsights = async (video: Omit<VideoDetailData, 'd
                         contentStrategy: { type: Type.STRING },
                         newTopics: { type: Type.ARRAY, items: { type: Type.STRING } },
                         growthStrategy: { type: Type.STRING },
+                        bestUploadTime: {
+                            type: Type.OBJECT,
+                            properties: {
+                                day: { type: Type.STRING },
+                                time: { type: Type.STRING },
+                                reason: { type: Type.STRING },
+                                weeklySchedule: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            day: { type: Type.STRING },
+                                            hour: { type: Type.NUMBER },
+                                            reason: { type: Type.STRING }
+                                        },
+                                        required: ["day", "hour", "reason"]
+                                    }
+                                }
+                            },
+                            required: ["day", "time", "reason", "weeklySchedule"]
+                        }
                     },
-                    required: ["contentStrategy", "newTopics", "growthStrategy"]
+                    required: ["contentStrategy", "newTopics", "growthStrategy", "bestUploadTime"]
                 },
             },
         },
@@ -916,15 +940,19 @@ export const getAIThumbnailAnalysis = async (
   try {
     const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
 
-    // Single step: Comprehensive Analysis
     const fullAnalysisPrompt = `
       Analyze top YouTube videos for "${query}".
-      Checklist: Thumbnails (Contrast, Face, Text), Titles (Concise, Curiosity).
+      For each video, analyze its Thumbnail and Title strategy.
       
-      **IMPORTANT: All string values in the JSON response (analysis, suggestions, descriptions) MUST BE IN KOREAN.**
+      Task:
+      1. Extract the primary text "Hook" (문구) written ON the thumbnail itself.
+      2. Evaluate the Keyword SEO/Search relevance (Keyword Score 0-100).
+      3. Calculate a Comprehensive Strategy Score (Total Score 0-100) based on title impact, thumbnail clickability, and keywords.
       
-      Return analysis, improvement suggestions, and score (0-100) per video in JSON.
-      Videos: ${JSON.stringify(videoData.slice(0, 10).map(v=>v.title), null, 2)}
+      **IMPORTANT: All string values (analysis, suggestions, reasons, hooks) MUST BE IN KOREAN.**
+      
+      Return a full strategic report in JSON.
+      Videos provided: ${JSON.stringify(videoData.slice(0, 10).map(v=>({ id: v.id, title: v.title })), null, 2)}
     `;
     const fullAnalysisResponse = await ai.models.generateContent({
       model: "gemini-2.5-flash",
@@ -957,7 +985,16 @@ export const getAIThumbnailAnalysis = async (
             },
             scoredThumbnails: {
               type: Type.ARRAY,
-              items: { type: Type.OBJECT, properties: { id: { type: Type.STRING }, totalScore: { type: Type.INTEGER } } },
+              items: { 
+                type: Type.OBJECT, 
+                properties: { 
+                  id: { type: Type.STRING }, 
+                  totalScore: { type: Type.INTEGER }, 
+                  hook: { type: Type.STRING, description: "썸네일에 적힌 핵심 후크 문구" },
+                  keywordScore: { type: Type.INTEGER, description: "키워드 SEO 최적화 점수" },
+                  reason: { type: Type.STRING, description: "점수 부여 근거 (20자 이내)" } 
+                } 
+              },
             },
           },
           required: ["analysis", "results", "scoredThumbnails"],
@@ -1081,7 +1118,7 @@ export const getAITrendingInsight = async (
             contents: prompt,
             config: {
                 tools: [{ googleSearch: {} }],
-                // Note: responseMimeType JSON is NOT supported with tools in some versions/regions, using text parsing.
+                // Note: responseMimeType JSON is NOT supported with tools in some regions, using text parsing.
             },
         });
 
