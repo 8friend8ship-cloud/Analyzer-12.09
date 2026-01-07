@@ -1,7 +1,5 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
-// FIX: Centralized types in types.ts
 import type { User } from '../types';
 
 interface HeaderProps {
@@ -15,14 +13,18 @@ interface HeaderProps {
     onShowRanking: () => void;
     onShowWorkflow: () => void;
     onShowMyChannel: () => void;
-    currentView: 'main' | 'admin' | 'ranking' | 'channelDetail' | 'workflow' | 'videoDetail' | 'thumbnailAnalysis' | 'outlierAnalysis' | 'myChannel';
+    currentView: 'main' | 'admin' | 'ranking' | 'channelDetail' | 'workflow' | 'videoDetail' | 'thumbnailAnalysis' | 'outlierAnalysis' | 'myChannel' | 'abTestGame' | 'algorithmFinder' | 'collections';
     hasApiKey: boolean; // New prop for status
 }
 
-// SVG Icons
-const DeviceIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}> <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /> </svg> );
 const HelpIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}> <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /> </svg> );
-const YouTubeLogo = () => ( <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-auto" viewBox="0 0 120 84" fill="none"> <path d="M117.5 13.1C116.1 10.2 113.8 7.9 110.9 6.5C101.3 2 60 2 60 2C60 2 18.7 2 9.1 6.5C6.2 7.9 3.9 10.2 2.5 13.1C-1.94531e-06 22.4 0 42 0 42C0 42 -1.94531e-06 61.6 2.5 70.9C3.9 73.8 6.2 76.1 9.1 77.5C18.7 82 60 82 60 82C60 82 101.3 82 110.9 77.5C113.8 76.1 116.1 73.8 117.5 70.9C120 61.6 120 42 120 42C120 42 120 22.4 117.5 13.1Z" fill="#FF0000"/> <path d="M48 60L79 42L48 24V60Z" fill="white"/> </svg> );
+
+const Logo = () => (
+    <div className="flex items-baseline gap-2">
+        <span className="text-xl font-bold text-white tracking-tighter">Content</span>
+        <span className="text-xl font-semibold text-gray-400 tracking-tighter">OS</span>
+    </div>
+);
 
 
 const Header: React.FC<HeaderProps> = ({ user, planLimit, onLogout, onOpenHelpModal, onShowAdmin, onNavigate, onShowMain, onShowRanking, onShowWorkflow, onShowMyChannel, currentView, hasApiKey }) => {
@@ -86,13 +88,12 @@ const Header: React.FC<HeaderProps> = ({ user, planLimit, onLogout, onOpenHelpMo
                 {/* Left Side */}
                 <div className="flex items-center space-x-3">
                      <button onClick={onShowMain} className="flex items-center space-x-3">
-                        <YouTubeLogo />
-                        <h1 className="text-xl font-bold text-gray-200 hidden md:block">콘텐츠 OS</h1>
+                        <Logo />
                      </button>
                      <div className="hidden sm:flex items-center border-l border-gray-700 ml-4 pl-4">
                         <NavTab text="분석" activeViews={['main', 'channelDetail', 'videoDetail']} onClick={onShowMain} />
                         <NavTab text="랭킹" activeViews={['ranking']} onClick={onShowRanking} />
-                        <NavTab text="워크플로우" activeViews={['workflow', 'thumbnailAnalysis', 'outlierAnalysis']} onClick={onShowWorkflow} />
+                        <NavTab text="워크플로우" activeViews={['workflow', 'thumbnailAnalysis', 'outlierAnalysis', 'abTestGame', 'algorithmFinder', 'collections']} onClick={onShowWorkflow} />
                         <NavTab text="내 채널" activeViews={['myChannel']} onClick={onShowMyChannel} />
                      </div>
                 </div>
@@ -116,7 +117,7 @@ const Header: React.FC<HeaderProps> = ({ user, planLimit, onLogout, onOpenHelpMo
                         </div>
 
                         <div className="px-3 py-1.5 text-sm bg-[#2C2F3B] rounded-lg">
-                            <span className="text-gray-400">월간 사용량: </span>
+                            <span className="text-gray-400">오늘 사용량: </span>
                             <span className="font-semibold text-white">{user.usage} / {planLimit === Infinity ? '무제한' : planLimit}</span>
                         </div>
                     </div>

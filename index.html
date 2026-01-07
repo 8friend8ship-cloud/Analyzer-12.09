@@ -7,9 +7,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Content OS</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Runtime Environment Variables Injection -->
-    <!-- Cloud Run에서 생성된 환경변수 파일을 로드합니다. 로컬 개발 시에는 404가 뜰 수 있으나 무시해도 됩니다. -->
-    <script src="/env-config.js"></script>
   <script type="importmap">
 {
   "imports": {
@@ -20,9 +17,7 @@
     "recharts": "https://aistudiocdn.com/recharts@^3.3.0",
     "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
     "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js",
-    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "vite": "https://esm.sh/vite@^7.2.7"
+    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/"
   }
 }
 </script>
@@ -42,6 +37,9 @@
       }
       .animate-fade-in {
         animation: fade-in 0.8s ease-out forwards;
+      }
+      .footer-link {
+        @apply text-gray-400 hover:text-white transition-colors text-sm;
       }
 </style>
 </head>

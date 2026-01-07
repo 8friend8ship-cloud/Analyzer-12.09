@@ -30,15 +30,10 @@ const CommentAnalysisModal: React.FC<CommentAnalysisModalProps> = ({ video, user
             setIsLoading(true);
             setError(null);
             try {
-                const apiKey = user.isAdmin
-                  ? appSettings.apiKeys.youtube
-                  : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
+                const apiKey = appSettings.apiKeys.youtube;
 
                 if (!apiKey) {
-                    throw new Error(user.isAdmin
-                        ? "시스템 API 키가 필요합니다. 관리자 대시보드에서 설정해주세요."
-                        : "YouTube API 키가 설정되지 않았습니다. 개인 키를 추가하거나 관리자에게 문의하세요."
-                    );
+                    throw new Error("시스템 YouTube API 키가 설정되지 않았습니다. 관리자에게 문의하여 키를 등록해주세요.");
                 }
 
                 const comments = await fetchVideoComments(video.id, apiKey);

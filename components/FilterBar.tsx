@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import type { AnalysisMode, FilterState, VideoLength, Period, SortBy, VideoFormat } from '../types';
 import { YOUTUBE_CATEGORY_OPTIONS } from '../types';
@@ -8,7 +7,6 @@ import { translateKeyword, getRelatedKeywords } from '../services/geminiService'
 interface FilterBarProps {
   onAnalyze: (searchQuery: string, searchMode: AnalysisMode) => void;
   isLoading: boolean;
-  onOpenCompareModal: () => void;
   selectedChannelCount: number;
   query: string;
   onQueryChange: (q: string) => void;
@@ -80,7 +78,6 @@ const initialFilterState: FilterState = {
 const FilterBar: React.FC<FilterBarProps> = ({ 
     onAnalyze, 
     isLoading, 
-    onOpenCompareModal, 
     selectedChannelCount,
     query,
     onQueryChange,
@@ -222,11 +219,7 @@ const FilterBar: React.FC<FilterBarProps> = ({
                     <option value="viewsPerHour">시간당 조회수</option>
                     <option value="publishedAt">최신순</option>
                     <option value="engagementRate">참여율</option>
-                    <option value="performanceRatio">성과배율</option>
-                    <option value="satisfactionScore">만족점수</option>
-                    <option value="grade">등급</option>
-                    <option value="cll">CLL</option>
-                    <option value="cul">CUL</option>
+                    <option value="relevance">관련성</option>
                 </select>
             </div>
              <div className="flex items-center gap-1.5">
@@ -241,7 +234,6 @@ const FilterBar: React.FC<FilterBarProps> = ({
                      <option value="any">전체 기간</option>
                      <option value="7">최근 7일</option>
                      <option value="30">최근 30일</option>
-                     <option value="90">최근 90일</option>
                 </select>
             </div>
             <div className="flex items-center gap-1.5">
@@ -265,12 +257,6 @@ const FilterBar: React.FC<FilterBarProps> = ({
                  </div>
             </div>
             <div className="flex-grow flex justify-end gap-2">
-                <Button type="button" variant="secondary" onClick={onOpenCompareModal} className="text-xs py-1.5 px-3 relative">
-                    채널 비교
-                    {selectedChannelCount > 0 && (
-                        <span className="absolute -top-2 -right-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">{selectedChannelCount}</span>
-                    )}
-                </Button>
                 <Button type="button" variant="secondary" onClick={handleResetFilters} className="text-xs py-1.5 px-3">필터 초기화</Button>
             </div>
         </div>

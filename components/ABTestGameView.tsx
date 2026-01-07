@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchYouTubeData } from '../services/youtubeService';
 import type { User, AppSettings, VideoData, FilterState, GameScore } from '../types';
@@ -13,7 +12,7 @@ const LEADERBOARD_SIZE = 10;
 
 const gameFilters: FilterState = {
   minViews: 1000, videoLength: 'any', videoFormat: 'any',
-  period: '90', sortBy: 'viewCount', resultsLimit: 100,
+  period: 'any', sortBy: 'viewCount', resultsLimit: 100,
   country: 'KR', category: 'all',
 };
 
@@ -27,11 +26,9 @@ interface ABTestGameViewProps {
   user: User;
   appSettings: AppSettings;
   onBack: () => void;
-  onUpdateUser: (updatedUser: Partial<User>) => void;
-  onUpgradeRequired: () => void;
 }
 
-const ABTestGameView: React.FC<ABTestGameViewProps> = ({ user, appSettings, onBack, onUpdateUser, onUpgradeRequired }) => {
+const ABTestGameView: React.FC<ABTestGameViewProps> = ({ user, appSettings, onBack }) => {
     const [gameState, setGameState] = useState<'welcome' | 'fetching' | 'playing' | 'result' | 'end'>('welcome');
     const [keyword, setKeyword] = useState('캠핑');
     const [videoPool, setVideoPool] = useState<VideoData[]>([]);
@@ -206,219 +203,228 @@ const ABTestGameView: React.FC<ABTestGameViewProps> = ({ user, appSettings, onBa
         }
         
         return () => {
-            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-            if (nextRoundTimeoutRef.current) clearTimeout(nextRoundTimeoutRef.current);
+            stopTimer();
+            if (nextRoundTimeoutRef.current) {
+                clearTimeout(nextRoundTimeoutRef.current);
+            }
         };
-    }, [gameState, nextRound, handleChoice]);
-
-    const startGame = async () => {
-        // Note: A/B Test Game is free - No usage check or deduction here.
+    }, [gameState, handleChoice, nextRound, stopTimer]);
+    
+    const startGame = useCallback(async () => {
         if (!keyword.trim()) {
             setError("키워드를 입력해주세요.");
             return;
         }
-
         setGameState('fetching');
         setError(null);
         setScore(0);
         setRound(1);
-        seenVideoIdsRef.current.clear();
-
+        
+        // Important: Only clear history if the keyword has changed significantly.
+        // For now, we assume if the user clicks start, they might want to continue with the same pool
+        // BUT since we are re-fetching, we should probably reset history if the pool changes completely.
+        // Strategy: We keep the history to support "Playing multiple games with the same keyword without duplicates".
+        // If the fetch returns a completely different set, the ID check handles it.
+        // If the user explicitly wants to reset, they can reload the page.
+        
         try {
             const apiKey = user.isAdmin ? appSettings.apiKeys.youtube : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
-            if (!apiKey) throw new Error("API Key Missing");
-
-            const videos = await fetchYouTubeData('keyword', keyword, gameFilters, apiKey);
-            if (videos.length < 10) {
-                throw new Error("영상이 부족합니다. 다른 키워드로 시도해주세요.");
+            if (!apiKey) throw new Error("YouTube API 키가 필요합니다.");
+            
+            // Check if we already have data for this keyword to avoid re-fetching API quota if possible
+            // For simplicity in this version, we always fetch to ensure freshness, 
+            // but logically, if we already have 'videoPool' and keyword matches, we could skip fetch.
+            // However, keeping the fetch allows getting updated view counts.
+            
+            const data = await fetchYouTubeData('keyword', keyword, gameFilters, apiKey);
+            const validData = data.filter(v => v.viewCount > 10000);
+            
+            if (validData.length < 10) {
+                 throw new Error("분석할 영상이 부족합니다. 더 대중적인 키워드를 시도해보세요.");
             }
             
-            setVideoPool(videos);
-            setupNewRound(videos);
-
+            setVideoPool(validData);
+            // Reset seen history only if we got a fresh batch that might overlap differently
+            // Actually, simply clearing it on new search is safer to avoid 'stuck' state if the API results shift slightly.
+            // But the user requested "even if played multiple times".
+            // So we DO NOT clear `seenVideoIdsRef` here unless the keyword changed.
+            
+            setupNewRound(validData);
         } catch (err) {
-            console.error(err);
-            setError("데이터를 불러오는데 실패했습니다. 잠시 후 다시 시도해주세요.");
+            setError(err instanceof Error ? err.message : "데이터를 가져오는 데 실패했습니다.");
             setGameState('welcome');
         }
-    };
+    }, [keyword, user, appSettings, setupNewRound]);
 
-    const handleSaveScore = () => {
-        if (!playerName.trim()) return;
-        
-        const newScore: GameScore = {
-            name: playerName,
-            score: score,
-            date: new Date().toISOString(),
-            keyword: keyword
-        };
-        
+    // Reset history when keyword changes (user types something new)
+    useEffect(() => {
+        seenVideoIdsRef.current.clear();
+    }, [keyword]);
+    
+    const handleLeaderboardSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const finalName = playerName.trim() || '익명';
+        const newScore: GameScore = { name: finalName, score, date: new Date().toISOString().split('T')[0], keyword };
         const newLeaderboard = [...leaderboard, newScore]
             .sort((a, b) => b.score - a.score)
             .slice(0, LEADERBOARD_SIZE);
-            
+        
         setLeaderboard(newLeaderboard);
         localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(newLeaderboard));
         setScoreSubmitted(true);
     };
 
-    return (
-        <div className="p-4 md:p-6 lg:p-8 h-full flex flex-col items-center">
-            <div className="w-full max-w-4xl">
-                <button onClick={onBack} className="mb-4 px-4 py-2 text-sm font-semibold rounded-md bg-gray-600 hover:bg-gray-500">
-                    ← 워크플로우로 돌아가기
-                </button>
+    const isHighScore = score > 0 && (leaderboard.length < LEADERBOARD_SIZE || score > (leaderboard[leaderboard.length - 1]?.score || 0));
+
+    const renderWelcome = () => (
+        <div className="text-center">
+            <h1 className="text-3xl font-bold text-white">썸네일 A/B 테스트 게임</h1>
+            <p className="text-gray-400 mt-2 max-w-xl mx-auto">어떤 썸네일이 더 높은 조회수를 기록했을까요? 당신의 감을 테스트해보세요!</p>
+            <form onSubmit={(e) => { e.preventDefault(); startGame(); }} className="max-w-md mx-auto my-8 flex gap-2">
+                <input type="text" value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="게임 주제 키워드 (예: 캠핑)" className="flex-grow bg-gray-700 border-gray-600 rounded-md p-3 text-lg" />
+                <Button type="submit">게임 시작</Button>
+            </form>
+            {error && <p className="text-red-400 mt-2">{error}</p>}
+        </div>
+    );
+
+    const renderGameUI = () => {
+      const isResultState = gameState === 'result';
+      const [video1, video2] = currentPair!;
+      
+      const getBorderStyle = (videoId: string) => {
+          if (!isResultState) return 'border-transparent group-hover:border-blue-500';
+          if (videoId === correctAnswerId) return 'border-green-500 ring-4 ring-green-500/50';
+          if (videoId === userChoice && videoId !== correctAnswerId) return 'border-red-500 ring-4 ring-red-500/50';
+          return 'border-transparent';
+      };
+
+      return (
+        <div className="flex flex-col items-center h-full w-full max-w-5xl mx-auto">
+            {/* Header - Reduced font sizes */}
+            <header className="w-full flex justify-between items-center mb-2">
+                <div><span className="font-bold text-lg">{score}</span> 점</div>
+                <div className="text-center">
+                    <div className="text-xs text-gray-400">ROUND</div>
+                    <div className="font-bold text-xl">{round}/{TOTAL_ROUNDS}</div>
+                </div>
+                <div className="font-bold text-lg text-yellow-400">{timer}초</div>
+            </header>
+
+            {/* Timer Progress Bar */}
+            <div className="w-full bg-gray-700 rounded-full h-1.5 mb-4">
+                <div className="bg-yellow-400 h-1.5 rounded-full" style={{ width: `${(timer / ROUND_TIME) * 100}%`, transition: timer === ROUND_TIME ? 'none' : 'width 1s linear' }} />
+            </div>
+            
+            {/* Question (Desktop position) */}
+            <h2 className="hidden md:block text-xl font-bold my-2 text-center">어떤 영상의 조회수가 더 높을까요?</h2>
+            
+            {/* Main Content Area */}
+            <div className="flex-grow w-full flex flex-col items-center justify-center">
+                {/* Thumbnails container */}
+                <div className="w-full flex flex-col md:flex-row items-stretch justify-center gap-4 md:gap-8">
+                    {[video1, video2].map(video => (
+                        <div key={video.id} className="w-full md:w-1/2 max-w-md flex flex-col items-center gap-2">
+                            {/* Result view count (smaller) */}
+                            <div className="h-16 flex items-center justify-center">
+                                {isResultState && (
+                                    <div className="text-center bg-gray-900/50 py-1 px-3 rounded-lg animate-fade-in">
+                                        <p className="text-xl md:text-2xl font-bold">{formatNumber(video.viewCount)}</p>
+                                        <p className="text-xs text-gray-400">조회수</p>
+                                    </div>
+                                )}
+                            </div>
+                            <button
+                                onClick={() => handleChoice(video.id)}
+                                disabled={isResultState}
+                                className={`group relative w-full aspect-video rounded-lg overflow-hidden border-4 transition-all duration-300 ${getBorderStyle(video.id)} disabled:cursor-default`}
+                            >
+                                <img src={video.thumbnailUrl} alt="Thumbnail" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                {isResultState && userChoice === video.id && <div className="absolute inset-0 bg-black/30 flex items-center justify-center text-white font-bold text-4xl">👆</div>}
+                            </button>
+                        </div>
+                    ))}
+                </div>
+                
+                {/* Question (Mobile position) */}
+                <h2 className="md:hidden text-lg font-bold mt-4 text-center">어떤 영상의 조회수가 더 높을까요?</h2>
             </div>
 
-            {gameState === 'welcome' && (
-                <div className="text-center max-w-lg bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700 animate-fade-in">
-                    <h1 className="text-3xl font-bold text-white mb-2">썸네일 A/B 테스트 게임</h1>
-                    <p className="text-gray-400 mb-6">어떤 썸네일이 더 조회수가 높을까요? 당신의 '감'을 테스트해보세요!</p>
-                    
-                    <div className="mb-6">
-                        <label className="block text-left text-sm text-gray-400 mb-1">게임 테마 키워드</label>
-                        <input 
-                            type="text" 
-                            value={keyword}
-                            onChange={(e) => setKeyword(e.target.value)}
-                            className="w-full bg-gray-700 border-gray-600 rounded-lg p-3 text-white focus:ring-blue-500 focus:border-blue-500"
-                            placeholder="예: 먹방, 여행, 주식..."
-                        />
-                    </div>
-
-                    {error && <p className="text-red-400 mb-4">{error}</p>}
-
-                    <Button onClick={startGame} className="w-full py-4 text-lg font-bold shadow-lg">
-                        게임 시작 (20 라운드)
-                    </Button>
-                    
-                    {leaderboard.length > 0 && (
-                        <div className="mt-8 pt-6 border-t border-gray-700">
-                            <h3 className="font-bold text-yellow-400 mb-4">🏆 명예의 전당</h3>
-                            <ul className="space-y-2 text-sm text-left">
-                                {leaderboard.map((entry, i) => (
-                                    <li key={i} className="flex justify-between items-center bg-gray-700/50 p-2 rounded">
-                                        <span className="flex items-center gap-2">
-                                            <span className="font-bold text-gray-500 w-4">{i+1}.</span>
-                                            <span className="text-white truncate max-w-[120px]">{entry.name}</span>
-                                            <span className="text-xs text-gray-500">({entry.keyword})</span>
-                                        </span>
-                                        <span className="font-bold text-yellow-400">{entry.score}점</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {gameState === 'fetching' && (
-                <div className="flex flex-col items-center justify-center h-64">
-                    <Spinner message="게임 데이터를 준비하고 있습니다..." />
-                </div>
-            )}
-
-            {(gameState === 'playing' || gameState === 'result') && currentPair && (
-                <div className="w-full max-w-5xl animate-fade-in">
-                    <div className="flex justify-between items-center mb-6 bg-gray-800 p-4 rounded-lg">
-                        <div className="text-xl font-bold">Round {round} / {TOTAL_ROUNDS}</div>
-                        <div className={`text-2xl font-black ${timer <= 3 ? 'text-red-500 animate-pulse' : 'text-blue-400'}`}>
-                            {timer}s
-                        </div>
-                        <div className="text-xl font-bold text-yellow-400">Score: {score}</div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-12 relative">
-                        {/* VS Badge */}
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 bg-red-600 text-white font-black text-2xl rounded-full w-14 h-14 flex items-center justify-center border-4 border-gray-900 shadow-xl transform rotate-12">
-                            VS
-                        </div>
-
-                        {currentPair.map((video, idx) => {
-                            const isSelected = userChoice === video.id;
-                            const isCorrect = correctAnswerId === video.id;
-                            let cardClass = "relative cursor-pointer group transform transition-all duration-200 hover:scale-[1.02] active:scale-95 rounded-xl overflow-hidden border-4 border-transparent";
-                            
-                            if (gameState === 'result') {
-                                if (isCorrect) cardClass += " border-green-500 shadow-[0_0_30px_rgba(34,197,94,0.5)]";
-                                else if (isSelected && !isCorrect) cardClass += " border-red-500 opacity-60";
-                                else cardClass += " opacity-60"; // Not selected, not correct
-                            }
-
-                            return (
-                                <div 
-                                    key={video.id} 
-                                    onClick={() => handleChoice(video.id)}
-                                    className={cardClass}
-                                >
-                                    <div className="aspect-video bg-black relative">
-                                        <img src={video.thumbnailUrl} alt={video.title} className="w-full h-full object-cover" />
-                                        {/* Result Overlay */}
-                                        {gameState === 'result' && (
-                                            <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center animate-fade-in">
-                                                <p className="text-3xl font-black text-white mb-2">{formatNumber(video.viewCount)}회</p>
-                                                {isCorrect ? (
-                                                    <span className="bg-green-600 text-white px-3 py-1 rounded font-bold">WINNER</span>
-                                                ) : (
-                                                    <span className="text-gray-400 text-sm">{Math.round((video.viewCount / (currentPair[0].viewCount + currentPair[1].viewCount)) * 100)}% 점유율</span>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="p-4 bg-gray-800">
-                                        <h3 className="font-bold text-white text-lg line-clamp-2 leading-snug">{video.title}</h3>
-                                        <p className="text-sm text-gray-400 mt-2">{video.channelTitle}</p>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                    {gameState === 'result' && (
-                        <div className="text-center mt-8">
-                            <p className="text-gray-400 text-sm animate-pulse">다음 라운드로 넘어갑니다...</p>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {gameState === 'end' && (
-                <div className="text-center max-w-lg bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700 animate-fade-in">
-                    <h2 className="text-4xl font-bold text-white mb-4">게임 종료!</h2>
-                    <div className="bg-gray-900/50 p-6 rounded-lg mb-8">
-                        <p className="text-gray-400 mb-2">최종 점수</p>
-                        <p className="text-6xl font-black text-yellow-400">{score} / {TOTAL_ROUNDS}</p>
-                        <p className="text-sm text-gray-500 mt-2">
-                            {score >= 18 ? "당신은 유튜브 알고리즘 그 자체입니다! 😲" : 
-                             score >= 12 ? "상당히 감각이 있으시네요! 👍" : 
-                             "조금 더 분발하세요! 😅"}
+            {/* Next Round Progress Bar */}
+            <div className="h-16 flex items-center justify-center w-full flex-shrink-0 mt-2">
+                {isResultState && (
+                     <div className="w-full max-w-xs">
+                        <p className="text-center text-gray-400 text-sm mb-1">
+                            {round < TOTAL_ROUNDS ? "다음 라운드로 이동합니다..." : "게임이 종료됩니다..."}
                         </p>
-                    </div>
-
-                    {!scoreSubmitted ? (
-                        <div className="space-y-4">
-                            <input 
-                                type="text"
-                                value={playerName}
-                                onChange={(e) => setPlayerName(e.target.value)}
-                                placeholder="이름을 입력하세요"
-                                className="w-full bg-gray-700 border-gray-600 rounded-lg p-3 text-white text-center"
-                                maxLength={10}
-                            />
-                            <Button onClick={handleSaveScore} className="w-full py-3 bg-green-600 hover:bg-green-700">
-                                점수 저장하기
-                            </Button>
+                        <div className="w-full bg-gray-700 rounded-full h-1.5">
+                            <div key={round} className="bg-blue-500 h-1.5 rounded-full animate-progress" />
                         </div>
-                    ) : (
-                        <p className="text-green-400 font-bold mb-4">점수가 저장되었습니다!</p>
-                    )}
-
-                    <div className="mt-6 flex gap-4">
-                        <Button onClick={() => setGameState('welcome')} variant="secondary" className="flex-1 py-3">
-                            처음으로
-                        </Button>
                     </div>
-                </div>
+                )}
+            </div>
+        </div>
+      );
+    };
+
+    const renderEnd = () => (
+        <div className="text-center">
+            <h2 className="text-2xl font-bold text-white">게임 종료!</h2>
+            <p className="text-6xl font-bold my-4">{score} / {TOTAL_ROUNDS}</p>
+            {isHighScore && !scoreSubmitted && (
+                <form onSubmit={handleLeaderboardSubmit} className="max-w-sm mx-auto my-6">
+                    <p className="text-green-400 font-semibold mb-2">🎉 최고 기록 달성! 랭킹에 이름을 남기세요.</p>
+                    <div className="flex gap-2">
+                        <input type="text" value={playerName} onChange={e => setPlayerName(e.target.value)} placeholder="이름 (3글자 이상)" minLength={3} required className="flex-grow bg-gray-700 border-gray-600 rounded-md p-2"/>
+                        <Button type="submit">등록</Button>
+                    </div>
+                </form>
             )}
+            <div className="flex justify-center gap-4 mt-8">
+                <Button onClick={() => setGameState('welcome')}>다른 키워드로 시작</Button>
+                <Button onClick={onBack} variant="secondary">워크플로우로 돌아가기</Button>
+            </div>
+        </div>
+    );
+    
+    const Leaderboard: React.FC = () => (
+        <div className="bg-gray-800/60 p-4 rounded-lg border border-gray-700/50">
+            <h3 className="font-bold text-lg text-yellow-300 mb-3 text-center">🏆 명예의 전당 (Top 10)</h3>
+            {leaderboard.length > 0 ? (
+                <ol className="space-y-2">
+                    {leaderboard.map((entry, i) => (
+                        <li key={i} className="flex justify-between items-center text-sm p-2 bg-gray-900/50 rounded-md">
+                            <span className="font-semibold"><span className="text-gray-500 w-6 inline-block">{i+1}.</span>{entry.name}</span>
+                            <div className="flex items-center gap-4">
+                                <span className="text-xs text-gray-400 hidden sm:inline">"{entry.keyword}"</span>
+                                <span className="font-bold text-blue-400 text-base">{entry.score}점</span>
+                            </div>
+                        </li>
+                    ))}
+                </ol>
+            ) : <p className="text-center text-sm text-gray-500 py-4">아직 랭킹이 없습니다.</p>}
+        </div>
+    );
+
+    const renderContent = () => {
+        switch (gameState) {
+            case 'welcome': return <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center"><div className="lg:col-span-1">{renderWelcome()}</div><div className="lg:col-span-1"><Leaderboard/></div></div>;
+            case 'fetching': return <Spinner message={`'${keyword}' 관련 영상을 불러오는 중...`} />;
+            case 'playing':
+            case 'result': return renderGameUI();
+            case 'end': return <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center"><div className="lg:col-span-1">{renderEnd()}</div><div className="lg:col-span-1"><Leaderboard/></div></div>;
+            default: return null;
+        }
+    };
+
+    return (
+        <div className="p-4 md:p-6 lg:p-8 h-full flex flex-col">
+            <div className="flex-shrink-0">
+                <Button onClick={onBack} variant="secondary" className="mb-4">← 워크플로우로 돌아가기</Button>
+            </div>
+            <main className="flex-grow flex items-center justify-center bg-gray-800/40 rounded-lg p-2 sm:p-6">
+                {renderContent()}
+            </main>
         </div>
     );
 };

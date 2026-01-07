@@ -1,8 +1,8 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
+import TermsModal from './TermsModal';
+import PrivacyPolicyModal from './PrivacyPolicyModal';
 
-// FIX: Add global type declaration for window.google to fix TypeScript errors.
-// The Google Identity Services script is loaded externally and attaches the `google` object to the window.
 declare global {
   interface Window {
     google?: {
@@ -37,6 +37,8 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
+  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
 
   const handleGoogleLogin = useCallback((response: any) => {
     try {
@@ -60,11 +62,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
       return;
     }
     onLogin({ email, password });
-  };
-
-  const handleForgotPassword = (e: React.MouseEvent) => {
-      e.preventDefault();
-      alert("현재 데모 버전에서는 비밀번호 찾기 기능을 지원하지 않습니다.\n관리자(admin) 계정으로 로그인하거나 새 계정을 생성해주세요.");
   };
 
 
@@ -97,76 +94,84 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
 
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-900">
-      <div className="w-full max-w-md p-8 space-y-6 bg-gray-800 rounded-2xl shadow-lg">
-        <div className="text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-white">
-                콘텐츠 OS 로그인
-            </h1>
-            <p className="mt-2 text-gray-400">
-                유튜브 데이터 분석을 시작하세요.
-            </p>
-        </div>
+    <>
+      <div className="flex items-center justify-center min-h-screen bg-gray-900">
+        <div className="w-full max-w-md p-8 space-y-6 bg-gray-800 rounded-2xl shadow-lg">
+          <div className="text-center">
+              <h1 className="text-3xl font-bold tracking-tight text-white">
+                  Content OS
+              </h1>
+              <p className="mt-2 text-gray-400">
+                  유튜브 데이터 분석을 시작하세요.
+              </p>
+          </div>
 
-        <form className="space-y-4" onSubmit={handleFormLogin}>
-            <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-300 text-left">이메일 주소</label>
-                <input id="email" name="email" type="email" autoComplete="email" required 
-                       value={email}
-                       onChange={(e) => setEmail(e.target.value)}
-                       className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                />
-            </div>
-            <div>
-                <label htmlFor="password"className="block text-sm font-medium text-gray-300 text-left">비밀번호</label>
-                <input id="password" name="password" type="password" autoComplete="current-password" required 
-                       value={password}
-                       onChange={(e) => setPassword(e.target.value)}
-                       className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                />
-            </div>
-            <div className="text-right text-sm">
-                <button 
-                    type="button"
-                    onClick={handleForgotPassword}
-                    className="font-medium text-blue-400 hover:text-blue-300 bg-transparent border-none p-0 cursor-pointer focus:outline-none"
-                >
-                    비밀번호를 잊으셨나요?
-                </button>
-            </div>
-            <div>
-                 <button
-                    type="submit"
-                    className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
-                >
-                    로그인
-                </button>
-            </div>
-        </form>
+          <form className="space-y-4" onSubmit={handleFormLogin}>
+              <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-300 text-left">이메일 주소</label>
+                  <input id="email" name="email" type="email" autoComplete="email" required 
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+              </div>
+              <div>
+                  <label htmlFor="password"className="block text-sm font-medium text-gray-300 text-left">비밀번호</label>
+                  <input id="password" name="password" type="password" autoComplete="current-password" required 
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+              </div>
+              <div className="text-right text-sm">
+                  <a href="#" className="font-medium text-blue-400 hover:text-blue-300">비밀번호를 잊으셨나요?</a>
+              </div>
+              <div>
+                  <button
+                      type="submit"
+                      className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+                  >
+                      로그인
+                  </button>
+              </div>
+          </form>
 
-        <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-600" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-800 text-gray-400">또는</span>
-            </div>
-        </div>
+          <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-600" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-gray-800 text-gray-400">또는</span>
+              </div>
+          </div>
 
-        <div>
-            <div id="google-signin-button" className="w-full flex justify-center"></div>
-        </div>
-        
-        <div className="text-sm text-center">
-            <p className="text-gray-400">
-                계정이 없으신가요?{' '}
-                <button onClick={() => onNavigate('register')} className="font-medium text-blue-400 hover:text-blue-300">
-                    가입하기
-                </button>
-            </p>
+          <div>
+              <div id="google-signin-button" className="w-full flex justify-center"></div>
+          </div>
+          
+          <div className="text-sm text-center">
+              <p className="text-gray-400">
+                  계정이 없으신가요?{' '}
+                  <button onClick={() => onNavigate('register')} className="font-medium text-blue-400 hover:text-blue-300">
+                      가입하기
+                  </button>
+              </p>
+          </div>
+
+          <div className="text-center text-xs text-gray-500 pt-4 border-t border-gray-700">
+              <p>로그인함으로써, 귀하는 Content OS의</p>
+              <div className="flex justify-center gap-4 mt-1">
+                  <button onClick={() => setIsTermsOpen(true)} className="underline hover:text-gray-300">서비스 이용약관</button>
+                  <span>및</span>
+                  <button onClick={() => setIsPrivacyOpen(true)} className="underline hover:text-gray-300">개인정보처리방침</button>
+              </div>
+              <p className="mt-1">에 동의하는 것으로 간주됩니다.</p>
+          </div>
         </div>
       </div>
-    </div>
+      {isTermsOpen && <TermsModal onClose={() => setIsTermsOpen(false)} />}
+      {isPrivacyOpen && <PrivacyPolicyModal onClose={() => setIsPrivacyOpen(false)} />}
+    </>
   );
 };
 

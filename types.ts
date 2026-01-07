@@ -1,73 +1,26 @@
 
-declare global {
-    interface Window {
-        env: {
-            FIREBASE_API_KEY?: string;
-            FIREBASE_AUTH_DOMAIN?: string;
-            FIREBASE_PROJECT_ID?: string;
-            FIREBASE_STORAGE_BUCKET?: string;
-            FIREBASE_MESSAGING_SENDER_ID?: string;
-            FIREBASE_APP_ID?: string;
-            ADMIN_EMAIL?: string;
-            API_KEY?: string; // Gemini API Key
-            [key: string]: string | undefined;
-        };
-        google?: {
-            accounts: {
-                id: {
-                    initialize: (config: { client_id: string; callback: (response: any) => void; }) => void;
-                    renderButton: (
-                        parent: HTMLElement,
-                        options: {
-                            type: string;
-                            theme: string;
-                            size: string;
-                            text: string;
-                            shape: string;
-                            logo_alignment: string;
-                            width: string;
-                        }
-                    ) => void;
-                };
-            };
-        };
-        html2pdf?: () => { from: (element: HTMLElement) => { set: (opt: any) => { save: () => Promise<void> } } };
-    }
-}
-
 export interface VideoData {
   id: string;
   channelId: string;
   title: string;
   thumbnailUrl: string;
   channelTitle: string;
-  publishedAt: string;
+  publishedAt: string; // ISO 8061 string
   subscribers: number;
   viewCount: number;
   viewsPerHour: number;
   likeCount: number;
   commentCount: number;
   durationMinutes: number;
-  engagementRate: number;
-  performanceRatio: number;
-  satisfactionScore: number;
-  cll: number;
-  cul: number;
-  grade: string;
-  estimatedRevenue: number;
-  estimatedMonthlyRevenue: number;
-  aiThumbnailScore?: number;
-  aiThumbnailReason?: string;
-  aiThumbnailHook?: string;
-  aiKeywordScore?: number;
-  channelCountry?: string;
+  engagementRate: number; // (likes + comments) / views
+  channelCountry?: string; // Added for country flag display
 }
 
 export type AnalysisMode = 'keyword' | 'channel';
 
 export type VideoLength = 'any' | 'short' | 'medium' | 'long';
-export type Period = 'any' | '7' | '30' | '90';
-export type SortBy = 'viewCount' | 'publishedAt' | 'viewsPerHour' | 'engagementRate' | 'performanceRatio' | 'satisfactionScore' | 'cll' | 'cul' | 'grade';
+export type Period = 'any' | '7' | '30';
+export type SortBy = 'viewCount' | 'publishedAt' | 'viewsPerHour' | 'engagementRate' | 'relevance';
 export type VideoFormat = 'any' | 'longform' | 'shorts';
 
 export interface FilterState {
@@ -77,7 +30,7 @@ export interface FilterState {
   period: Period;
   sortBy: SortBy;
   resultsLimit: number;
-  country: string;
+  country: string; // e.g., 'KR', 'US', 'JP'
   category: string;
 }
 
@@ -96,8 +49,9 @@ export const YOUTUBE_CATEGORY_OPTIONS = [
 ];
 
 export const COUNTRY_FLAGS: { [key: string]: string } = {
-    WW: '🌍', KR: '🇰🇷', US: '🇺🇸', JP: '🇯🇵', NZ: '🇳🇿', TW: '🇹🇼', DE: '🇩🇪', RU: '🇷🇺', MY: '🇲🇾', MX: '🇲🇽', VN: '🇻🇳', BN: '🇧🇳', SG: '🇸🇬', GB: '🇬🇧', IN: '🇮🇳', ID: '🇮🇩', CN: 'CN', CL: 'CL', CA: 'CA', TH: 'TH', PG: 'PG', PE: 'PE', FR: 'FR', PH: 'PH', AU: 'AU', HK: 'HK', BR: 'BR'
+    WW: '🌍', KR: '🇰🇷', US: '🇺🇸', JP: '🇯🇵', NZ: '🇳🇿', TW: '🇹🇼', DE: '🇩🇪', RU: '🇷🇺', MY: '🇲🇾', MX: '🇲🇽', VN: '🇻🇳', BN: '🇧🇳', SG: '🇸🇬', GB: '🇬🇧', IN: '🇮🇳', ID: '🇮🇩', CN: '🇨🇳', CL: '🇨🇱', CA: '🇨🇦', TH: '🇹🇭', PG: '🇵🇬', PE: '🇵🇪', FR: '🇫🇷', PH: '🇵🇭', AU: '🇦🇺', HK: '🇭🇰', BR: '🇧🇷'
 };
+
 
 export interface ChannelDetails {
   id: string;
@@ -106,9 +60,9 @@ export interface ChannelDetails {
   subscriberCount: number;
   videoCount: number;
   viewCount: number;
-  publishedAt: string;
+  publishedAt: string; // ISO 8601 string for channel creation
   avgViews: number;
-  recentUploads: number;
+  recentUploads: number; // e.g., in the last 30 days
 }
 
 export interface ChannelVideo {
@@ -123,15 +77,13 @@ export interface ChannelVideo {
   isShorts: boolean;
   durationMinutes: number;
   viewsPerHour: number;
-  estimatedRank?: string;
-  estimatedRevenue: number;
-  tags?: string[];
+  tags?: string[]; // Added optional tags for internal processing
 }
 
 export interface SurgingVideos {
   monthly: { longform: ChannelVideo[]; shorts: ChannelVideo[] };
   weekly: { longform: ChannelVideo[]; shorts: ChannelVideo[] };
-  threeMonths: { longform: ChannelVideo[]; shorts: ChannelVideo[] };
+  daily: { longform: ChannelVideo[]; shorts: ChannelVideo[] };
 }
 
 export interface FormatStats {
@@ -143,7 +95,7 @@ export interface FormatStats {
 }
 
 export interface TrendPoint {
-  date: string;
+  date: string; // e.g., '10/26'
   views: number;
   engagements: number;
   likes: number;
@@ -191,8 +143,6 @@ export interface ChannelAnalysisData {
   surgingVideos: SurgingVideos;
   performanceTrend: PerformanceTrendData;
   audienceProfile: AudienceProfile;
-  estimatedTotalRevenue: number;
-  estimatedMonthlyRevenue: number;
 }
 
 export interface AIInsights {
@@ -217,11 +167,13 @@ export interface ComparisonInsights {
   recommendation: string;
 }
 
-export interface VideoComment {
-  text: string;
-  author: string;
-  likeCount: number;
-  publishedAt: string;
+export interface SimilarChannelData {
+  id: string;
+  name: string;
+  thumbnailUrl: string;
+  subscriberCount: number;
+  videoCount: number;
+  reason: string;
 }
 
 export interface CommentInsights {
@@ -230,7 +182,7 @@ export interface CommentInsights {
   negativePoints: string[];
 }
 
-export interface AIVideoDeepDiveInsights {
+export interface DeepDiveInsights {
   topicAnalysis: {
     summary: string;
     successFactors: string[];
@@ -247,27 +199,24 @@ export interface AIVideoDeepDiveInsights {
   retentionStrategy: {
     summary: string;
     improvementPoints: {
-        point: string;
-        reason: string;
-        productionTip: string;
-        editingTip: string;
+      point: string;
+      reason: string;
+      productionTip: string;
+      editingTip: string;
     }[];
   };
   strategicRecommendations: {
     contentStrategy: string;
-    newTopics: string[];
     growthStrategy: string;
-    bestUploadTime?: {
-        day: string;
-        time: string;
-        reason: string;
-        weeklySchedule: { day: string; hour: number; reason: string }[];
-    };
+    newTopics: string[];
   };
-  thumbnailAnalysis?: {
-      score: number;
-      reason: string;
-  };
+}
+
+export interface VideoComment {
+  text: string;
+  author: string;
+  likeCount: number;
+  publishedAt: string;
 }
 
 export interface VideoDetailData {
@@ -286,15 +235,13 @@ export interface VideoDetailData {
   embedHtml: string;
   embeddable: boolean;
   comments: VideoComment[];
-  commentInsights: CommentInsights;
-  deepDiveInsights: AIVideoDeepDiveInsights;
-  estimatedRevenue: number;
-  estimatedMonthlyRevenue: number;
   benchmarks?: {
       title: string;
       views: number;
       thumbnailUrl: string;
   }[];
+  commentInsights?: CommentInsights;
+  deepDiveInsights?: DeepDiveInsights;
 }
 
 export interface Plan {
@@ -309,9 +256,7 @@ export interface User {
   email: string;
   isAdmin: boolean;
   plan: 'Free' | 'Pro' | 'Biz';
-  usage: number;
-  apiKeyYoutube?: string;
-  apiKeyGemini?: string;
+  usage: number; // monthly analyses used
   password?: string;
   planExpirationDate?: string;
 }
@@ -346,8 +291,6 @@ export interface ChannelRankingData {
     viewCount: number;
     rank: number;
     rankChange: number;
-    estimatedTotalRevenue: number;
-    estimatedMonthlyRevenue: number;
     categoryId?: string;
     description?: string;
     channelCountry?: string;
@@ -361,13 +304,11 @@ export interface VideoRankingData {
     channelId: string;
     thumbnailUrl: string;
     publishedDate: string;
-    viewCount: number;
+    viewCount: number; // Total views
     viewsPerHour: number;
     rankChange: number;
     channelTotalViews: number;
     channelSubscriberCount: number;
-    estimatedRevenue: number;
-    estimatedMonthlyRevenue: number;
     categoryId?: string;
     channelHandle?: string;
     channelDescription?: string;
@@ -464,17 +405,9 @@ export interface BenchmarkComparisonData {
     };
 }
 
-export interface SimilarChannelData {
-  id: string;
-  name: string;
-  thumbnailUrl: string;
-  subscriberCount: number;
-  videoCount: number;
-  reason: string;
-}
-
 export interface AIThumbnailInsights {
   analysis: {
+    // THUMBNAIL
     focalPoint: string;
     colorContrast: string;
     faceEmotionCTR: string;
@@ -482,11 +415,13 @@ export interface AIThumbnailInsights {
     brandingConsistency: string;
     mobileReadability: string;
     categoryRelevance: string;
+    // TITLE
     titlePatterns: string;
     titleLength: string;
     titleCredibility: string;
   };
   results: {
+    // THUMBNAIL
     thumbnailSummary: string;
     improvedConcepts: { concept: string; description: string; }[];
     textCandidates: string[];
@@ -495,17 +430,12 @@ export interface AIThumbnailInsights {
       fonts: string;
       layout: string;
     };
+    // TITLE
     titleSummary: string;
     titleSuggestions: { title: string; reason: string; }[];
   };
-  scoredThumbnails?: {
-    id: string;
-    totalScore: number;
-    hook: string;
-    keywordScore: number;
-    reason: string;
-  }[];
 }
+
 
 export interface ChatMessage {
   role: 'user' | 'model';
@@ -535,7 +465,6 @@ export interface OutlierViewState {
         viralFactors: string[];
         topKeywords: string[];
         topChannels: string[];
-        sources?: { title: string; url: string }[];
     } | null;
     excludedCategories: string[];
     multiplier: number;
@@ -547,11 +476,6 @@ export interface ThumbnailViewState {
     insights: AIThumbnailInsights | null;
 }
 
-export interface RankingTabCache {
-    results: (ChannelRankingData | VideoRankingData)[];
-    params: any;
-}
-
 export interface RankingViewState {
     activeTab: 'channels' | 'videos' | 'performance';
     country: string;
@@ -560,68 +484,62 @@ export interface RankingViewState {
     videoFormat: 'all' | 'longform' | 'shorts';
     results: (ChannelRankingData | VideoRankingData)[];
     selectedChannels: Record<string, { name: string }>;
-    tabCache: {
-        channels?: RankingTabCache;
-        videos?: RankingTabCache;
-        performance?: RankingTabCache;
-    };
 }
 
+// --- Algorithm Finder Types ---
 export interface AlgorithmOption {
-    text: string;
+    text: string; // The "Thumbnail" text
     traits: {
-        category: string;
-        age: string;
-        tone: string;
-        keyword: string;
-        gender?: 'Male' | 'Female' | 'Neutral';
+        category: string; // e.g. 'Music', 'Movie', 'Comedy', 'Life', 'Knowledge'
+        age: string; // e.g. '10-15', '16-19', '20-24', '30-39' (Detailed)
+        tone: string; // e.g. 'Fun', 'Healing', 'Info', 'Shock'
+        keyword: string; // e.g. 'Kpop', 'Vlog', 'Money'
+        gender?: 'Male' | 'Female' | 'Neutral'; // New trait
     };
 }
 
 export interface AlgorithmStage {
-    id: string;
+    id: string; // A, B, C, D, E, F
     title: string;
     description: string;
     options: AlgorithmOption[];
 }
 
 export interface AlgorithmResult {
-    score: number;
+    score: number; // 0-100 Consistency Score
     profile: {
         category: string;
         age: string;
         tone: string;
         keyword: string;
-        persona: string;
-        gender?: string;
+        persona: string; // Detailed description
+        gender?: string; // e.g. "여성향", "남성향"
     };
     seriesRecommendations: {
         title: string;
         concept: string;
     }[];
-    recommendedKeywords: {
+    recommendedKeywords: { // New field for Core/Side keywords
         core: string[];
         side: string[];
     };
     statusMessage: string;
     strategy: string;
-    analysisLog: string[];
+    analysisLog: string[]; // Reasons for score deductions
     recommendedChannels: {
         korea: { name: string; reason: string; }[];
         global: { name: string; reason: string; }[];
     };
 }
 
-export type CollectionType = 'channel' | 'video' | 'outlier' | 'trend' | 'thumbnail' | 'algorithm' | 'myChannel';
-
 export interface CollectionItem {
     id: string;
-    type: CollectionType;
+    type: 'channel' | 'video';
     title: string;
     thumbnailUrl: string;
-    metric1: string; // Dynamic label based on type
-    metric2: string; // Dynamic label based on type
-    date: string; // ISO String of saved time
-    url: string; // Direct link if available
-    raw: any; // Full analysis object for point-in-time rendering
+    metric1: string; // e.g. Subscribers or Views
+    metric2: string; // e.g. Video Count or Likes
+    date: string; // ISO String
+    url: string;
+    raw: any; // Store raw data for potential re-analysis or detail view
 }

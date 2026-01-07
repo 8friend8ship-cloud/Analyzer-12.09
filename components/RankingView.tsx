@@ -1,9 +1,8 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Spinner from './common/Spinner';
 import { fetchRankingData } from '../services/youtubeService';
-import type { User, AppSettings, ChannelRankingData, VideoRankingData, RankingViewState, RankingTabCache } from '../types';
-import { YOUTUBE_CATEGORY_OPTIONS } from '../types';
+import type { User, AppSettings, ChannelRankingData, VideoRankingData, RankingViewState } from '../types';
+import { YOUTUBE_CATEGORY_OPTIONS, COUNTRY_FLAGS } from '../types';
 import ComparisonModal from './ComparisonModal';
 
 interface RankingViewProps {
@@ -13,9 +12,6 @@ interface RankingViewProps {
     onShowVideoDetail: (videoId: string) => void;
     savedState: RankingViewState | null;
     onSaveState: (state: RankingViewState) => void;
-    onUpdateUser: (updatedUser: Partial<User>) => void;
-    onUpgradeRequired: () => void;
-    planLimit: number;
 }
 
 type ActiveTab = 'channels' | 'videos' | 'performance';
@@ -23,85 +19,96 @@ type ActiveTab = 'channels' | 'videos' | 'performance';
 const countryOptions = [
     { label: "전세계", value: "WW" },
     { label: "대한민국", value: "KR" },
+    { label: "뉴질랜드", value: "NZ" },
+    { label: "대만", value: "TW" },
+    { label: "독일", value: "DE" },
+    { label: "러시아", value: "RU" },
+    { label: "말레이시아", value: "MY" },
+    { label: "멕시코", value: "MX" },
     { label: "미국", value: "US" },
-    { label: "일본", value: "JP" },
+    { label: "베트남", value: "VN" },
+    { label: "브루나이", value: "BN" },
+    { label: "싱가포르", value: "SG" },
     { label: "영국", value: "GB" },
     { label: "인도", value: "IN" },
+    { label: "인도네시아", value: "ID" },
+    { label: "일본", value: "JP" },
+    { label: "중국", value: "CN" },
+    { label: "칠레", value: "CL" },
     { label: "캐나다", value: "CA" },
-    { label: "호주", value: "AU" },
-    { label: "독일", value: "DE" },
+    { label: "태국", value: "TH" },
+    { label: "파푸아뉴기니", value: "PG" },
+    { label: "페루", value: "PE" },
     { label: "프랑스", value: "FR" },
-    { label: "베트남", value: "VN" },
+    { label: "필리핀", value: "PH" },
+    { label: "호주", value: "AU" },
+    { label: "홍콩", value: "HK" },
 ];
+
+const YOUTUBE_CATEGORIES_KR: { [key: string]: string } = {
+    '1': '영화/애니메이션', '2': '자동차/교통', '10': '음악', '15': '애완동물/동물',
+    '17': '스포츠', '19': '여행/이벤트', '20': '게임', '22': '인물/블로그',
+    '23': '코미디', '24': '엔터테인먼트', '25': '뉴스/정치', '26': '노하우/스타일',
+    '27': '교육', '28': '과학 기술', '29': 'NGO/운동',
+};
 
 const EXCLUDABLE_CATEGORIES = [
     { id: '10', label: '음악' },
-    { id: '1', label: '영화/애니' },
+    { id: '1', label: '영화' },
     { id: '20', label: '게임' },
 ];
 
-// --- Utility Components ---
-
-const PerformanceBadge: React.FC<{ ratio: number }> = ({ ratio }) => {
-    if (!ratio || !isFinite(ratio)) return <span className="text-xs text-gray-500">-</span>;
-    let color = 'bg-gray-600 text-gray-200';
-    let icon = '';
-    if (ratio >= 10) { color = 'bg-purple-600 text-white'; icon = '🚀'; }
-    else if (ratio >= 5) { color = 'bg-red-600 text-white'; icon = '🔥'; }
-    else if (ratio >= 2) { color = 'bg-blue-600 text-white'; icon = '💎'; }
-    else if (ratio >= 1) { color = 'bg-green-600 text-white'; icon = '✅'; }
+const RankChange: React.FC<{ change: number }> = ({ change }) => {
+    // Safety check for undefined/null change
+    if (change === undefined || change === null || change === 0) {
+        return <span className="text-gray-500">-</span>;
+    }
+    const isUp = change > 0;
     return (
-        <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${color}`}>
-            {icon} {ratio.toFixed(1)}x
+        <span className={`flex items-center justify-center font-semibold ${isUp ? 'text-green-400' : 'text-red-400'}`}>
+            {isUp ? '▲' : '▼'} {Math.abs(change)}
+        </span>
+    );
+};
+
+const ShortsBadge: React.FC = () => (
+    <span className="ml-2 px-1.5 py-0.5 rounded bg-red-600/80 text-white text-[10px] font-bold uppercase tracking-wider border border-red-500">
+        Shorts
+    </span>
+);
+
+const DurationBadge: React.FC<{ seconds: number }> = ({ seconds }) => {
+    if (!seconds || isNaN(seconds)) return null;
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    const timeString = `${minutes}:${secs.toString().padStart(2, '0')}`;
+    
+    return (
+        <div className="absolute bottom-1 right-1 px-1 py-0.5 rounded bg-black/80 text-white text-[10px] font-medium">
+            {timeString}
         </div>
     );
 };
 
-const formatNumber = (num: number): string => {
-    if (num === undefined || num === null) return '-';
-    if (num >= 1000000000) return `${(num / 1000000000).toFixed(1)}B`;
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 10000) return `${(num / 1000).toFixed(0)}K`;
-    return num.toLocaleString();
-};
-
-const RankingView: React.FC<RankingViewProps> = ({ 
-    user, 
-    appSettings, 
-    onShowChannelDetail, 
-    onShowVideoDetail, 
-    savedState, 
-    onSaveState,
-    onUpdateUser,
-    onUpgradeRequired,
-    planLimit
-}) => {
+const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChannelDetail, onShowVideoDetail, savedState, onSaveState }) => {
     const [activeTab, setActiveTab] = useState<ActiveTab>(savedState?.activeTab || 'channels');
     const [results, setResults] = useState<(ChannelRankingData | VideoRankingData)[]>(savedState?.results || []);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(!savedState?.results.length);
     const [error, setError] = useState<string | null>(null);
-    const [hasSearched, setHasSearched] = useState(!!savedState?.results.length);
+    const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
-    // Filters
     const [country, setCountry] = useState(savedState?.country || 'KR');
     const [category, setCategory] = useState(savedState?.category || 'all');
+    const [limit] = useState(50);
+    
+    const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
+    const [selectedChannels, setSelectedChannels] = useState<Record<string, { name: string }>>(savedState?.selectedChannels || {});
+    
     const [excludedCategories, setExcludedCategories] = useState<Set<string>>(
         savedState?.excludedCategories ? new Set(savedState.excludedCategories) : new Set()
     );
     const [videoFormat, setVideoFormat] = useState<'all' | 'longform' | 'shorts'>(savedState?.videoFormat || 'all');
-    
-    // UI State
-    const [selectedChannels, setSelectedChannels] = useState<Record<string, { name: string }>>(savedState?.selectedChannels || {});
-    const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
 
-    // Cache per tab
-    const [tabCache, setTabCache] = useState<{
-        channels?: RankingTabCache;
-        videos?: RankingTabCache;
-        performance?: RankingTabCache;
-    }>(savedState?.tabCache || {});
-
-    // Save State on Change
     useEffect(() => {
         onSaveState({
             activeTab,
@@ -110,472 +117,483 @@ const RankingView: React.FC<RankingViewProps> = ({
             excludedCategories: Array.from(excludedCategories),
             videoFormat,
             results,
-            selectedChannels,
-            tabCache // Persist the cache
+            selectedChannels
         });
-    }, [activeTab, country, category, excludedCategories, videoFormat, results, selectedChannels, tabCache, onSaveState]);
+    }, [activeTab, country, category, excludedCategories, videoFormat, results, selectedChannels, onSaveState]);
 
-    const handleSearchClick = async () => {
-        // Usage Limit Check
-        if (user.usage >= planLimit) {
-            onUpgradeRequired();
+    const handleChannelSelect = useCallback((channel: { id: string, name: string }, isSelected: boolean) => {
+        setSelectedChannels(prev => {
+            const newSelection = { ...prev };
+            if (isSelected) {
+                newSelection[channel.id] = { name: channel.name };
+            } else {
+                delete newSelection[channel.id];
+            }
+            return newSelection;
+        });
+    }, []);
+    
+    const handleExcludeCategoryChange = useCallback((categoryId: string, checked: boolean) => {
+        setExcludedCategories(prev => {
+            const newSet = new Set(prev);
+            if (checked) {
+                newSet.add(categoryId);
+            } else {
+                newSet.delete(categoryId);
+            }
+            return newSet;
+        });
+    }, []);
+
+    const handleOpenCompareModal = () => {
+        if (Object.keys(selectedChannels).length < 2) {
+            alert('비교할 채널을 2개 이상 선택해주세요.');
             return;
         }
-
-        // Current parameters snapshot
-        const currentParams = {
-            limit: 50,
-            country,
-            category,
-            excludedCategories: Array.from(excludedCategories).sort(), // Sort for consistent comparison
-            videoFormat,
-            metric: 'mostPopular',
-            tab: activeTab // Include tab in params to differentiate
-        };
-
-        // 1. Check for Duplicate Search (Prevent Credit Deduction)
-        // If the parameters are exactly the same as the last successful search for this tab, skip API call.
-        const cached = tabCache[activeTab];
-        if (cached && JSON.stringify(cached.params) === JSON.stringify(currentParams)) {
-            // Already have these results, just show them (even if they are already showing)
-            // This prevents usage deduction on repeated clicks
-            console.log("Duplicate search detected. Using cached results.");
-            if (results !== cached.results) {
-                setResults(cached.results);
-            }
-            return; 
-        }
-
-        // 2. Proceed with API Call
-        setIsLoading(true);
-        setError(null);
-        setResults([]);
-        setHasSearched(true);
-
-        const apiKey = user.isAdmin ? appSettings.apiKeys.youtube : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
-        
-        if (!apiKey) {
-            setError("YouTube API 키가 설정되지 않았습니다. 설정 페이지를 확인해주세요.");
-            setIsLoading(false);
-            return;
-        }
-
-        try {
-            const apiFilters = { 
-                limit: 50,
-                country,
-                category,
-                excludedCategories: Array.from(excludedCategories),
-                videoFormat,
-                metric: 'mostPopular',
-                skipCache: activeTab === 'performance' 
-            };
-            
-            const fetchType = activeTab === 'channels' ? 'channels' : 'videos';
-            const data = await fetchRankingData(fetchType, apiFilters, apiKey);
-
-            let finalResults = data || [];
-
-            if (activeTab === 'performance') {
-                finalResults = (data as VideoRankingData[])
-                    .filter(v => v.viewCount > 10000)
-                    .sort((a, b) => {
-                        const ratioA = a.viewCount / (a.channelSubscriberCount || 1);
-                        const ratioB = b.viewCount / (b.channelSubscriberCount || 1);
-                        return ratioB - ratioA;
-                    });
-            }
-            
-            setResults(finalResults);
-            
-            // Update Cache with new results and the exact params used
-            setTabCache(prev => ({
-                ...prev,
-                [activeTab]: {
-                    results: finalResults,
-                    params: currentParams // Store params to compare later
-                }
-            }));
-            
-            // Deduct usage only on successful fresh fetch
-            onUpdateUser({ usage: user.usage + 1 });
-
-        } catch (err) {
-            console.error("Ranking fetch error:", err);
-            setError("데이터를 불러오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
-        } finally {
-            setIsLoading(false);
-        }
+        setIsComparisonModalOpen(true);
     };
-
+    const handleCloseCompareModal = () => setIsComparisonModalOpen(false);
+    
     const handleTabChange = (tab: ActiveTab) => {
-        if (tab === activeTab) return;
+        setResults([]); // CRITICAL FIX: Clear results immediately to prevent rendering crashes due to mismatched data types
         setActiveTab(tab);
         setSelectedChannels({});
-
-        // Restore from cache if available (Maintains state between tabs)
-        if (tabCache[tab]) {
-            setResults(tabCache[tab]!.results);
-            setHasSearched(true);
-            // We do NOT update the filter UI (Country/Category) to match the cache here,
-            // to allow users to apply current filters to the new tab easily.
-            // But the displayed results will match the *previous search* on that tab until they click 'Search' again.
-        } else {
-            setResults([]);
-            setHasSearched(false);
-        }
+        setVideoFormat('all');
     };
 
-    const handleCheckboxChange = (id: string, name: string, checked: boolean) => {
-        setSelectedChannels(prev => {
-            const next = { ...prev };
-            if (checked) next[id] = { name };
-            else delete next[id];
-            return next;
-        });
+    const processPerformanceData = (rawData: VideoRankingData[]) => {
+        if (!Array.isArray(rawData)) return [];
+        return rawData
+            .filter(video => 
+                video && 
+                typeof video.channelSubscriberCount === 'number' && 
+                video.channelSubscriberCount >= 1000 && 
+                typeof video.viewCount === 'number' &&
+                video.viewCount >= 10000
+            )
+            .sort((a, b) => {
+                const subA = a.channelSubscriberCount || 1;
+                const subB = b.channelSubscriberCount || 1;
+                const ratioA = a.viewCount / subA;
+                const ratioB = b.viewCount / subB;
+                return ratioB - ratioA;
+            });
     };
 
-    // Mobile Card Components
-    const MobileChannelCard: React.FC<{ item: ChannelRankingData; rank: number }> = ({ item, rank }) => (
-        <div className="bg-gray-800/80 rounded-lg p-3 border border-gray-700/50 w-full overflow-hidden">
-            <div className="flex items-center gap-3 mb-3">
-                <span className="text-lg font-bold text-gray-500 w-6 text-center flex-shrink-0">{rank}</span>
-                <input 
-                    type="checkbox" 
-                    className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 flex-shrink-0"
-                    checked={!!selectedChannels[item.id]}
-                    onChange={e => handleCheckboxChange(item.id, item.name, e.target.checked)}
-                />
-                <button onClick={() => onShowChannelDetail(item.id)} className="flex items-center gap-3 flex-grow text-left min-w-0">
-                    <img src={item.thumbnailUrl} alt="" className="w-10 h-10 rounded-full flex-shrink-0 object-cover" />
-                    <div className="min-w-0 flex-grow">
-                        <p className="font-semibold text-white truncate text-sm">{item.name}</p>
-                        <p className="text-xs text-gray-400">구독자 {formatNumber(item.subscriberCount)}</p>
-                    </div>
-                </button>
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-center text-xs border-t border-gray-700/50 pt-3">
-                <div className="truncate">
-                    <span className="text-gray-500 block mb-1">인기 조회수</span>
-                    <span className="font-semibold text-white">{formatNumber(item.viewsInPeriod)}</span>
-                </div>
-                <div className="truncate">
-                    <span className="text-gray-500 block mb-1">총 조회수</span>
-                    <span className="font-semibold text-white">{formatNumber(item.viewCount)}</span>
-                </div>
-                <div className="truncate">
-                    <span className="text-gray-500 block mb-1">월 수익</span>
-                    <span className="font-semibold text-green-400">${formatNumber(item.estimatedMonthlyRevenue)}</span>
-                </div>
-            </div>
-            <button 
-                onClick={() => onShowChannelDetail(item.id)}
-                className="w-full mt-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 text-xs font-semibold rounded transition-colors"
-            >
-                채널 상세 분석
-            </button>
-        </div>
-    );
+    useEffect(() => {
+        const fetchData = async () => {
+            setIsLoading(true);
+            setError(null);
 
-    const MobileVideoCard: React.FC<{ item: VideoRankingData; rank: number }> = ({ item, rank }) => {
-        const ratio = item.channelSubscriberCount > 0 ? item.viewCount / item.channelSubscriberCount : 0;
-        return (
-            <div className="bg-gray-800/80 rounded-lg p-3 border border-gray-700/50 w-full overflow-hidden">
-                <div className="flex gap-3 mb-3">
-                    <div className="flex flex-col items-center gap-2 flex-shrink-0">
-                        <span className="text-lg font-bold text-gray-500">{rank}</span>
-                        <input 
-                            type="checkbox" 
-                            className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
-                            checked={!!selectedChannels[item.channelId]}
-                            onChange={e => handleCheckboxChange(item.channelId, item.channelName, e.target.checked)}
-                        />
-                    </div>
-                    <div className="flex-grow min-w-0">
-                        <div className="relative mb-2 w-full aspect-video bg-black rounded overflow-hidden">
-                            <a href={`https://www.youtube.com/watch?v=${item.id}`} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
-                                <img src={item.thumbnailUrl} alt="" className="w-full h-full object-cover" />
-                            </a>
-                            <span className="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1 rounded">
-                                {Math.floor(item.durationSeconds / 60)}:{(item.durationSeconds % 60).toString().padStart(2, '0')}
-                            </span>
-                        </div>
-                        <button onClick={() => onShowVideoDetail(item.id)} className="font-semibold text-white text-sm line-clamp-2 text-left mb-1 w-full hover:text-blue-400">
-                            {item.name}
-                        </button>
-                        <div className="flex justify-between items-center text-xs">
-                            <button onClick={() => onShowChannelDetail(item.channelId)} className="text-gray-400 truncate block text-left hover:text-white max-w-[120px]">
-                                {item.channelName}
-                            </button>
-                            <span className="text-gray-500">구독 {formatNumber(item.channelSubscriberCount)}</span>
-                        </div>
-                    </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center text-xs border-t border-gray-700/50 pt-3">
-                    <div className="truncate">
-                        <span className="text-gray-500 block mb-1">조회수</span>
-                        <span className="font-semibold text-white">{formatNumber(item.viewCount)}</span>
-                    </div>
-                    <div className="truncate flex flex-col items-center">
-                        <span className="text-gray-500 block mb-1">{activeTab === 'performance' ? '성과지표' : '예상수익'}</span>
-                        {activeTab === 'performance' ? (
-                            <PerformanceBadge ratio={ratio} />
-                        ) : (
-                            <span className="font-semibold text-green-400">${formatNumber(item.estimatedRevenue)}</span>
-                        )}
-                    </div>
-                    <div className="truncate">
-                        <span className="text-gray-500 block mb-1">VPH</span>
-                        <span className="font-semibold text-blue-400">{formatNumber(item.viewsPerHour)}</span>
-                    </div>
-                </div>
-                <div className="flex gap-2 mt-3">
-                    <button onClick={() => onShowVideoDetail(item.id)} className="flex-1 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 text-xs font-semibold rounded transition-colors">
-                        영상 분석
-                    </button>
-                    <button onClick={() => onShowChannelDetail(item.channelId)} className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs font-semibold rounded transition-colors">
-                        채널 분석
-                    </button>
-                </div>
-            </div>
-        );
+            const filters = { 
+                limit: limit, 
+                country, 
+                category, 
+                metric: 'mostPopular', 
+                excludedCategories,
+                videoFormat,
+                skipCache: activeTab === 'performance'
+            };
+            
+            const apiKey = appSettings.apiKeys.youtube;
+            
+            if (!apiKey) {
+                setError("시스템 API 키가 필요합니다. 관리자에게 문의해주세요.");
+                setIsLoading(false);
+                return;
+            }
+
+            try {
+                const fetchType = activeTab === 'channels' ? 'channels' : 'videos';
+                const data = await fetchRankingData(fetchType, filters, apiKey);
+                
+                setLastUpdated(new Date().toLocaleString());
+
+                if (activeTab === 'performance') {
+                    setResults(processPerformanceData(data as VideoRankingData[]));
+                } else {
+                    setResults(Array.isArray(data) ? data : []);
+                }
+            } catch (err) {
+                console.error("Failed to fetch ranking data:", err);
+                setError(err instanceof Error ? err.message : "랭킹 데이터를 불러오는데 실패했습니다.");
+                setResults([]);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchData();
+
+    }, [activeTab, country, category, limit, appSettings, excludedCategories, videoFormat]);
+    
+    const formatNumber = (num: number): string => {
+        if (num === undefined || num === null || isNaN(num)) return '-';
+        if (num >= 1000000000) return `${(num / 1000000000).toFixed(1).replace('.0', '')}B`;
+        if (num >= 1000000) return `${(num / 1000000).toFixed(1).replace('.0', '')}M`;
+        if (num >= 10000) return `${(num / 1000).toFixed(0)}K`;
+        return num.toLocaleString();
     };
-
+    
     const renderResults = () => {
-        if (isLoading) return <div className="py-20 flex justify-center"><Spinner message="데이터 분석 중..." /></div>;
-        
-        if (error) return (
-            <div className="py-20 text-center">
-                <p className="text-red-400 mb-4">{error}</p>
-                <button onClick={handleSearchClick} className="px-4 py-2 bg-gray-700 rounded text-sm hover:bg-gray-600">다시 시도</button>
-            </div>
-        );
-
-        if (!hasSearched) return (
-            <div className="py-20 text-center text-gray-500 border-2 border-dashed border-gray-700/50 rounded-lg">
-                <p className="text-lg mb-2">👆 상단 필터를 확인하고 '순위 조회'를 눌러주세요.</p>
-                <p className="text-sm">국가별, 카테고리별 실시간 랭킹을 확인할 수 있습니다.</p>
-            </div>
-        );
-
-        if (results.length === 0) return (
-            <div className="py-20 text-center text-gray-500">
-                <p>조건에 맞는 결과가 없습니다.</p>
-            </div>
-        );
+        if (isLoading) return <div className="flex justify-center items-center pt-20"><Spinner message={activeTab === 'performance' ? "실시간 급상승 데이터를 분석 중입니다... (API 호출)" : "랭킹 데이터를 불러오는 중입니다..."} /></div>;
+        if (error) return <div className="text-center text-red-400 p-4 bg-red-900/50 rounded-lg">{error}</div>;
+        if (!results || results.length === 0) return <div className="text-center py-20 text-gray-500"><p>결과가 없습니다. 필터를 변경해보세요.</p></div>;
 
         return (
             <div>
                 {/* Desktop View */}
-                <div className="hidden md:block bg-gray-800/50 rounded-lg overflow-hidden border border-gray-700/50">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-gray-400 uppercase bg-gray-900/50">
-                                <tr>
-                                    <th className="px-4 py-3 text-center w-16">순위</th>
-                                    <th className="px-4 py-3">{activeTab === 'channels' ? '채널 정보' : '영상 정보'}</th>
-                                    <th className="px-4 py-3 text-center">구독자</th>
-                                    <th className="px-4 py-3 text-center">조회수</th>
-                                    <th className="px-4 py-3 text-center">{activeTab === 'performance' ? '성과지표' : '추정 수익'}</th>
-                                    <th className="px-4 py-3 text-center">분석</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-700/50">
-                                {results.map((item, index) => {
-                                    const rank = index + 1;
+                <div className="hidden md:block bg-gray-800/60 rounded-lg border border-gray-700/50">
+                    {activeTab === 'channels' && (
+                        <div className="grid grid-cols-12 px-4 py-3 text-xs font-semibold text-gray-400 border-b border-gray-700/50">
+                            <div className="col-span-1 text-center">순위</div>
+                            <div className="col-span-8">채널</div>
+                            <div className="col-span-2 text-center">인기 조회수</div>
+                            <div className="col-span-1 text-right">구독자</div>
+                        </div>
+                    )}
+                    {activeTab === 'videos' && (
+                        <div className="grid grid-cols-12 px-4 py-3 text-xs font-semibold text-gray-400 border-b border-gray-700/50">
+                            <div className="col-span-1 text-center">순위</div>
+                            <div className="col-span-8">영상</div>
+                            <div className="col-span-2 text-center">VPH</div>
+                            <div className="col-span-1 text-right">조회수</div>
+                        </div>
+                    )}
+                    {activeTab === 'performance' && (
+                        <div className="grid grid-cols-12 px-4 py-3 text-xs font-semibold text-gray-400 border-b border-gray-700/50">
+                            <div className="col-span-1 text-center">순위</div>
+                            <div className="col-span-7">급성장 영상</div>
+                            <div className="col-span-2 text-center">조회수</div>
+                            <div className="col-span-1 text-center">구독자</div>
+                            <div className="col-span-1 text-right">상세 분석</div>
+                        </div>
+                    )}
+                
+                    <div className="divide-y divide-gray-700/50">
+                        {results.map((item, index) => {
+                            if (!item) return null;
+
+                            const isChannel = 'viewsInPeriod' in item;
+                            const isPerformance = activeTab === 'performance';
+                            const channelInfo = isChannel
+                                ? { id: item.id, name: item.name }
+                                : { id: (item as VideoRankingData).channelId, name: (item as VideoRankingData).channelName };
+                            
+                            const categoryName = item.categoryId ? YOUTUBE_CATEGORIES_KR[item.categoryId] : null;
+                            const channelCountry = (item as ChannelRankingData | VideoRankingData).channelCountry;
+                            
+                            const displayRank = isPerformance ? index + 1 : item.rank;
+                            
+                            const isShorts = !isChannel && (item as any).isShorts;
+                            const durationSeconds = !isChannel ? (item as VideoRankingData).durationSeconds : 0;
+
+                            return (
+                                <div key={item.id} className="grid grid-cols-12 items-center px-4 py-3 hover:bg-gray-700/40">
+                                    <div className="col-span-1 text-lg font-bold text-gray-500 text-center flex items-center justify-center gap-2">
+                                        <span>{displayRank}</span>
+                                        {!isPerformance && <RankChange change={item.rankChange} />}
+                                    </div>
                                     
-                                    if (activeTab === 'channels') {
-                                        const ch = item as ChannelRankingData;
-                                        return (
-                                            <tr key={ch.id} className="hover:bg-gray-700/30 transition-colors">
-                                                <td className="px-4 py-3 text-center font-bold text-gray-500">{rank}</td>
-                                                <td className="px-4 py-3">
-                                                    <div className="flex items-center gap-3">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
-                                                            checked={!!selectedChannels[ch.id]}
-                                                            onChange={e => handleCheckboxChange(ch.id, ch.name, e.target.checked)}
-                                                        />
-                                                        <button onClick={() => onShowChannelDetail(ch.id)} className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity">
-                                                            <img src={ch.thumbnailUrl} alt="" className="w-10 h-10 rounded-full" />
-                                                            <div>
-                                                                <div className="font-semibold text-white hover:text-blue-400 transition-colors">{ch.name}</div>
-                                                                {/* Move view info to Views column for clarity */}
-                                                            </div>
-                                                        </button>
+                                    <div className={`${isPerformance ? 'col-span-7' : 'col-span-8'} flex items-center gap-3`}>
+                                        <input
+                                            type="checkbox"
+                                            className="form-checkbox h-4 w-4 bg-gray-700 border-gray-600 rounded text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                                            checked={!!selectedChannels[channelInfo.id]}
+                                            onChange={(e) => handleChannelSelect(channelInfo, e.target.checked)}
+                                            title="채널 비교 선택"
+                                        />
+                                        {isChannel ? (
+                                            <button onClick={() => onShowChannelDetail(item.id)} className="flex items-center gap-3 text-left min-w-0">
+                                                <img src={item.thumbnailUrl} alt={item.name} className="w-16 h-16 object-cover rounded-full flex-shrink-0" />
+                                                <div className="min-w-0">
+                                                    <p className="font-semibold text-white truncate text-sm" title={item.name}>{item.name}</p>
+                                                    <div className="flex items-center gap-1.5 text-xs text-gray-400 truncate">
+                                                        {channelCountry && (
+                                                            <span title={countryOptions.find(c => c.value === channelCountry)?.label || channelCountry}>
+                                                                {COUNTRY_FLAGS[channelCountry] || channelCountry}
+                                                            </span>
+                                                        )}
+                                                        <span>{item.name}</span>
                                                     </div>
-                                                </td>
-                                                <td className="px-4 py-3 text-center font-medium">{formatNumber(ch.subscriberCount)}</td>
-                                                <td className="px-4 py-3 text-center font-medium text-gray-300">{formatNumber(ch.viewCount)}</td>
-                                                <td className="px-4 py-3 text-center text-green-400 font-medium">${formatNumber(ch.estimatedMonthlyRevenue)}</td>
-                                                <td className="px-4 py-3 text-center">
-                                                    <button onClick={() => onShowChannelDetail(ch.id)} className="text-blue-400 hover:text-blue-300 text-xs border border-blue-500/30 px-2 py-1 rounded">상세</button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    } else {
-                                        const vd = item as VideoRankingData;
-                                        const ratio = vd.channelSubscriberCount > 0 ? vd.viewCount / vd.channelSubscriberCount : 0;
-                                        return (
-                                            <tr key={vd.id} className="hover:bg-gray-700/30 transition-colors">
-                                                <td className="px-4 py-3 text-center font-bold text-gray-500">{rank}</td>
-                                                <td className="px-4 py-3">
-                                                    <div className="flex items-center gap-3">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
-                                                            checked={!!selectedChannels[vd.channelId]}
-                                                            onChange={e => handleCheckboxChange(vd.channelId, vd.channelName, e.target.checked)}
-                                                        />
-                                                        <a href={`https://www.youtube.com/watch?v=${vd.id}`} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 group">
-                                                            <img src={vd.thumbnailUrl} alt="" className="w-16 h-9 object-cover rounded transition-transform group-hover:scale-105" />
-                                                        </a>
-                                                        <div className="min-w-0 max-w-xs">
-                                                            <button onClick={() => onShowVideoDetail(vd.id)} className="font-semibold text-white truncate text-left hover:text-blue-400 transition-colors block w-full" title={vd.name}>{vd.name}</button>
-                                                            <button onClick={() => onShowChannelDetail(vd.channelId)} className="text-xs text-gray-400 truncate hover:text-white block">{vd.channelName}</button>
-                                                        </div>
+                                                    {categoryName && <p className="text-xs font-semibold text-cyan-400 mt-1">#{categoryName}</p>}
+                                                </div>
+                                            </button>
+                                        ) : (
+                                            <>
+                                                <a href={`https://www.youtube.com/watch?v=${item.id}`} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 group relative">
+                                                    <div className="relative">
+                                                        <img src={item.thumbnailUrl} alt={item.name} className="w-16 h-16 object-cover rounded-lg flex-shrink-0 transition-transform group-hover:scale-105" />
+                                                        <DurationBadge seconds={durationSeconds} />
                                                     </div>
-                                                </td>
-                                                <td className="px-4 py-3 text-center font-medium text-gray-400">{formatNumber(vd.channelSubscriberCount)}</td>
-                                                <td className="px-4 py-3 text-center font-medium text-white">{formatNumber(vd.viewCount)}</td>
-                                                <td className="px-4 py-3 text-center">
-                                                    {activeTab === 'performance' ? (
-                                                        <PerformanceBadge ratio={ratio} />
-                                                    ) : (
-                                                        <span className="text-green-400 font-medium">${formatNumber(vd.estimatedRevenue)}</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-center">
-                                                    <div className="flex gap-2 justify-center">
-                                                        <button onClick={() => onShowVideoDetail(vd.id)} className="text-blue-400 hover:text-blue-300 text-xs border border-blue-500/30 px-2 py-1 rounded">영상</button>
-                                                        <button onClick={() => onShowChannelDetail(vd.channelId)} className="text-gray-400 hover:text-white text-xs border border-gray-600 px-2 py-1 rounded">채널</button>
+                                                </a>
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center">
+                                                        <button onClick={() => onShowVideoDetail(item.id)} className="font-semibold text-white truncate text-sm text-left hover:text-blue-400 transition-colors bg-transparent border-none p-0 cursor-pointer focus:outline-none" title={item.name}>{item.name}</button>
+                                                        {isShorts && <ShortsBadge />}
                                                     </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    }
-                                })}
-                            </tbody>
-                        </table>
+                                                    <div className="flex items-center gap-1.5 text-xs text-gray-400 truncate">
+                                                        {channelCountry && (
+                                                            <span title={countryOptions.find(c => c.value === channelCountry)?.label || channelCountry}>
+                                                                {COUNTRY_FLAGS[channelCountry] || channelCountry}
+                                                            </span>
+                                                        )}
+                                                        <button onClick={() => onShowChannelDetail((item as VideoRankingData).channelId)} className="hover:text-white transition-colors">{(item as VideoRankingData).channelName}</button>
+                                                    </div>
+                                                    {categoryName && <p className="text-xs font-semibold text-cyan-400 mt-1">#{categoryName}</p>}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                
+                                    {isChannel ? (
+                                        <>
+                                            <div className="col-span-2 text-center font-semibold text-sm text-blue-400">
+                                                {formatNumber((item as ChannelRankingData).viewsInPeriod)}
+                                            </div>
+                                            <div className="col-span-1 text-right font-semibold text-sm">{formatNumber((item as ChannelRankingData).subscriberCount)}</div>
+                                        </>
+                                    ) : isPerformance ? (
+                                        <>
+                                            <div className="col-span-2 text-center font-semibold text-sm text-gray-300">{formatNumber((item as VideoRankingData).viewCount)}</div>
+                                            <div className="col-span-1 text-center font-semibold text-sm text-gray-400">{formatNumber((item as VideoRankingData).channelSubscriberCount)}</div>
+                                            <div className="col-span-1 text-right">
+                                                 <button onClick={() => onShowVideoDetail(item.id)} className="text-xs text-blue-400 hover:text-blue-300 font-semibold">분석</button>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="col-span-2 text-center font-bold text-sm text-blue-400">{formatNumber((item as VideoRankingData).viewsPerHour)}</div>
+                                            <div className="col-span-1 text-right font-semibold text-sm">{formatNumber((item as VideoRankingData).viewCount)}</div>
+                                        </>
+                                    )}
+                                </div>
+                            )
+                        })}
                     </div>
                 </div>
 
                 {/* Mobile View */}
                 <div className="md:hidden space-y-3">
                     {results.map((item, index) => {
-                        if (activeTab === 'channels') {
-                            return <MobileChannelCard key={item.id} item={item as ChannelRankingData} rank={index + 1} />;
-                        } else {
-                            return <MobileVideoCard key={item.id} item={item as VideoRankingData} rank={index + 1} />;
-                        }
+                        if (!item) return null;
+                        const isChannel = 'subscriberCount' in item;
+                        const isPerformance = activeTab === 'performance';
+                        const channelInfo = isChannel ? { id: item.id, name: item.name } : { id: (item as VideoRankingData).channelId, name: (item as VideoRankingData).channelName };
+                        const categoryName = item.categoryId ? YOUTUBE_CATEGORIES_KR[item.categoryId] : null;
+                        const channelCountry = (item as ChannelRankingData | VideoRankingData).channelCountry;
+                        const displayRank = isPerformance ? index + 1 : item.rank;
+                        
+                        const isShorts = !isChannel && (item as any).isShorts;
+                        const durationSeconds = !isChannel ? (item as VideoRankingData).durationSeconds : 0;
+                        
+                        return (
+                            <div key={item.id} className="bg-gray-800/80 rounded-lg p-3 border border-gray-700/50">
+                                <div className="flex items-start gap-3 mb-3">
+                                    <div className="flex items-center pt-1 gap-2">
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-lg font-bold text-gray-500">{displayRank}</span>
+                                            {!isPerformance && <RankChange change={item.rankChange} />}
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            className="form-checkbox h-4 w-4 bg-gray-700 border-gray-600 rounded text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                                            checked={!!selectedChannels[channelInfo.id]}
+                                            onChange={(e) => handleChannelSelect(channelInfo, e.target.checked)}
+                                            title="채널 비교 선택"
+                                        />
+                                    </div>
+                                    
+                                    {isChannel ? (
+                                        <img src={item.thumbnailUrl} alt={item.name} className="w-12 h-12 object-cover rounded-full flex-shrink-0" />
+                                    ) : (
+                                        <div className="relative flex-shrink-0">
+                                            <img src={item.thumbnailUrl} alt={item.name} className="w-20 h-auto object-cover rounded-md" />
+                                            <DurationBadge seconds={durationSeconds} />
+                                        </div>
+                                    )}
+
+                                    <div className="min-w-0 flex-grow">
+                                        <div className="flex items-center">
+                                            <p className="font-semibold text-white truncate text-sm" title={item.name}>{item.name}</p>
+                                            {isShorts && <ShortsBadge />}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 text-xs text-gray-400 truncate">
+                                            {channelCountry && (
+                                                <span title={countryOptions.find(c => c.value === channelCountry)?.label || channelCountry}>
+                                                    {COUNTRY_FLAGS[channelCountry] || channelCountry}
+                                                </span>
+                                            )}
+                                            <span>{!isChannel && (item as VideoRankingData).channelName}</span>
+                                        </div>
+                                        {categoryName && <p className="text-xs font-semibold text-cyan-400 mt-1">#{categoryName}</p>}
+                                    </div>
+                                </div>
+
+                                {isChannel ? (
+                                    <div className="grid grid-cols-2 gap-2 text-center border-t border-gray-700/50 pt-3">
+                                        <div><p className="text-xs text-gray-400">인기 조회수</p><p className="font-semibold text-blue-400">{formatNumber((item as ChannelRankingData).viewsInPeriod)}</p></div>
+                                        <div><p className="text-xs text-gray-400">구독자</p><p className="font-semibold">{formatNumber((item as ChannelRankingData).subscriberCount)}</p></div>
+                                    </div>
+                                ) : (
+                                     <div className="grid grid-cols-2 gap-2 text-center border-t border-gray-700/50 pt-3">
+                                        <div><p className="text-xs text-gray-400">{isPerformance ? '구독자' : 'VPH'}</p><p className="font-semibold text-blue-400">{formatNumber(isPerformance ? (item as VideoRankingData).channelSubscriberCount : (item as VideoRankingData).viewsPerHour)}</p></div>
+                                        <div><p className="text-xs text-gray-400">조회수</p><p className="font-semibold">{formatNumber((item as VideoRankingData).viewCount)}</p></div>
+                                    </div>
+                                )}
+                                <div className="mt-3 flex gap-2">
+                                     {isChannel ? (
+                                        <button onClick={() => onShowChannelDetail(item.id)} className="w-full text-center px-3 py-2 text-xs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white">채널 분석</button>
+                                     ) : (
+                                        <>
+                                            <button onClick={() => onShowVideoDetail(item.id)} className="flex-1 text-center px-3 py-2 text-xs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white">상세 분석</button>
+                                            <a href={`https://www.youtube.com/watch?v=${item.id}`} target="_blank" rel="noopener noreferrer" className="flex-1 text-center px-3 py-2 text-xs font-semibold rounded bg-gray-600 hover:bg-gray-500 text-white">영상 보기</a>
+                                        </>
+                                     )}
+                                </div>
+                            </div>
+                        )
                     })}
                 </div>
             </div>
-        );
-    };
+        )
+    }
+    
+    let explanation = "";
+    if (activeTab === 'channels') {
+        explanation = "구독자 수 기준 '기초 순위'와 현재 인기도 기반 '조회수 순위'를 비교하여 순위 변동을 보여줍니다.";
+    } else if (activeTab === 'videos') {
+        explanation = "영상의 '누적 조회수 순위'와 현재 화제성을 나타내는 '시간당 조회수 순위'를 비교하여 순위 변동을 보여줍니다.";
+    } else if (activeTab === 'performance') {
+        explanation = "'조회수 / 구독자 수' 비율이 높은 순서대로 정렬합니다. 내 채널 규모보다 훨씬 높은 성과를 낸 '알고리즘 픽' 영상을 찾아보세요.";
+    }
+    
+    const countryLabel = countryOptions.find(c => c.value === country)?.label || country;
 
     return (
-        <div className="p-4 md:p-6 max-w-7xl mx-auto">
-            <header className="mb-6 space-y-4">
-                <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                        <span className="text-3xl">🏆</span> 랭킹 & 트렌드
-                    </h1>
-                    <div className="flex bg-gray-800 p-1 rounded-lg">
-                        {(['channels', 'videos', 'performance'] as const).map(tab => (
-                            <button
-                                key={tab}
-                                onClick={() => handleTabChange(tab)}
-                                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === tab ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
-                            >
-                                {tab === 'channels' && '인기 채널'}
-                                {tab === 'videos' && '인기 영상'}
-                                {tab === 'performance' && '급성장 (조대전)'}
-                            </button>
-                        ))}
+        <div className="p-4 md:p-6 lg:p-8">
+            <header className="mb-4">
+                <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-2">
+                    <div className="flex items-center justify-center space-x-2">
+                        <button 
+                            onClick={() => handleTabChange('channels')}
+                            className={`px-4 sm:px-6 py-2 text-xs sm:text-sm font-semibold rounded-full transition-colors ${activeTab === 'channels' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                        >
+                            인기 채널
+                        </button>
+                        <button 
+                            onClick={() => handleTabChange('videos')}
+                            className={`px-4 sm:px-6 py-2 text-xs sm:text-sm font-semibold rounded-full transition-colors ${activeTab === 'videos' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                        >
+                            인기 영상
+                        </button>
+                        <button 
+                            onClick={() => handleTabChange('performance')}
+                            className={`px-4 sm:px-6 py-2 text-xs sm:text-sm font-semibold rounded-full transition-colors flex items-center gap-1 ${activeTab === 'performance' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                        >
+                            <span className="hidden sm:inline">🚀</span> 급성장 (조대전)
+                        </button>
+                    </div>
+                    <div className="text-xs text-gray-500 bg-gray-800/50 px-2 py-1 rounded-md border border-gray-700">
+                        📅 데이터 기준: {lastUpdated || '불러오는 중...'}
                     </div>
                 </div>
-
-                <div className="bg-gray-800/60 p-4 rounded-xl border border-gray-700/50 flex flex-wrap items-center gap-4">
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-400">국가</label>
-                        <select 
-                            value={country} 
-                            onChange={e => setCountry(e.target.value)}
-                            className="bg-gray-700 border-gray-600 rounded text-sm py-1.5 px-3 focus:ring-blue-500"
+                
+                <div className="mb-4 p-3 bg-gray-900/50 rounded-lg">
+                    <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
+                        <div className="flex items-center gap-2">
+                            <label htmlFor="country-ranking" className="text-sm font-semibold text-gray-400">국가:</label>
+                            <span className="text-xl">{COUNTRY_FLAGS[country] || '🏳️'}</span>
+                            <select
+                                id="country-ranking"
+                                value={country}
+                                onChange={e => setCountry(e.target.value)}
+                                className="bg-gray-700 border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-xs p-1.5"
+                            >
+                                {countryOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label htmlFor="category-ranking" className="text-sm font-semibold text-gray-400">카테고리:</label>
+                            <select
+                                id="category-ranking"
+                                value={category}
+                                onChange={e => setCategory(e.target.value)}
+                                className="bg-gray-700 border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-xs p-1.5"
+                            >
+                                {YOUTUBE_CATEGORY_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            </select>
+                        </div>
+                         <div className="flex items-center gap-3 border-l border-gray-700 pl-4">
+                            <span className="text-sm font-semibold text-gray-400">카테고리 제외 필터:</span>
+                            {EXCLUDABLE_CATEGORIES.map(cat => (
+                                <label key={cat.id} className="flex items-center gap-1.5 cursor-pointer text-xs text-gray-300 hover:text-white">
+                                    <input
+                                        type="checkbox"
+                                        checked={excludedCategories.has(cat.id)}
+                                        onChange={(e) => handleExcludeCategoryChange(cat.id, e.target.checked)}
+                                        className="form-checkbox h-4 w-4 bg-gray-700 border-gray-600 rounded text-blue-600 focus:ring-blue-500"
+                                    />
+                                    {cat.label}
+                                </label>
+                            ))}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-gray-400">종류:</span>
+                            <div className="flex items-center gap-1 bg-gray-700/50 p-1 rounded-md">
+                                <button
+                                    onClick={() => setVideoFormat('all')}
+                                    className={`px-3 py-1 text-xs font-semibold rounded ${videoFormat === 'all' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}
+                                >
+                                    전체
+                                </button>
+                                <button
+                                    onClick={() => setVideoFormat('longform')}
+                                    className={`px-3 py-1 text-xs font-semibold rounded ${videoFormat === 'longform' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}
+                                >
+                                    3분 초과 (Long)
+                                </button>
+                                <button
+                                    onClick={() => setVideoFormat('shorts')}
+                                    className={`px-3 py-1 text-xs font-semibold rounded ${videoFormat === 'shorts' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}
+                                >
+                                    3분 이하 (Shorts)
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <button
+                            onClick={handleOpenCompareModal}
+                            disabled={Object.keys(selectedChannels).length < 2}
+                            className="px-4 py-1.5 text-xs font-semibold rounded-md bg-purple-600 hover:bg-purple-700 text-white disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed relative"
                         >
-                            {countryOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                        </select>
+                            채널 비교
+                            {Object.keys(selectedChannels).length > 0 && (
+                                <span className="absolute -top-2 -right-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">{Object.keys(selectedChannels).length}</span>
+                            )}
+                        </button>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-400">카테고리</label>
-                        <select 
-                            value={category} 
-                            onChange={e => setCategory(e.target.value)}
-                            className="bg-gray-700 border-gray-600 rounded text-sm py-1.5 px-3 focus:ring-blue-500"
-                        >
-                            {YOUTUBE_CATEGORY_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                        </select>
-                    </div>
-                    
-                    <div className="h-6 w-px bg-gray-700 hidden sm:block"></div>
-
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-400">제외:</span>
-                        {EXCLUDABLE_CATEGORIES.map(cat => (
-                            <label key={cat.id} className="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer hover:text-white">
-                                <input 
-                                    type="checkbox" 
-                                    checked={excludedCategories.has(cat.id)}
-                                    onChange={e => {
-                                        const newSet = new Set(excludedCategories);
-                                        if (e.target.checked) newSet.add(cat.id);
-                                        else newSet.delete(cat.id);
-                                        setExcludedCategories(newSet);
-                                    }}
-                                    className="rounded border-gray-600 bg-gray-700 text-blue-600"
-                                />
-                                {cat.label}
-                            </label>
-                        ))}
-                    </div>
-
-                    <div className="flex-grow"></div>
-
-                    <button 
-                        onClick={handleSearchClick}
-                        disabled={isLoading}
-                        className="w-full sm:w-auto px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-lg transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isLoading ? '조회 중...' : '순위 조회'}
-                    </button>
                 </div>
             </header>
-
-            <main>
-                <div className="flex justify-between items-center mb-2">
-                    <p className="text-sm text-gray-400">
-                        {activeTab === 'performance' ? '💡 구독자 대비 조회수가 높은 "알고리즘 픽" 영상입니다.' : '💡 실시간 인기 데이터를 기준으로 정렬됩니다.'}
-                    </p>
-                    {Object.keys(selectedChannels).length > 1 && (
-                        <button 
-                            onClick={() => setIsComparisonModalOpen(true)}
-                            className="text-sm text-blue-400 hover:text-blue-300 font-medium"
-                        >
-                            선택한 채널 비교하기 ({Object.keys(selectedChannels).length})
-                        </button>
-                    )}
+            
+            <div className="">
+                <div className="flex justify-between items-center mb-2 px-1">
+                    <h2 className="text-xl font-bold flex items-center gap-2">
+                        {countryLabel} 실시간 
+                        {activeTab === 'channels' && ' 인기 채널 순위'}
+                        {activeTab === 'videos' && ' 인기 영상 순위'}
+                        {activeTab === 'performance' && <span className="text-purple-400"> 조대전(급성장) 랭킹</span>}
+                    </h2>
+                    <p className="text-xs text-gray-500 hidden sm:block">{explanation}</p>
                 </div>
                 {renderResults()}
-            </main>
-
+            </div>
             {isComparisonModalOpen && (
-                <ComparisonModal 
-                    user={user} 
-                    appSettings={appSettings} 
-                    initialSelectedChannels={selectedChannels} 
-                    onClose={() => setIsComparisonModalOpen(false)} 
+                <ComparisonModal
+                    user={user}
+                    appSettings={appSettings}
+                    onClose={handleCloseCompareModal}
+                    initialSelectedChannels={selectedChannels}
                 />
             )}
         </div>

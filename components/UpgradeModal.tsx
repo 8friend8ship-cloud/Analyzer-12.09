@@ -17,7 +17,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ onClose }) => {
         
         <h2 className="text-2xl font-bold mb-2">분석 한도를 초과했습니다</h2>
         <p className="text-gray-400 mb-6">
-          Free 요금제의 월간 분석 10회를 모두 사용하셨습니다. 더 많은 분석을 실행하려면 요금제를 업그레이드해주세요.
+          Free 요금제의 월간 분석 30회를 모두 사용하셨습니다. 더 많은 분석을 실행하려면 요금제를 업그레이드해주세요.
         </p>
 
         <div className="w-full space-y-3">

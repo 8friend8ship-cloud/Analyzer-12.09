@@ -1,10 +1,16 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import ApiKeyModal from './ApiKeyModal';
 import EditUserModal from './EditUserModal';
 import type { AppSettings, Plan, User } from '../types';
 import { clearCache } from '../services/cacheService';
-import { getStoredUsers, upsertUser } from '../services/storageService';
+
+// Mock data for user management
+const initialUsers = [
+  { id: 1, name: 'Admin User', email: 'adm***@corp.com', isAdmin: true, plan: 'Biz', status: 'Active', expires: '2025. 12. 31.', },
+  { id: 2, name: 'Demo User', email: 'demo@user.com', isAdmin: false, plan: 'Free', status: 'N/A', expires: 'N/A', },
+  { id: 3, name: 'Pro User', email: 'pro@user.com', isAdmin: false, plan: 'Pro', status: 'Active', expires: '2025. 11. 20.', },
+];
 
 interface AdminDashboardProps {
   onBack: () => void;
@@ -12,16 +18,17 @@ interface AdminDashboardProps {
   onUpdateSettings: (updatedSettings: Partial<AppSettings>) => void;
 }
 
-// User interface for modal
+// This is a simplified version for the modal
 interface UserForModal {
-  id: string;
+  id: number;
   name: string;
   email: string;
   plan: string;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpdateSettings }) => {
-  const [users, setUsers] = useState<User[]>([]);
+  // User management state remains local as it's a mock feature for now
+  const [users, setUsers] = useState(initialUsers);
   
   // Local state for modal visibility and temporary data
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
@@ -32,16 +39,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load users from storage
-  const refreshUsers = () => {
-      const storedUsers = getStoredUsers();
-      setUsers(storedUsers);
-  };
-
-  useEffect(() => {
-      refreshUsers();
-  }, []);
-
+  // Handlers now update the parent state via onUpdateSettings prop
   const handlePlanChange = (planKey: 'pro' | 'biz', field: 'analyses' | 'price', value: string) => {
     const numericValue = parseInt(value, 10);
     if (!isNaN(numericValue) && numericValue >= 0) {
@@ -61,7 +59,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
   };
 
   const handleSaveSettings = (settingName: string) => {
-      alert(`${settingName} 설정이 저장되었습니다. 즉시 반영됩니다.`);
+      // Data is already saved on change, this button is for user feedback
+      alert(`${settingName} 설정이 저장되었습니다.`);
   };
 
   const openApiKeyModal = (key: keyof AppSettings['apiKeys'], name: string) => {
@@ -77,43 +76,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
     onUpdateSettings({ apiKeys: updatedApiKeys });
     setIsApiKeyModalOpen(false);
     setEditingApiKey(null);
-    alert(`${key} 키가 시스템에 영구 저장되었습니다.`);
   };
 
-  const openUserModal = (user: User) => {
+  const openUserModal = (user: (typeof initialUsers)[0]) => {
     setEditingUser({ id: user.id, name: user.name, email: user.email, plan: user.plan });
     setIsUserModalOpen(true);
   };
   
-  const handleSaveUser = (updatedUserModalData: UserForModal) => {
-      const targetUser = users.find(u => u.id === updatedUserModalData.id);
-      if (targetUser) {
-          const updatedUser = { ...targetUser, plan: updatedUserModalData.plan as any };
-          
-          // If plan changed to paid, set expiration (demo logic)
-          if (updatedUserModalData.plan !== 'Free' && targetUser.plan === 'Free') {
-              const date = new Date();
-              date.setMonth(date.getMonth() + 1);
-              updatedUser.planExpirationDate = date.toISOString().split('T')[0];
-          }
-
-          upsertUser(updatedUser);
-          refreshUsers(); // Reload list
-          alert(`${updatedUser.name}님의 정보를 수정했습니다.`);
-      }
+  const handleSaveUser = (updatedUser: UserForModal) => {
+      setUsers(prevUsers => prevUsers.map(u => u.id === updatedUser.id ? { ...u, plan: updatedUser.plan } : u));
       setIsUserModalOpen(false);
       setEditingUser(null);
-  };
-  
-  const handleExportSettings = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(settings, null, 2));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", "content-os-settings.json");
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-    alert('설정이 내보내졌습니다.');
   };
 
   const handleImportClick = () => {
@@ -131,6 +104,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
         if (typeof text !== 'string') throw new Error("File is not a text file");
         const importedSettings = JSON.parse(text);
         
+        // Construct a partial settings object to update
         const settingsToUpdate: Partial<AppSettings> = {};
         if (typeof importedSettings.freePlanLimit === 'number') {
             settingsToUpdate.freePlanLimit = importedSettings.freePlanLimit;
@@ -191,7 +165,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
                 <input type="number" id="free-limit" value={settings.freePlanLimit} onChange={(e) => handleFreePlanLimitChange(e.target.value)} className="block w-full max-w-xs bg-gray-700 border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2" />
                 <button onClick={() => handleSaveSettings('무료 플랜')} className="px-4 py-2 text-sm font-semibold rounded-md bg-blue-600 hover:bg-blue-700">설정 저장</button>
               </div>
-              <p className="mt-2 text-xs text-gray-500">모든 Free 플랜 사용자에게 즉시 적용됩니다.</p>
+              <p className="mt-2 text-xs text-gray-500">새로 가입하는 'Free' 플랜 사용자에게 적용되는 월간 분석 제한 횟수입니다.</p>
             </div>
           </div>
           
@@ -219,15 +193,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
           </div>
            <div className="bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
             <h2 className="text-xl font-semibold mb-2">설정 및 캐시 관리</h2>
-            <p className="text-sm text-gray-400 mb-4">현재 관리자 설정을 파일로 내보내거나, 백업 파일로부터 복원합니다.</p>
+            <p className="text-sm text-gray-400 mb-4">백업 파일로부터 설정을 복원합니다.</p>
             <div className="flex gap-4">
-              <button onClick={handleExportSettings} className="flex-1 px-4 py-3 text-sm font-bold rounded-md bg-green-600 hover:bg-green-700">설정 내보내기 (json)</button>
               <button onClick={handleImportClick} className="flex-1 px-4 py-3 text-sm font-bold rounded-md bg-blue-600 hover:bg-blue-700">설정 가져오기 (json)</button>
               <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" style={{ display: 'none' }} />
             </div>
             <div className="mt-4 pt-4 border-t border-gray-700/50">
                  <h3 className="font-semibold text-gray-300 mb-2">세션 캐시 관리</h3>
-                 <p className="text-xs text-gray-400 mb-3">현재 브라우저 세션에 저장된 API 응답 캐시를 지웁니다.</p>
+                 <p className="text-xs text-gray-400 mb-3">현재 브라우저 세션에 저장된 API 응답 캐시를 지웁니다. 데이터가 갱신되지 않는 문제가 있을 때 사용하세요.</p>
                  <button onClick={handleClearCache} className="w-full px-4 py-3 text-sm font-bold rounded-md bg-red-600 hover:bg-red-700">세션 캐시 전체 삭제</button>
             </div>
           </div>
@@ -237,66 +210,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
         {/* Right Column */}
         <div className="space-y-6">
           <div className="bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
-            <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">가입자 관리 ({users.length}명)</h2>
-                <button onClick={refreshUsers} className="px-4 py-2 text-sm font-semibold rounded-md bg-gray-600 hover:bg-gray-500">새로고침</button>
-            </div>
-            <div className="overflow-x-auto max-h-[500px]">
-                <table className="w-full text-sm text-left">
-                    <thead className="text-xs text-gray-400 sticky top-0 bg-gray-900">
-                        <tr>
-                            <th className="p-2">이름</th>
-                            <th className="p-2">요금제</th>
-                            <th className="p-2">사용량</th>
-                            <th className="p-2">만료일</th>
-                            <th className="p-2"></th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-700/50">
-                        {users.map(user => (
-                            <tr key={user.id} className="hover:bg-gray-700/30">
-                                <td className="p-2">
-                                    <div className="font-semibold text-white">{user.name} {user.isAdmin && <span className="text-xs text-yellow-400 ml-1">(Admin)</span>}</div>
-                                    <div className="text-gray-400 text-xs">{user.email}</div>
-                                </td>
-                                <td className="p-2">
-                                    <span className={`px-2 py-0.5 text-xs rounded-full ${user.plan === 'Biz' ? 'bg-purple-500/20 text-purple-300' : user.plan === 'Pro' ? 'bg-blue-500/20 text-blue-300' : 'bg-gray-600/20 text-gray-400'}`}>
-                                        {user.plan}
-                                    </span>
-                                </td>
-                                <td className="p-2 text-gray-300">{user.usage}회</td>
-                                <td className="p-2 text-gray-400 text-xs">{user.planExpirationDate || '-'}</td>
-                                <td className="p-2 text-right">
-                                    <button onClick={() => openUserModal(user)} className="text-blue-400 hover:text-blue-300 text-xs bg-gray-700 px-2 py-1 rounded">수정</button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+            <div className="flex justify-between items-center mb-4"><h2 className="text-xl font-semibold">사용자 관리</h2><button className="px-4 py-2 text-sm font-semibold rounded-md bg-gray-600 hover:bg-gray-500">새로고침</button></div>
+            <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="text-xs text-gray-400"><tr><th className="p-2">이름</th><th className="p-2">요금제</th><th className="p-2">상태</th><th className="p-2">만료일</th><th className="p-2"></th></tr></thead><tbody className="divide-y divide-gray-700/50">{users.map(user => (<tr key={user.id}><td className="p-2"><div className="font-semibold text-white">{user.name} {user.isAdmin && <span className="text-xs text-yellow-400">(Admin)</span>}</div><div className="text-gray-400">{user.email}</div></td><td className="p-2">{user.plan}</td><td className="p-2">{user.status === 'Active' ? (<span className="px-2 py-1 text-xs font-semibold bg-green-500/30 text-green-300 rounded-full">{user.status}</span>) : (<span className="text-gray-500">{user.status}</span>)}</td><td className="p-2">{user.expires}</td><td className="p-2 text-right"><button onClick={() => openUserModal(user)} className="text-blue-400 hover:text-blue-300">수정</button></td></tr>))}</tbody></table></div>
           </div>
         </div>
         
         <div className="lg:col-span-2 bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
-          <h2 className="text-xl font-semibold mb-2">공용 시스템 API 키 관리</h2>
-          <p className="text-sm text-gray-400 mb-6">여기에 저장된 키는 개인 키가 없는 사용자들에게 기본으로 제공됩니다.<br/>한 번 저장하면 관리자 화면에서 영구적으로 유지됩니다.</p>
+          <h2 className="text-xl font-semibold mb-2">API 키 관리</h2><p className="text-sm text-gray-400 mb-6">어플리케이션에서 사용하는 외부 API 키를 관리합니다. 키는 안전하게 저장됩니다.</p>
           <div className="space-y-4">
             {apiConfigs.map(config => (
-              <div key={config.key} className="bg-gray-900/50 p-4 rounded-md flex justify-between items-center border border-gray-700/50">
+              <div key={config.key} className="bg-gray-900/50 p-4 rounded-md flex justify-between items-center">
                 <div>
                   <h3 className="font-semibold text-white">{config.name}</h3>
                   <p className="text-xs text-gray-400 mt-1">{config.description}</p>
                   {settings.apiKeys[config.key] ? (
-                     <div className="flex items-center gap-2 mt-2">
-                        <span className="text-green-400 text-sm font-semibold">✅ 저장됨 (••••••••)</span>
-                        <span className="text-xs text-gray-500">정상 작동 중</span>
-                     </div>
+                     <p className="text-sm font-semibold text-green-400 mt-2">설정됨</p>
                   ) : (
-                     <p className="text-sm font-semibold text-yellow-400 mt-2">⚠️ 설정되지 않음</p>
+                     <p className="text-sm font-semibold text-yellow-400 mt-2">설정되지 않음</p>
                   )}
                 </div>
-                <button onClick={() => openApiKeyModal(config.key, config.name)} className="px-4 py-2 text-sm font-semibold rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200 border border-gray-600">
-                   {settings.apiKeys[config.key] ? '키 관리/수정' : '키 등록'}
+                <button onClick={() => openApiKeyModal(config.key, config.name)} className="px-4 py-2 text-sm font-semibold rounded-md bg-gray-600 hover:bg-gray-500">
+                   {settings.apiKeys[config.key] ? '키 수정' : '키 추가'}
                 </button>
               </div>
             ))}
@@ -314,8 +248,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
       )}
       {isUserModalOpen && editingUser && (
         <EditUserModal 
-            user={{...editingUser, id: 0} as any} // Prop type compatibility mapping
-            onSave={(u) => handleSaveUser({...u, id: editingUser.id} as UserForModal)}
+            user={editingUser}
+            onSave={handleSaveUser}
             onClose={() => setIsUserModalOpen(false)}
         />
       )}
