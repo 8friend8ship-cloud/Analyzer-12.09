@@ -10,7 +10,11 @@ interface ErrorBoundaryState {
 }
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState = { hasError: false };
+  // FIX: Refactored state initialization to use a constructor for broader compatibility. This may resolve issues with 'this.props' type inference in some environments.
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
 
   static getDerivedStateFromError(_: Error): ErrorBoundaryState {
     // Update state so the next render will show the fallback UI.
