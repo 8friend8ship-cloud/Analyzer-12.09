@@ -179,7 +179,7 @@ const VideoDetailView: React.FC<VideoDetailViewProps> = ({ videoId, user, appSet
                             )}
                         </div>
                     ) : (
-                        deepDiveReport && (
+                        hasAnalyzed && deepDiveReport && (
                             <div className="animate-fade-in">
                                 <AIReportView report={deepDiveReport} type="video" />
                             </div>
