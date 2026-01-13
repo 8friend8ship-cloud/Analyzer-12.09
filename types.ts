@@ -8,7 +8,6 @@ export interface VideoData {
   publishedAt: string; // ISO 8061 string
   subscribers: number;
   viewCount: number;
-  viewsPerHour: number;
   likeCount: number;
   commentCount: number;
   durationMinutes: number;
@@ -19,8 +18,8 @@ export interface VideoData {
 export type AnalysisMode = 'keyword' | 'channel';
 
 export type VideoLength = 'any' | 'short' | 'medium' | 'long';
-export type Period = 'any' | '7' | '30';
-export type SortBy = 'viewCount' | 'publishedAt' | 'viewsPerHour' | 'engagementRate' | 'relevance';
+export type Period = 'any' | '7' | '30' | '90';
+export type SortBy = 'viewCount' | 'publishedAt' | 'engagementRate' | 'relevance';
 export type VideoFormat = 'any' | 'longform' | 'shorts';
 
 export interface FilterState {
@@ -35,7 +34,7 @@ export interface FilterState {
 }
 
 export const YOUTUBE_CATEGORY_OPTIONS = [
-    { label: "전체 카테고리", value: "all" },
+    { label: "전체 카테고리 (All)", value: "all" },
     { label: "Entertainment (24)", value: "24" },
     { label: "People & Blogs (22)", value: "22" },
     { label: "Gaming (20)", value: "20" },
@@ -76,7 +75,6 @@ export interface ChannelVideo {
   engagementRate: number;
   isShorts: boolean;
   durationMinutes: number;
-  viewsPerHour: number;
   tags?: string[]; // Added optional tags for internal processing
 }
 
@@ -88,7 +86,7 @@ export interface SurgingVideos {
 
 export interface FormatStats {
   totalVideos: number;
-  avgViews: number;
+  totalViewsInPeriod: number;
   avgEngagementRate: number;
   avgLikes: number;
   avgComments: number;
@@ -100,12 +98,8 @@ export interface TrendPoint {
   engagements: number;
   likes: number;
   thumbnails?: string[];
-}
-
-export interface PerformanceTrendData {
-  longFormStats: FormatStats;
-  shortsStats: FormatStats;
-  dailyTrends: TrendPoint[];
+  subscribers?: number;
+  subscriberChange?: number;
 }
 
 export interface AudienceProfile {
@@ -114,6 +108,12 @@ export interface AudienceProfile {
   genderRatio: { label: string; value: number }[];
   ageGroups: { label: string; value: number }[];
   topCountries: { label: string; value: number }[];
+}
+
+export interface MonthlyStat {
+    month: string;
+    views?: number;
+    subscribers?: number;
 }
 
 export interface ChannelAnalysisData {
@@ -133,7 +133,7 @@ export interface ChannelAnalysisData {
       last7Days: number;
       last24Hours: number;
     };
-    competitiveness: {
+    channelFocus: {
       categories: string[];
       tags: string[];
     };
@@ -141,22 +141,23 @@ export interface ChannelAnalysisData {
   };
   videoList: ChannelVideo[];
   surgingVideos: SurgingVideos;
-  performanceTrend: PerformanceTrendData;
   audienceProfile: AudienceProfile;
+  lastFetched?: string; // ISO timestamp
+  deepDiveReport?: AI6StepReport;
 }
 
 export interface AIInsights {
   summary: string;
   patterns: string[];
-  recommendations: string[];
+  suggestions: string[];
 }
 
 export interface ChannelSummary {
   name: string;
-  strengths: string[];
+  observedCharacteristics: string[];
   stats: {
-    '평균 조회수': string;
-    '평균 영상 길이': string;
+    '평균 조회수 (Avg Views)': string;
+    '평균 영상 길이 (Avg Length)': string;
   };
 }
 
@@ -164,16 +165,18 @@ export interface ComparisonInsights {
   summary: string;
   channelA_summary: ChannelSummary;
   channelB_summary: ChannelSummary;
-  recommendation: string;
+  suggestion: string;
 }
 
 export interface SimilarChannelData {
   id: string;
   name: string;
+  handle: string;
   thumbnailUrl: string;
   subscriberCount: number;
+  totalViews: number;
   videoCount: number;
-  reason: string;
+  similarityScore: number;
 }
 
 export interface CommentInsights {
@@ -182,34 +185,19 @@ export interface CommentInsights {
   negativePoints: string[];
 }
 
-export interface DeepDiveInsights {
-  topicAnalysis: {
-    summary: string;
-    successFactors: string[];
-  };
-  audienceAnalysis: {
-    summary: string;
-    engagementPoints: string[];
-  };
-  performanceAnalysis: {
-    summary: string;
-    trafficSources: string[];
-    subscriberImpact: string;
-  };
-  retentionStrategy: {
-    summary: string;
-    improvementPoints: {
-      point: string;
-      reason: string;
-      productionTip: string;
-      editingTip: string;
-    }[];
-  };
-  strategicRecommendations: {
-    contentStrategy: string;
-    growthStrategy: string;
-    newTopics: string[];
-  };
+export interface EngagementLever {
+    type: 'comment' | 'like' | 'subscribe';
+    recommendation: string;
+}
+
+export interface AI6StepReport {
+    currentStage: string;
+    viewerValue: string;
+    dataFacts: string[];
+    interpretation: string;
+    engagementLevers: EngagementLever[];
+    nextAction: string;
+    hybridFormulaAnalysis?: { [key: string]: string };
 }
 
 export interface VideoComment {
@@ -241,7 +229,7 @@ export interface VideoDetailData {
       thumbnailUrl: string;
   }[];
   commentInsights?: CommentInsights;
-  deepDiveInsights?: DeepDiveInsights;
+  deepDiveReport?: AI6StepReport;
 }
 
 export interface Plan {
@@ -250,13 +238,28 @@ export interface Plan {
     price: number;
 }
 
+export interface FeatureUsage {
+  used: number;
+  limit: number;
+}
+
+export interface UserUsage {
+  search: FeatureUsage;
+  channelDetail: FeatureUsage;
+  videoDetail: FeatureUsage;
+  aiInsight: FeatureUsage;
+  aiContentMaker: FeatureUsage;
+  outlierAnalysis: FeatureUsage;
+  credits: FeatureUsage;
+}
+
 export interface User {
   id: string;
   name: string;
   email: string;
   isAdmin: boolean;
   plan: 'Free' | 'Pro' | 'Biz';
-  usage: number; // monthly analyses used
+  usage: UserUsage;
   password?: string;
   planExpirationDate?: string;
 }
@@ -286,7 +289,8 @@ export interface ChannelRankingData {
     channelHandle?: string;
     thumbnailUrl: string;
     subscriberCount: number;
-    viewsInPeriod: number;
+    newSubscribersInPeriod: number;
+    newViewsInPeriod: number;
     videoCount: number;
     viewCount: number;
     rank: number;
@@ -294,6 +298,10 @@ export interface ChannelRankingData {
     categoryId?: string;
     description?: string;
     channelCountry?: string;
+    tags?: string[];
+    grade?: string;
+    categoryTags?: string[];
+    latestVideoThumbnailUrl?: string;
 }
 
 export interface VideoRankingData {
@@ -305,7 +313,6 @@ export interface VideoRankingData {
     thumbnailUrl: string;
     publishedDate: string;
     viewCount: number; // Total views
-    viewsPerHour: number;
     rankChange: number;
     channelTotalViews: number;
     channelSubscriberCount: number;
@@ -315,6 +322,10 @@ export interface VideoRankingData {
     durationSeconds: number;
     channelCountry?: string;
     isShorts: boolean;
+    description?: string;
+    tags?: string[];
+    channelThumbnailUrl?: string;
+    channelCategoryTags?: string[];
 }
 
 export interface RetentionDataPoint {
@@ -340,8 +351,26 @@ export interface VideoAnalytics {
 
 export interface AIAnalyticsInsight {
     summary: string;
-    strengths: string[];
-    opportunities: string[];
+    positivePatterns: string[];
+    growthAreas: string[];
+}
+
+export interface BenchmarkComparisonData {
+    myChannelName: string;
+    benchmarkChannelName: string;
+    comparison: {
+        metric: string;
+        myValue: string;
+        benchmarkValue: string;
+    }[];
+    aiSummary: string;
+}
+
+export interface DailyStat {
+    date: string;
+    views: number;
+    subscribersGained: number;
+    subscribersLost: number;
 }
 
 export interface MyChannelAnalyticsData {
@@ -356,7 +385,7 @@ export interface MyChannelAnalyticsData {
         avgViewDurationSeconds: number;
         impressionsLast30d: number;
     };
-    dailyStats: { date: string; netSubscribers: number; }[];
+    dailyStats: DailyStat[];
     aiGrowthInsight: AIAnalyticsInsight;
     funnelMetrics: {
         impressions: number;
@@ -389,25 +418,8 @@ export interface MyChannelAnalyticsData {
     audienceProfile: AudienceProfile;
 }
 
-export interface BenchmarkComparisonData {
-    myChannelKpi: MyChannelAnalyticsData['kpi'];
-    benchmarkChannelKpi: MyChannelAnalyticsData['kpi'];
-    dailyComparison: {
-        date: string;
-        myChannelViews: number;
-        benchmarkViews: number;
-    }[];
-    aiInsight: {
-        summary: string;
-        strength: string;
-        weakness: string;
-        recommendation: string;
-    };
-}
-
 export interface AIThumbnailInsights {
   analysis: {
-    // THUMBNAIL
     focalPoint: string;
     colorContrast: string;
     faceEmotionCTR: string;
@@ -415,13 +427,11 @@ export interface AIThumbnailInsights {
     brandingConsistency: string;
     mobileReadability: string;
     categoryRelevance: string;
-    // TITLE
     titlePatterns: string;
     titleLength: string;
     titleCredibility: string;
   };
   results: {
-    // THUMBNAIL
     thumbnailSummary: string;
     improvedConcepts: { concept: string; description: string; }[];
     textCandidates: string[];
@@ -430,7 +440,6 @@ export interface AIThumbnailInsights {
       fonts: string;
       layout: string;
     };
-    // TITLE
     titleSummary: string;
     titleSuggestions: { title: string; reason: string; }[];
   };
@@ -476,57 +485,69 @@ export interface ThumbnailViewState {
     insights: AIThumbnailInsights | null;
 }
 
-export interface RankingViewState {
+export type VideoRankingMetric = 'daily' | 'weekly' | 'monthly';
+
+export type ChannelRankingMetric = 
+  'subs_daily' | 'subs_weekly' | 'subs_monthly' | 'subs_total' |
+  'views_daily' | 'views_weekly' | 'views_monthly' | 'views_total';
+
+export interface TopChartsViewState {
     activeTab: 'channels' | 'videos' | 'performance';
     country: string;
     category: string;
     excludedCategories: string[];
     videoFormat: 'all' | 'longform' | 'shorts';
     results: (ChannelRankingData | VideoRankingData)[];
-    selectedChannels: Record<string, { name: string }>;
+    selectedChannels: Record<string, { name: string; }>;
+    videoRankingMetric?: VideoRankingMetric;
+    channelRankingMetric?: ChannelRankingMetric;
 }
 
-// --- Algorithm Finder Types ---
-export interface AlgorithmOption {
+// --- Identity Finder Types ---
+export interface IdentityOption {
     text: string; // The "Thumbnail" text
     traits: {
-        category: string; // e.g. 'Music', 'Movie', 'Comedy', 'Life', 'Knowledge'
-        age: string; // e.g. '10-15', '16-19', '20-24', '30-39' (Detailed)
-        tone: string; // e.g. 'Fun', 'Healing', 'Info', 'Shock'
-        keyword: string; // e.g. 'Kpop', 'Vlog', 'Money'
-        gender?: 'Male' | 'Female' | 'Neutral'; // New trait
+        category: string;
+        age: string;
+        tone: string;
+        keyword: string;
+        gender?: 'Male' | 'Female' | 'Neutral';
     };
 }
 
-export interface AlgorithmStage {
+export interface IdentityStage {
     id: string; // A, B, C, D, E, F
     title: string;
     description: string;
-    options: AlgorithmOption[];
+    options: IdentityOption[];
 }
 
-export interface AlgorithmResult {
-    score: number; // 0-100 Consistency Score
+export interface IdentityResult {
+    score: number;
     profile: {
         category: string;
         age: string;
         tone: string;
         keyword: string;
-        persona: string; // Detailed description
-        gender?: string; // e.g. "여성향", "남성향"
+        persona: string;
+        gender?: string;
     };
-    seriesRecommendations: {
+    seriesIdeas: {
         title: string;
         concept: string;
+        concept_en: string;
     }[];
-    recommendedKeywords: { // New field for Core/Side keywords
+    suggestedKeywords: {
         core: string[];
         side: string[];
     };
     statusMessage: string;
+    statusMessage_en: string;
     strategy: string;
-    analysisLog: string[]; // Reasons for score deductions
-    recommendedChannels: {
+    strategy_en: string;
+    analysisLog: string[];
+    analysisLog_en: string[];
+    suggestedChannels: {
         korea: { name: string; reason: string; }[];
         global: { name: string; reason: string; }[];
     };
@@ -543,3 +564,35 @@ export interface CollectionItem {
     url: string;
     raw: any; // Store raw data for potential re-analysis or detail view
 }
+
+// --- Influencer Marketing Types ---
+export interface InfluencerChannelResult {
+    id: string;
+    name: string;
+    thumbnailUrl: string;
+    subscriberCount: number;
+    matchRate: number; // Renamed from algorithmScore
+    algorithmReason: string;
+    email?: string;
+    emailRevealed?: boolean;
+    isMyChannel?: boolean;
+}
+
+export interface InfluencerAnalysisDetail {
+    channelName: string;
+    keyword: string;
+    coreSummary: string;
+    audienceAlignment: {
+        score: number;
+        reason: string;
+    };
+    contentSynergy: string;
+    kpiRecommendations: {
+        core: string[];
+        secondary: string[];
+    };
+    finalConclusion: string;
+}
+
+// FIX: Add type alias for RankingViewState to maintain compatibility with older components.
+export type RankingViewState = TopChartsViewState;

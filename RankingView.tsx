@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Spinner from './common/Spinner';
 import { fetchRankingData } from '../services/youtubeService';
-import type { User, AppSettings, ChannelRankingData, VideoRankingData, TopChartsViewState, VideoRankingMetric, ChannelRankingMetric } from '../types';
+import type { User, AppSettings, ChannelRankingData, VideoRankingData, RankingViewState, VideoRankingMetric, ChannelRankingMetric } from '../types';
 import { YOUTUBE_CATEGORY_OPTIONS, COUNTRY_FLAGS } from '../types';
+import ComparisonModal from './ComparisonModal';
 import Button from './common/Button';
 import HelpTooltip from './common/HelpTooltip';
 
-interface TopChartsViewProps {
+interface RankingViewProps {
     user: User;
     appSettings: AppSettings;
     onShowChannelDetail: (channelId: string) => void;
     onShowVideoDetail: (videoId: string) => void;
-    savedState: TopChartsViewState | null;
-    onSaveState: (state: TopChartsViewState) => void;
+    savedState: RankingViewState | null;
+    onSaveState: (state: RankingViewState) => void;
 }
 
 type ActiveTab = 'channels' | 'videos' | 'performance';
@@ -130,7 +131,7 @@ const SparklineGraph: React.FC = () => {
     );
 };
 
-const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShowChannelDetail, onShowVideoDetail, savedState, onSaveState }) => {
+const RankingView: React.FC<RankingViewProps> = ({ user, appSettings, onShowChannelDetail, onShowVideoDetail, savedState, onSaveState }) => {
     const [activeTab, setActiveTab] = useState<ActiveTab>(savedState?.activeTab || 'channels');
     const [results, setResults] = useState<(ChannelRankingData | VideoRankingData)[]>(savedState?.results || []);
     const [isLoading, setIsLoading] = useState(false);
@@ -140,6 +141,9 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
     const [country, setCountry] = useState(savedState?.country || 'KR');
     const [category, setCategory] = useState(savedState?.category || 'all');
     const [limit] = useState(100);
+    
+    const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
+    const [selectedChannels, setSelectedChannels] = useState<Record<string, { name: string }>>(savedState?.selectedChannels || {});
     
     const [excludedCategories, setExcludedCategories] = useState<Set<string>>(
         savedState?.excludedCategories ? new Set(savedState.excludedCategories) : new Set()
@@ -176,12 +180,24 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
             excludedCategories: Array.from(excludedCategories),
             videoFormat,
             results,
-            selectedChannels: {}, // Feature removed
+            selectedChannels,
             videoRankingMetric,
             channelRankingMetric
         });
-    }, [activeTab, country, category, excludedCategories, videoFormat, results, videoRankingMetric, channelRankingMetric, onSaveState]);
+    }, [activeTab, country, category, excludedCategories, videoFormat, results, selectedChannels, videoRankingMetric, channelRankingMetric, onSaveState]);
 
+    const handleChannelSelect = useCallback((channel: { id: string, name: string }, isSelected: boolean) => {
+        setSelectedChannels(prev => {
+            const newSelection = { ...prev };
+            if (isSelected) {
+                newSelection[channel.id] = { name: channel.name };
+            } else {
+                delete newSelection[channel.id];
+            }
+            return newSelection;
+        });
+    }, []);
+    
     const handleExcludeCategoryChange = useCallback((categoryId: string, checked: boolean) => {
         setExcludedCategories(prev => {
             const newSet = new Set(prev);
@@ -193,10 +209,21 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
             return newSet;
         });
     }, []);
+
+    const handleOpenCompareModal = () => {
+        const selected = Object.entries(selectedChannels);
+        if (selected.length !== 2) {
+            alert('AI 비교 요약을 위해서는 정확히 2개의 채널을 선택해주세요. (Please select exactly 2 channels for AI comparison summary.)');
+            return;
+        }
+        setIsComparisonModalOpen(true);
+    };
+    const handleCloseCompareModal = () => setIsComparisonModalOpen(false);
     
     const handleTabChange = (tab: ActiveTab) => {
         setResults([]);
         setActiveTab(tab);
+        setSelectedChannels({});
         setVideoFormat('all');
         setIsInitial(true);
         setError(null);
@@ -304,7 +331,7 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
                                     </th>
                                     <th className="p-3 whitespace-nowrap">
                                         <div className="flex items-center gap-1">
-                                            구독자 증감 (Growth)
+                                            구독자 급상승 (Growth)
                                             <HelpTooltip text={"선택된 기간(주간/월간) 동안 순수하게 증가한 구독자 수입니다.\n\n(The net increase in subscribers during the selected period (weekly/monthly).)"} />
                                         </div>
                                     </th>
@@ -315,12 +342,14 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
                             <tbody className="divide-y divide-gray-700/50">
                                 {results.map(item => {
                                     const channel = item as ChannelRankingData;
+                                    const channelInfo = { id: channel.id, name: channel.name };
                                     
                                     return (
                                         <tr key={channel.id} className="hover:bg-gray-700/40">
                                             <td className="p-3 font-semibold text-gray-400">{channel.rank}</td>
                                             <td className="p-3">
                                                 <div className="flex items-center gap-3">
+                                                    <input type="checkbox" className="form-checkbox h-4 w-4 bg-gray-700 border-gray-600 rounded text-blue-600 focus:ring-blue-500 flex-shrink-0" checked={!!selectedChannels[channelInfo.id]} onChange={(e) => handleChannelSelect(channelInfo, e.target.checked)} />
                                                     <img src={channel.thumbnailUrl} alt={channel.name} className="w-10 h-10 rounded-full" />
                                                     <div className="min-w-0">
                                                         <p className="font-semibold text-white truncate">{channel.name}</p>
@@ -360,7 +389,7 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
                                         <th className="p-3 text-center">
                                             <div className="flex items-center justify-center gap-1">
                                                 성과 배수 (Ratio)
-                                                <HelpTooltip text={"이 값은 YouTube API 정책 준수를 위해 공개 데이터를 기반으로 단순 계산된 참고용 지표입니다.\n계산법: 영상 조회수 ÷ 채널 구독자 수\n\nThis is a reference metric simply calculated from public data to comply with YouTube API Policies.\nFormula: Video Views ÷ Channel Subscribers"} />
+                                                <HelpTooltip text={"계산법: 영상 조회수 ÷ 채널 구독자 수. 채널 규모 대비 영상의 상대적 성과를 배수로 나타냅니다.\n\n(Calculation: Video Views ÷ Channel Subscribers. Shows relative video performance as a multiple compared to channel size.)"} />
                                             </div>
                                         </th>
                                     }
@@ -370,12 +399,14 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
                             <tbody className="divide-y divide-gray-700/50 align-middle">
                                 {results.map((item, index) => {
                                     const video = item as VideoRankingData;
+                                    const channelInfo = { id: video.channelId, name: video.channelName };
                                     
                                     return (
                                         <tr key={video.id} className="hover:bg-gray-700/40">
                                             <td className="p-3 text-center font-semibold text-gray-400">{index + 1}</td>
                                             <td className="p-3">
                                                 <div className="flex items-start gap-3">
+                                                    <input type="checkbox" className="form-checkbox h-4 w-4 bg-gray-700 border-gray-600 rounded text-blue-600 focus:ring-blue-500 flex-shrink-0 mt-1" checked={!!selectedChannels[channelInfo.id]} onChange={(e) => handleChannelSelect(channelInfo, e.target.checked)} />
                                                     <img src={video.thumbnailUrl} alt={video.name} className="w-24 h-auto rounded flex-shrink-0" />
                                                     <div className="min-w-0">
                                                         <button onClick={() => onShowVideoDetail(video.id)} className="font-semibold text-white line-clamp-2 text-sm text-left hover:text-blue-400">{video.name}</button>
@@ -423,7 +454,10 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
 
     const countryLabel = countryOptions.find(c => c.value === country)?.label || country;
     const trendTooltipText = "동향 데이터는 Content OS가 API를 통해 얻은 값을 기반으로 한 단순 계산치입니다. 주간은 직전 주와의 증감이며, 월간은 28일 정책에 따라 폐기 전 데이터를 합산하여 계산합니다. 모든 데이터는 YouTube API 정책을 준수합니다.\n\n[For Reviewers]\nTrend data is a calculated value based on data obtained by Contents OS and is not directly from YouTube Analytics. It complies with YouTube API policies.";
+    const numSelected = Object.keys(selectedChannels).length;
     
+    const comparisonChannelEntries: [string, { name: string }][] = Object.entries(selectedChannels);
+
     return (
         <div className="p-4 md:p-6 lg:p-8">
             <header className="mb-4">
@@ -444,6 +478,15 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
                            <Button onClick={handleSearch} disabled={isLoading} className="text-sm py-2 px-6 whitespace-nowrap">
                                {isLoading ? 'Searching...' : 'Search'}
                            </Button>
+                           <button 
+                               onClick={handleOpenCompareModal} 
+                               disabled={numSelected !== 2}
+                               className="px-4 py-2 text-xs font-semibold rounded-md bg-purple-600 hover:bg-purple-700 text-white relative disabled:opacity-50 disabled:bg-gray-600 disabled:cursor-not-allowed"
+                               title={numSelected !== 2 ? "AI 요약을 위해 2개 채널을 선택하세요" : "두 채널 AI 비교 요약 보기"}
+                           >
+                               AI 요약
+                               {numSelected > 0 && <span className="absolute -top-2 -right-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">{numSelected}</span>}
+                           </button>
                         </div>
                     </div>
                 </div>
@@ -513,10 +556,12 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
                         <h2 className="text-xl font-bold flex items-center justify-center gap-2">
                           {countryLabel} {activeTab === 'channels' && 'Top Channels'}{activeTab === 'videos' && 'Top Videos'}
                           {activeTab === 'performance' && 
-                            <>
-                                <span className="text-purple-400"> 성과 배수 (Performance Ratio)</span>
-                                <HelpTooltip text={"이 값은 YouTube API 정책 준수를 위해 공개 데이터를 기반으로 단순 계산된 참고용 지표입니다.\n계산법: 영상 조회수 ÷ 채널 구독자 수\n\nThis is a reference metric simply calculated from public data to comply with YouTube API Policies.\nFormula: Video Views ÷ Channel Subscribers"} />
-                            </>
+                            <div className="relative inline-flex items-center gap-2 group">
+                                <span className="text-purple-400">콘텐츠 OS 성과 배수 (자체 계산 지표)</span>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-80 p-2 text-xs text-left text-white bg-gray-900 border border-gray-700 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 whitespace-pre-line">
+                                    {'계산법: (조회수 ÷ 구독자 수). 채널 규모와 상관없이 \'시청자의 선택을 받은\' 영상을 찾는 데 유용한 Contents OS의 자체 참고 지표입니다.\n\n[For Reviewers]\nThis is a proprietary reference metric calculated as (Views ÷ Subscribers). It helps identify high-performing videos regardless of channel size and is NOT an official YouTube score.'}
+                                </div>
+                            </div>
                           }
                         </h2>
                         <p className="text-xs text-yellow-300 bg-yellow-900/30 p-3 rounded-md border border-yellow-500/30 mt-1 mb-2">
@@ -526,8 +571,16 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
                     {renderResults()}
                 </main>
             </div>
+            {isComparisonModalOpen && comparisonChannelEntries.length === 2 && (
+                <ComparisonModal
+                    onClose={handleCloseCompareModal}
+                    channelAInfo={{ id: comparisonChannelEntries[0][0], name: comparisonChannelEntries[0][1].name }}
+                    channelBInfo={{ id: comparisonChannelEntries[1][0], name: comparisonChannelEntries[1][1].name }}
+                    appSettings={appSettings}
+                />
+            )}
         </div>
     );
 };
 
-export default TopChartsView;
+export default RankingView;

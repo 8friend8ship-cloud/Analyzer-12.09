@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { fetchChannelAnalysis, fetchSimilarChannels, analyzeChannelDeeply } from '../services/youtubeService';
 import { addToCollection, createChannelCollectionItem } from '../services/collectionService';
@@ -10,7 +9,6 @@ import AdAnalysis from './AdAnalysis';
 import LengthChart from './charts/LengthChart';
 import ViewsDistributionChart from './charts/ViewsDistributionChart';
 import AIReportView from './AIReportView';
-import Button from './common/Button';
 
 
 // --- Reusable Components within this view ---
@@ -47,8 +45,8 @@ const SurgingVideoCard: React.FC<{ video: ChannelVideo, onShowVideoDetail: (id: 
 );
 
 const DataSummaryView = ({ data }: { data: ChannelVideo[] }) => (
-    <div>
-        <h3 className="text-xl font-bold mb-4">영상 데이터 요약 (Video Data Summary)</h3>
+    <div className="mb-8 animate-fade-in">
+        <h3 className="text-xl font-bold mb-4">채널 데이터 요약 (Channel Data Summary)</h3>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1 h-72"><ViewsDistributionChart data={data as any} /></div>
             <div className="lg:col-span-1 h-72"><LengthChart data={data as any} /></div>
@@ -58,35 +56,6 @@ const DataSummaryView = ({ data }: { data: ChannelVideo[] }) => (
         </div>
     </div>
 );
-
-const RelevanceBar: React.FC<{ score: number }> = ({ score }) => {
-    const totalBars = 5;
-    let filledBars = 1;
-    if (score >= 95) filledBars = 5;
-    else if (score >= 90) filledBars = 4;
-    else if (score >= 85) filledBars = 3;
-    else if (score >= 80) filledBars = 2;
-
-    const getColor = (index: number) => {
-        if (index >= filledBars) return 'bg-gray-600'; // Inactive bar color
-        if (filledBars >= 4) return 'bg-green-500';
-        if (filledBars >= 3) return 'bg-yellow-500';
-        return 'bg-gray-500';
-    };
-
-    return (
-        <div className="flex items-end gap-1 h-5" title={`Relevance: ${score}`}>
-            {Array.from({ length: totalBars }).map((_, i) => (
-                <div
-                    key={i}
-                    className={`w-1.5 rounded-sm ${getColor(i)}`}
-                    style={{ height: `${(i + 1) * 20}%` }}
-                />
-            ))}
-        </div>
-    );
-};
-
 
 // --- Tab Content Components ---
 
@@ -114,6 +83,8 @@ const OverviewTab: React.FC<{ data: ChannelAnalysisData; onShowVideoDetail: (id:
                     subValue="All-time"
                 />
             </div>
+
+            <DataSummaryView data={data.videoList} />
             
              {!data.deepDiveReport ? (
                 <div className="bg-gray-800/40 p-8 rounded-lg border border-dashed border-gray-600 flex flex-col items-center justify-center text-center">
@@ -123,13 +94,17 @@ const OverviewTab: React.FC<{ data: ChannelAnalysisData; onShowVideoDetail: (id:
                         </div>
                     ) : (
                         <>
-                            <h3 className="text-xl font-bold text-white mb-2">AI 채널 심층 분석 (AI Channel Deep-Dive)</h3>
-                            <p className="text-gray-400 mb-6 max-w-md">
+                            <h3 className="text-xl font-bold text-white mb-2">🚀 AI 채널 심층 분석 (AI Channel Deep-Dive)</h3>
+                            <p className="text-gray-400 mb-4 max-w-md">
                                 채널의 방향성, 강점/약점, 시청자 가치, 다음 액션 플랜 등을 담은 종합 리포트를 받아보세요.
                             </p>
-                            <Button onClick={onStartAnalysis}>
+                            <p className="text-xs text-gray-500 mb-6">※ 이 AI 분석은 YouTube 데이터 기반 가이드입니다.</p>
+                            <button 
+                                onClick={onStartAnalysis}
+                                className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold rounded-full shadow-lg transform transition hover:scale-105"
+                            >
                                 Start AI Analysis
-                            </Button>
+                            </button>
                         </>
                     )}
                 </div>
@@ -212,55 +187,50 @@ const VideosTab: React.FC<{ data: ChannelAnalysisData; onShowVideoDetail: (id: s
     }, [data.videoList, sort, searchTerm]);
 
     return (
-        <div className="animate-fade-in space-y-8">
-            <DataSummaryView data={data.videoList} />
-
-            <div>
-                 <h3 className="text-xl font-bold mb-4">전체 영상 목록 (Full Video List)</h3>
-                <div className="flex flex-col md:flex-row gap-4 mb-4 p-3 bg-gray-800/50 rounded-lg">
-                    <input 
-                        type="text"
-                        placeholder="영상 제목으로 검색... (Search by title...)"
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        className="flex-grow bg-gray-700 border-gray-600 rounded-md p-2 text-sm"
-                    />
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-400">정렬 (Sort):</span>
-                        <select value={sort} onChange={e => setSort(e.target.value as any)} className="bg-gray-700 border-gray-600 rounded-md p-2 text-sm">
-                            <option value="publishedAt">최신순 (Latest)</option>
-                            <option value="viewCount">인기순 (Popular)</option>
-                            <option value="engagementRate">참여율순 (E.Rate)</option>
-                        </select>
-                    </div>
+        <div className="animate-fade-in">
+            <div className="flex flex-col md:flex-row gap-4 mb-4 p-3 bg-gray-800/50 rounded-lg">
+                <input 
+                    type="text"
+                    placeholder="Search by title..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    className="flex-grow bg-gray-700 border-gray-600 rounded-md p-2 text-sm"
+                />
+                <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-400">Sort:</span>
+                    <select value={sort} onChange={e => setSort(e.target.value as any)} className="bg-gray-700 border-gray-600 rounded-md p-2 text-sm">
+                        <option value="publishedAt">Latest</option>
+                        <option value="viewCount">Popular</option>
+                        <option value="engagementRate">E.Rate</option>
+                    </select>
                 </div>
-                
-                <div className="bg-gray-800 rounded-lg divide-y divide-gray-700/50">
-                    {sortedAndFilteredVideos.map(video => (
-                        <div key={video.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-3">
-                            <a href={`https://www.youtube.com/watch?v=${video.id}`} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 w-full md:w-40 group">
-                                <img src={video.thumbnailUrl} alt={video.title} className="w-full h-auto md:h-[90px] object-cover rounded-md transition-transform group-hover:scale-105" />
-                            </a>
-                            <div className="flex-grow min-w-0">
-                                <button onClick={() => onShowVideoDetail(video.id)} className="font-semibold text-white hover:text-blue-400 transition-colors line-clamp-2 text-left">{video.title}</button>
-                                <p className="text-xs text-gray-400 mt-1">{new Date(video.publishedAt).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-300">
-                                    <span className="flex items-center gap-1"><span title="조회수">Views:</span> <span className="font-mono">{formatNumber(video.viewCount)}</span></span>
-                                    <span className="flex items-center gap-1"><span title="좋아요">Likes:</span> <span className="font-mono">{formatNumber(video.likeCount)}</span></span>
-                                    <span className="flex items-center gap-1"><span title="댓글">Comments:</span> <span className="font-mono">{formatNumber(video.commentCount)}</span></span>
-                                </div>
-                            </div>
-                            <div className="flex-shrink-0">
-                                <button
-                                    onClick={() => onShowVideoDetail(video.id)}
-                                    className="w-24 px-3 py-2 text-xs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white"
-                                >
-                                    Details
-                                </button>
+            </div>
+            
+            <div className="bg-gray-800 rounded-lg divide-y divide-gray-700/50">
+                {sortedAndFilteredVideos.map(video => (
+                    <div key={video.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-3">
+                        <a href={`https://www.youtube.com/watch?v=${video.id}`} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 w-full md:w-40 group">
+                            <img src={video.thumbnailUrl} alt={video.title} className="w-full h-auto md:h-[90px] object-cover rounded-md transition-transform group-hover:scale-105" />
+                        </a>
+                        <div className="flex-grow min-w-0">
+                            <button onClick={() => onShowVideoDetail(video.id)} className="font-semibold text-white hover:text-blue-400 transition-colors line-clamp-2 text-left">{video.title}</button>
+                            <p className="text-xs text-gray-400 mt-1">{new Date(video.publishedAt).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-300">
+                                <span className="flex items-center gap-1"><span title="조회수">Views:</span> <span className="font-mono">{formatNumber(video.viewCount)}</span></span>
+                                <span className="flex items-center gap-1"><span title="좋아요">Likes:</span> <span className="font-mono">{formatNumber(video.likeCount)}</span></span>
+                                <span className="flex items-center gap-1"><span title="댓글">Comments:</span> <span className="font-mono">{formatNumber(video.commentCount)}</span></span>
                             </div>
                         </div>
-                    ))}
-                </div>
+                        <div className="flex-shrink-0">
+                            <button
+                                onClick={() => onShowVideoDetail(video.id)}
+                                className="w-24 px-3 py-2 text-xs font-semibold rounded bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                                Details
+                            </button>
+                        </div>
+                    </div>
+                ))}
             </div>
         </div>
     );
@@ -302,6 +272,21 @@ const SimilarChannelsTab: React.FC<{ channelId: string; appSettings: AppSettings
         return num.toString();
     };
 
+    const getScoreColorClass = (score: number) => {
+        if (score >= 95) return 'bg-green-500 text-white';
+        if (score >= 90) return 'bg-green-600 text-white';
+        if (score >= 85) return 'bg-yellow-500 text-black';
+        return 'bg-gray-600 text-gray-200';
+    };
+
+    const getScoreTextColor = (score: number) => {
+        if (score >= 95) return 'text-white';
+        if (score >= 90) return 'text-white';
+        if (score >= 85) return 'text-black';
+        return 'text-gray-200';
+    };
+
+
     if (isLoading) return <div className="flex justify-center py-12"><Spinner /></div>;
     if (error) return <LimitedDataMessage message={error} />;
     
@@ -313,11 +298,8 @@ const SimilarChannelsTab: React.FC<{ channelId: string; appSettings: AppSettings
                 <div className="col-span-2 text-right"><span title="총 조회수">Total Views</span></div>
                 <div className="col-span-1 text-right"><span title="업로드">Uploads</span></div>
                 <div className="col-span-2 text-center flex items-center justify-center">
-                    <span>연관도</span>
-                     <HelpTooltip text="채널의 주제, 키워드, 규모 등 공개 데이터를 기반으로 Content OS가 계산한 참고용 '연관도' 지표입니다. YouTube의 공식 추천 점수가 아닙니다.
-
-[For Reviewers]
-This is a proprietary 'Relevance' metric calculated by Content OS based on public data like channel topic, keywords, and size. It is NOT an official YouTube recommendation score." />
+                    <span title="채널 연관도 점수">연관도 (Relevance)</span>
+                     <HelpTooltip text="채널의 주제, 키워드, 규모 등 공개 데이터를 기반으로 Content OS가 계산한 참고용 '연관도' 지표입니다. YouTube의 공식 추천 점수가 아닙니다.\n\n[For Reviewers]\nThis is a proprietary 'Relevance' metric calculated by Content OS based on public data like channel topic, keywords, and size. It is NOT an official YouTube recommendation score." />
                 </div>
             </div>
             <div className="divide-y divide-gray-700/50">
@@ -339,16 +321,15 @@ This is a proprietary 'Relevance' metric calculated by Content OS based on publi
                             <div className="hidden md:block col-span-2 text-right font-semibold">{formatStat(channel.totalViews)}</div>
                             <div className="hidden md:block col-span-1 text-right font-semibold">{formatStat(channel.videoCount)}</div>
                             <div className="hidden md:flex col-span-2 justify-center items-center">
-                                 <RelevanceBar score={channel.similarityScore} />
+                                 <div className={`px-4 py-1.5 rounded-full text-sm font-bold ${getScoreColorClass(channel.similarityScore)}`}>
+                                    {channel.similarityScore}
+                                 </div>
                             </div>
                             <div className="md:hidden col-span-12 mt-2 pt-2 border-t border-gray-700">
                                  <div className="flex justify-around text-center">
                                     <div><p className="text-xs text-gray-400" title="구독자">Subs</p><p className="font-semibold">{formatStat(channel.subscriberCount)}</p></div>
                                     <div><p className="text-xs text-gray-400" title="총 조회수">Views</p><p className="font-semibold">{formatStat(channel.totalViews)}</p></div>
-                                    <div className="flex flex-col items-center">
-                                        <p className="text-xs text-gray-400" title="연관도">Relevance</p>
-                                        <div className="mt-1"><RelevanceBar score={channel.similarityScore} /></div>
-                                    </div>
+                                    <div><p className="text-xs text-gray-400" title="연관도 점수">Relevance</p><p className={`font-bold text-lg ${getScoreTextColor(channel.similarityScore)}`}>{channel.similarityScore}</p></div>
                                  </div>
                             </div>
                         </div>
@@ -478,7 +459,7 @@ const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({ channelId, user, 
                 <div className="-mb-px flex space-x-8" aria-label="Tabs">
                     <TabButton tabId="overview" title="개요 (Overview)" />
                     <TabButton tabId="videos" title="영상 (Videos)" />
-                    <TabButton tabId="similarChannels" title="유사 채널 (Similar Channels)" />
+                    <TabButton tabId="similarChannels" title="연관 채널 (Related)" />
                 </div>
             </nav>
 

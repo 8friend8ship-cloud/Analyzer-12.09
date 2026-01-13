@@ -6,77 +6,44 @@ interface VideoPerformanceChartProps {
   video: VideoDetailData;
 }
 
-// Generates simulated performance data. Shows hourly data for videos newer than 48 hours,
-// and daily data for older videos. This provides more relevant insights for newly uploaded content.
+// Generates simulated performance data for the first 28 days post-upload.
+// This standardizes the comparison metric for all videos, regardless of age.
 const generateSimulatedData = (video: VideoDetailData) => {
-    const now = new Date();
-    const published = new Date(video.publishedAt);
-    const hoursSincePublished = Math.max(1, (now.getTime() - published.getTime()) / (1000 * 60 * 60));
-
-    // For videos published within the last 48 hours, show hourly data
-    if (hoursSincePublished < 48) {
-        // Weights for the first 48 hours, modeling an initial boost then stabilization
-        const hourlyWeights = [
-            0.5, 1, 2, 4, 7, 10, 12, 11, 10, 9, 8, 7, // First 12 hours
-            6, 6, 5, 5, 4, 4, 3, 3, 3, 3, 3, 3,       // Next 12 hours (24h total)
-            2.5, 2.5, 2.5, 2.5, 2, 2, 2, 2, 1.5, 1.5, 1.5, 1.5, // Next 12 hours (36h total)
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1        // Next 12 hours (48h total)
-        ];
-        
-        const currentHourIndex = Math.floor(hoursSincePublished) - 1;
-        const relevantWeights = hourlyWeights.slice(0, currentHourIndex + 1);
-        const totalWeight = relevantWeights.reduce((sum, w) => sum + w, 0);
-
-        if (totalWeight === 0) {
-            // Fallback for very new videos (less than 1 hour)
-            return [{ time: '0시간차', views: 0 }, { time: '1시간차', views: video.viewCount }];
-        }
-
-        const scaleFactor = video.viewCount / totalWeight;
-
-        const hourlyData = relevantWeights.map((weight, i) => ({
-            time: `${i + 1}시간차`, // "Hour X"
-            views: Math.round(weight * scaleFactor),
-        }));
-
-        // Add a starting point for a better-looking graph
-        return [{ time: '0시간차', views: 0 }, ...hourlyData];
+    const duration = 28;
+    if (!video.viewCount || video.viewCount <= 0) {
+        return Array.from({ length: duration + 1 }, (_, i) => ({ time: `${i}일 (Day)`, views: 0 }));
     }
-
-    // For older videos, show daily data for the first 30 days
-    const daysSincePublished = Math.ceil(hoursSincePublished / 24);
-    const duration = Math.min(daysSincePublished, 30);
-    
-    // Fallback for edge cases
-    if (duration < 2) {
-        return [{ time: '0일차', views: 0 }, { time: '1일차', views: video.viewCount }];
-    }
-
-    const viewsPerHour = video.viewCount / hoursSincePublished;
-    const peakValue = viewsPerHour * 24; // Estimated first-day views as a heuristic
 
     const rawData = [];
+    // This model peaks around day 3-4 and then decays.
+    // k affects how quickly it decays. A smaller k means a slower decay.
+    const k = 0.25; 
+    
+    // Generate raw "virality" scores for each day
     for (let i = 0; i < duration; i++) {
-        const day = i + 1;
-        // Exponential decay model
-        const value = peakValue * Math.exp(-0.15 * (day - 1));
+        const t = i + 1;
+        // The model t * exp(-k*t) gives a rise-and-fall curve, simulating initial growth and later decay
+        const value = t * Math.exp(-k * t);
         rawData.push(value);
     }
-
+    
     const rawTotal = rawData.reduce((sum, val) => sum + val, 0);
-    if (rawTotal === 0) {
-        return [{ time: '1일차', views: video.viewCount }];
-    }
 
+    if (rawTotal === 0) {
+        // This should not happen with the new model, but as a safeguard:
+        return Array.from({ length: duration + 1 }, (_, i) => ({ time: `${i}일 (Day)`, views: 0 }));
+    }
+    
+    // Scale the raw data so that the total sum of simulated views matches the video's actual total view count
     const scaleFactor = video.viewCount / rawTotal;
 
     const dailyData = rawData.map((value, i) => ({
-        time: `${i + 1}일차`, // "Day X"
+        time: `${i + 1}일 (Day)`,
         views: Math.round(value * scaleFactor),
     }));
 
-     // Add a starting point for a better-looking graph
-    return [{ time: '0일차', views: 0 }, ...dailyData];
+    // Add a starting point at Day 0 for a better-looking graph origin
+    return [{ time: '0일 (Day)', views: 0 }, ...dailyData];
 };
 
 
@@ -86,7 +53,7 @@ const VideoPerformanceChart: React.FC<VideoPerformanceChartProps> = ({ video }) 
     if (chartData.length <= 1) {
         return (
             <div className="flex items-center justify-center h-full text-gray-500">
-                과거 조회수 데이터가 부족하여 그래프를 생성할 수 없습니다.
+                과거 조회수 데이터가 부족하여 그래프를 생성할 수 없습니다. (Insufficient data to generate chart.)
             </div>
         );
     }
@@ -97,7 +64,7 @@ const VideoPerformanceChart: React.FC<VideoPerformanceChartProps> = ({ video }) 
                 <div className="bg-gray-900/80 p-3 rounded-lg border border-gray-700 text-sm">
                     <p className="font-bold text-gray-300">{label}</p>
                     <p className="text-blue-400">
-                        {`추정 조회수 : ${payload[0].value.toLocaleString()}`}
+                        {`추정 조회수 (Est. Views): ${payload[0].value.toLocaleString()}`}
                     </p>
                 </div>
             );
@@ -118,7 +85,7 @@ const VideoPerformanceChart: React.FC<VideoPerformanceChartProps> = ({ video }) 
                 <XAxis 
                     dataKey="time"
                     tick={{ fill: '#A0AEC0', fontSize: 12 }}
-                    interval={Math.floor(chartData.length / 5)} // Show ~5 ticks
+                    interval={6} // Show ticks for day 0, 7, 14, 21, 28
                 />
                 <YAxis 
                     tick={{ fill: '#A0AEC0', fontSize: 12 }} 

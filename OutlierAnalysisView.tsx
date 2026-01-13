@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { fetchYouTubeData, fetchRankingData } from '../services/youtubeService';
 import { getAITrendingInsight, translateKeyword } from '../services/geminiService';
@@ -355,18 +352,15 @@ const OutlierAnalysisView: React.FC<OutlierAnalysisViewProps> = ({ user, appSett
                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
                          {/* AI Insight */}
                          <div className="lg:col-span-3 bg-blue-900/20 border border-blue-500/30 p-4 rounded-lg mb-2">
-                             <h3 className="font-bold text-blue-400 mb-2 flex items-center gap-2"><span className="text-xl">🔑</span> Key Factors (주요 동인)</h3>
+                             <h3 className="font-bold text-blue-400 mb-2 flex items-center gap-2"><span className="text-xl">🧠</span> AI Trend Insight (Root Cause)</h3>
                              <p className="text-gray-200 text-sm leading-relaxed mb-3">{trendingData.summary}</p>
-                             <div className="flex flex-wrap gap-2 mb-3">
+                             <div className="flex flex-wrap gap-2">
                                  {trendingData.viralFactors.map((factor, i) => (
                                      <span key={i} className="px-2 py-1 bg-blue-800/50 text-blue-200 text-xs rounded-full border border-blue-600/50">
                                          #{factor}
                                      </span>
                                  ))}
                              </div>
-                             <p className="text-right text-xs text-gray-500">
-                                Source: Analysis based on YouTube Data API & Google Trends
-                            </p>
                          </div>
 
                          {/* Top Keywords */}

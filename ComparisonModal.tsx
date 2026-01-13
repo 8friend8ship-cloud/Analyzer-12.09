@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { getAIComparisonInsights } from '../services/geminiService';
 import { fetchChannelAnalysis } from '../services/youtubeService';
@@ -106,10 +105,10 @@ const ComparisonModal: React.FC<ComparisonModalProps> = ({ onClose, channelA, ch
           {insights && !isLoading && (
             <div className="space-y-6">
               <div>
-                <h3 className="text-xl font-bold text-yellow-400 mb-2">종합 요약 및 제안 (Overall Summary & Suggestion)</h3>
+                <h3 className="text-xl font-bold text-yellow-400 mb-2">종합 요약 및 추천 전략 (Overall Summary & Recommendation)</h3>
                 <p className="text-gray-300 leading-relaxed mb-2">{insights.summary}</p>
                 <p className="text-sm bg-blue-900/30 text-blue-300 p-3 rounded-md border border-blue-500/30">
-                  <strong>제안 (Suggestion):</strong> {insights.suggestion}
+                  <strong>추천 (Recommendation):</strong> {insights.recommendation}
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

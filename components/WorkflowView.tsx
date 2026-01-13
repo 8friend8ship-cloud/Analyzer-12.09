@@ -1,113 +1,151 @@
-
-
-
 import React from 'react';
 
-// --- SVG Icons for each feature ---
-const ChannelAnalyticsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>;
-const VideoAnalyticsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>;
-const SimilarChannelsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.122-1.28-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.122-1.28.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
-const TopChartsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 11l3-3m0 0l3 3m-3-3v8m0-13a9 9 0 110 18 9 9 0 010-18z" /></svg>;
-const ChromeExtensionIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14v6m-3-3h6M6 10h2a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2zm10 0h2a2 2 0 002-2V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2a2 2 0 002 2zM6 20h2a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2z" /></svg>;
-const OutliersIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>;
-const ThumbnailSearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
-const ABTestIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547a2 2 0 00-.547 1.806l.477 2.387a6 6 0 00.517 3.86l.158.318a6 6 0 00.517 3.86l2.387.477a2 2 0 001.806-.547a2 2 0 00.547-1.806l-.477-2.387a6 6 0 00-.517-3.86l-.158-.318a6 6 0 01-.517-3.86l-2.387-.477zM12 2v.01" /></svg>;
-const AlgorithmIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>;
-const CollectionsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>;
+// Icons for each feature card, matching the new design
+const OutlierIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>;
+const ThumbnailIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
+const ABTestIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>;
+const AlgorithmIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>;
+const CollectionIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>;
+const MarketingIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>;
+const DiagnosisIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>;
+const ComparisonIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}> <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h8a2 2 0 012 2v10a2 2 0 01-2 2H8a2 2 0 01-2-2V9a2 2 0 012-2z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16 3H5a2 2 0 00-2 2v11" /></svg>;
 
-const workflowSteps = [
-    {
-        step: 1,
-        features: [
-            { id: 'channel_analytics', title: "채널 분석 (Channel Analytics)", description: "채널의 구독자, 조회수, 영상 성과 등 상세 분석 및 장기/단기 추이 확인", icon: <ChannelAnalyticsIcon /> },
-            { id: 'video_analytics', title: "영상 분석 (Video Analytics)", description: "특정 영상의 일일 조회수, 썸네일 테스트 결과, 랭킹(1~10점) 확인 및 성과 분석", icon: <VideoAnalyticsIcon /> }
-        ]
-    },
-    {
-        step: 2,
-        features: [
-            { id: 'similar_channels', title: "유사 채널 추천 (Similar Channels)", description: "채널 콘텐츠와 유사한 채널 추천을 통해 협업 및 아이디어 영감 제공", icon: <SimilarChannelsIcon /> },
-            { id: 'top_charts', title: "실시간 랭킹 (Top Charts)", description: "실시간 구독자·조회수·상위 영상 랭킹을 일/주/월/연간 단위로 제공", icon: <TopChartsIcon /> }
-        ]
-    },
-    {
-        step: 3,
-        features: [
-            { id: 'chrome_extension', title: "크롬 확장 프로그램 (Chrome Extension)", description: "유튜브 시청 중 Content OS 오버레이로 영상별 조회수, 랭킹 등 실시간 데이터 바로 확인", icon: <ChromeExtensionIcon /> },
-            { id: 'outliers', title: "아웃라이어 영상 분석 (Outliers)", description: "평균보다 월등히 높은 조회수를 기록한 바이럴 영상(아웃라이어)을 필터링하고 비결 분석", icon: <OutliersIcon /> }
-        ]
-    },
-    {
-        step: 4,
-        features: [
-            { id: 'thumbnail_search', title: "썸네일 검색 (Thumbnail Search)", description: "특정 키워드나 이미지로 썸네일을 검색하여 영감을 얻고 아이디어 수집", icon: <ThumbnailSearchIcon /> },
-            { id: 'ab_test', title: "A/B 테스트 (A/B Test)", description: "다른 유튜버들의 썸네일 A/B 테스트 결과를 확인하여 성공 패턴 학습 및 적용", icon: <ABTestIcon /> }
-        ]
-    },
-    {
-        step: 5,
-        features: [
-            { id: 'algorithm_finder', title: "알고리즘 주제 찾기 (Algorithm Finder)", description: "질문 선택만으로 나만의 카테고리, 연령, 성향, 키워드 패턴을 자동 추출하여 방향성 제시", icon: <AlgorithmIcon /> },
-            { id: 'collections', title: "컬렉션 (Collections)", description: "여러 도구에서 찾은 아이디어·데이터·결과물을 한 곳에 모아 체계적으로 정리", icon: <CollectionsIcon /> }
-        ]
-    }
+
+const features = [
+  {
+    id: 'outliers',
+    icon: <OutlierIcon />,
+    title: '아웃라이어 & 트렌드 분석 (Outlier & Trend Analysis)',
+    description: '평균을 뛰어넘는 바이럴 영상을 필터링하고, 실시간 트렌드를 분석하여 기회를 포착합니다. (Filter viral videos that outperform the average and analyze real-time trends to seize opportunities.)',
+  },
+  {
+    id: 'thumbnail_search',
+    icon: <ThumbnailIcon />,
+    title: '썸네일 & 제목 분석 (Thumbnail & Title Analysis)',
+    description: '특정 키워드의 상위 영상들을 분석하여 가장 효과적인 썸네일과 제목의 패턴을 찾습니다. (Analyze top videos for a specific keyword to find effective patterns for thumbnails and titles.)',
+  },
+  {
+    id: 'ab_test',
+    icon: <ABTestIcon />,
+    title: 'A/B 테스트 게임 (A/B Test Game)',
+    description: '어떤 썸네일과 제목이 더 높은 성과를 냈는지 맞추는 게임을 통해 성과가 좋은 콘텐츠에 대한 감을 기릅니다. (Sharpen your intuition for high-performing content by playing a game to guess which thumbnail and title performed better.)',
+  },
+  {
+    id: 'identity_finder',
+    icon: <AlgorithmIcon />,
+    title: '채널 정체성 진단 (Identity Finder)',
+    description: '6단계 질문으로 채널의 정체성을 분석하고, 맞춤형 콘텐츠 시리즈와 키워드 전략에 대한 아이디어를 얻습니다. (Analyze your channel\'s identity through a 6-step diagnosis and get ideas for custom content series and keyword strategies.)',
+    tag: { text: 'PRO', color: 'purple' as const },
+  },
+  {
+    id: 'channel_comparison',
+    icon: <ComparisonIcon />,
+    title: '채널 데이터 비교 (Channel Comparison)',
+    description: '선택한 채널들의 데이터를 나란히 비교하여 강점, 약점, 차별화 포인트를 발견합니다. (Compare data from selected channels side-by-side to discover strengths, weaknesses, and points of differentiation.)',
+    tag: { text: 'PRO', color: 'purple' as const },
+  },
+  {
+    id: 'collections',
+    icon: <CollectionIcon />,
+    title: '컬렉션 (Collections)',
+    description: '분석 과정에서 발견한 중요한 채널이나 영상을 자동으로 저장하고 관리합니다. (Automatically save and manage important channels or videos discovered during your analysis.)',
+    tag: { text: 'PRO', color: 'purple' as const },
+  },
+  {
+    id: 'my_channel_analytics',
+    icon: <DiagnosisIcon />,
+    title: 'AI 채널 진단 (AI Channel Diagnosis)',
+    description: '채널 데이터를 심층 분석하고, AI로부터 맞춤형 성장 전략을 진단받는 공간입니다. (A space to deeply analyze channel data and receive a personalized growth strategy diagnosis from AI.)',
+    tag: { text: 'AGENCY', color: 'teal' as const },
+  },
+  {
+    id: 'influencer_marketing',
+    icon: <MarketingIcon />,
+    title: 'AI 상품 적합도 분석 (AI Product Fit Analysis)',
+    description: '내 채널과 특정 상품의 적합도를 분석하고, 벤치마킹 채널과 비교하여 수익화 전략을 구체화합니다. (Analyze your channel\'s fit with a specific product and compare it with benchmark channels to refine your monetization strategy.)',
+    tag: { text: 'AGENCY', color: 'teal' as const },
+  },
 ];
 
-const FeatureCard: React.FC<{ feature: typeof workflowSteps[0]['features'][0]; onNavigate: (featureId: string) => void; }> = ({ feature, onNavigate }) => (
-    <button onClick={() => onNavigate(feature.id)} className="bg-gray-800/60 rounded-lg p-4 flex items-start gap-4 border border-gray-700/50 w-full text-left hover:bg-gray-700/50 transition-colors group">
-        <div className="flex-shrink-0 group-hover:scale-110 transition-transform">{feature.icon}</div>
-        <div>
-            <h3 className="font-bold text-white group-hover:text-blue-400 transition-colors">{feature.title}</h3>
-            <p className="text-sm text-gray-400 mt-1">{feature.description}</p>
-        </div>
-    </button>
-);
-
-interface WorkflowViewProps {
-    onNavigate: (featureId: string) => void;
+const getTagClasses = (color: 'purple' | 'teal') => {
+    switch (color) {
+        case 'purple':
+            return 'bg-purple-600/80 text-purple-200 border-purple-500/50';
+        case 'teal':
+            return 'bg-teal-600/80 text-teal-200 border-teal-500/50';
+    }
 }
 
+interface FeatureCardProps {
+  feature: typeof features[0];
+  align: 'left' | 'right';
+  onClick: (id: string) => void;
+}
+
+const FeatureCard: React.FC<FeatureCardProps> = ({ feature, align, onClick }) => (
+  <button
+    onClick={() => onClick(feature.id)}
+    className={`bg-[#1E222B] p-6 rounded-lg border border-gray-700/80 text-left w-full h-full transition-all hover:border-blue-500/50 hover:bg-[#252a33] transform hover:-translate-y-1`}
+  >
+    <div className={`flex items-center gap-3 mb-3`}>
+      {feature.icon}
+      <h3 className="text-lg font-bold text-white">{feature.title}</h3>
+      {feature.tag && (
+        <span className={`px-2 py-0.5 text-xs font-bold rounded-md border ${getTagClasses(feature.tag.color)}`}>
+            {feature.tag.text}
+        </span>
+      )}
+    </div>
+    <p className="text-sm text-gray-400 leading-relaxed">{feature.description}</p>
+  </button>
+);
+
+
+interface WorkflowViewProps {
+  onNavigate: (featureId: string) => void;
+}
 
 const WorkflowView: React.FC<WorkflowViewProps> = ({ onNavigate }) => {
-    return (
-        <div className="p-4 md:p-6 lg:p-8">
-            <div className="max-w-4xl mx-auto">
-                <header className="text-center mb-10">
-                    <h1 className="text-3xl font-bold text-white">Content OS 워크플로우</h1>
-                    <p className="text-gray-400 mt-2">데이터 분석부터 아이디어 수집까지, 기능의 흐름을 따라 최고의 성과를 만들어보세요.</p>
-                </header>
+  const featurePairs = [];
+  for (let i = 0; i < features.length; i += 2) {
+      featurePairs.push(features.slice(i, i + 2));
+  }
 
-                <div className="relative">
-                    {/* Vertical line */}
-                    <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-gray-700 hidden md:block" aria-hidden="true"></div>
+  return (
+    <div className="p-4 md:p-6 lg:p-8 animate-fade-in">
+      <header className="text-center mb-16">
+        <h1 className="text-3xl md:text-4xl font-bold text-white">워크플로우 (Workflow)</h1>
+        <p className="text-gray-400 mt-2 max-w-2xl mx-auto">
+          아이디어 발상부터 전략 수립까지, 전문가의 노하우가 담긴 분석 도구 모음입니다.<br/>(A suite of expert analysis tools to guide you from ideation to strategy.)
+        </p>
+      </header>
 
-                    <div className="space-y-12">
-                        {workflowSteps.map((step, index) => (
-                            <div key={step.step} className="flex flex-col md:flex-row items-center justify-center relative">
-                                <div className="md:w-1/2 flex md:justify-end md:pr-12 mb-4 md:mb-0 w-full">
-                                    <FeatureCard feature={step.features[0]} onNavigate={onNavigate} />
-                                </div>
-                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-gray-900 border-2 border-gray-600 rounded-full flex items-center justify-center font-bold text-lg text-blue-400 z-10 shadow-lg">
-                                    {step.step}
-                                </div>
-                                <div className="md:w-1/2 flex md:justify-start md:pl-12 w-full">
-                                     <FeatureCard feature={step.features[1]} onNavigate={onNavigate} />
-                                </div>
+      <div className="relative max-w-5xl mx-auto">
+        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-gray-700 -translate-x-1/2" aria-hidden="true"></div>
 
-                                {index < workflowSteps.length - 1 && (
-                                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-6 hidden md:block">
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <path d="M12 5V19M12 19L7 14M12 19L17 14" stroke="#4A5568" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                        </svg>
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
+        <div>
+          {featurePairs.map((pair, index) => (
+            <div key={index} className="relative mb-24 last:mb-0">
+              <div className="grid md:grid-cols-2 gap-x-24">
+                <div className="md:text-right">
+                  {pair[0] && <FeatureCard feature={pair[0]} align="right" onClick={onNavigate} />}
                 </div>
+                <div>
+                  {pair[1] && <FeatureCard feature={pair[1]} align="left" onClick={onNavigate} />}
+                </div>
+              </div>
+              
+              {index < featurePairs.length - 1 && (
+                <div className="absolute left-1/2 top-full -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-gray-800 border-2 border-gray-600 flex items-center justify-center font-bold text-blue-400 shadow-lg z-10">
+                  {index + 1}
+                </div>
+              )}
             </div>
+          ))}
         </div>
-    );
+      </div>
+    </div>
+  );
 };
 
 export default WorkflowView;

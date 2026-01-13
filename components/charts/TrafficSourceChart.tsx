@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import type { TrafficSource } from '../../types';
@@ -16,8 +17,8 @@ const TrafficSourceChart: React.FC<TrafficSourceChartProps> = ({ data }) => {
       return (
         <div className="bg-gray-900/80 p-3 rounded-lg border border-gray-700 text-sm z-50">
           <p className="font-bold" style={{ color: entry.fill }}>{entry.name}</p>
-          <p className="text-gray-300">비율: {entry.percentage}%</p>
-          <p className="text-gray-300">조회수: {entry.views.toLocaleString()}</p>
+          <p className="text-gray-300">비율 (Percentage): {entry.percentage}%</p>
+          <p className="text-gray-300">조회수 (Views): {entry.views.toLocaleString()}</p>
         </div>
       );
     }

@@ -14,7 +14,7 @@ const ViewsChart: React.FC<ViewsChartProps> = ({ data }) => {
 
   return (
     <div className="bg-gray-800 p-4 rounded-lg shadow-lg h-64">
-      <h3 className="text-md font-semibold text-gray-200 mb-4">조회수 기준 상위 15개 동영상</h3>
+      <h3 className="text-md font-semibold text-gray-200 mb-4">조회수 기준 상위 15개 동영상 (Top 15 Videos by Views)</h3>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={chartData} margin={{ top: 0, right: 10, left: 10, bottom: 20 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#4A5568" />

@@ -6,7 +6,7 @@ interface UploadHeatmapProps {
 }
 
 const UploadHeatmap: React.FC<UploadHeatmapProps> = ({ data }) => {
-  const days = ['일', '월', '화', '수', '목', '금', '토'];
+  const days = ['일(Sun)', '월(Mon)', '화(Tue)', '수(Wed)', '목(Thu)', '금(Fri)', '토(Sat)'];
   const dayCounts = Array(7).fill(0);
 
   data.forEach(video => {
@@ -31,7 +31,7 @@ const UploadHeatmap: React.FC<UploadHeatmapProps> = ({ data }) => {
 
   return (
     <div className="bg-gray-800 p-4 rounded-lg shadow-lg">
-      <h3 className="text-md font-semibold text-gray-200 mb-4">요일별 업로드 빈도</h3>
+      <h3 className="text-md font-semibold text-gray-200 mb-4">요일별 업로드 빈도 (Upload Frequency by Day)</h3>
       <div className="grid grid-cols-7 gap-2">
         {days.map((day, index) => (
           <div key={day} className="text-center">

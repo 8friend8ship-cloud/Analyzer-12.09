@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ReferenceLine } from 'recharts';
 import type { RetentionDataPoint } from '../../types';
@@ -21,7 +22,7 @@ const RetentionChart: React.FC<RetentionChartProps> = ({ data }) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-gray-900/80 p-3 rounded-lg border border-gray-700 text-sm z-50">
-          <p className="font-bold text-gray-300">{`영상 진행률: ${label}%`}</p>
+          <p className="font-bold text-gray-300">{`영상 진행률 (Progress): ${label}%`}</p>
           {payload.map((p: any) => (
             <p key={p.name} style={{ color: p.color }}>
               {`${p.name}: ${p.value.toFixed(1)}%`}
@@ -47,22 +48,31 @@ const RetentionChart: React.FC<RetentionChartProps> = ({ data }) => {
             domain={[0, 100]}
             tick={{ fill: '#A0AEC0', fontSize: 12 }} 
             tickFormatter={(tick) => `${tick}%`}
-            label={{ value: '영상 진행률', position: 'insideBottom', offset: -5, fill: '#A0AEC0', fontSize: 12 }}
+            label={{ value: '영상 진행률 (Progress)', position: 'insideBottom', offset: -5, fill: '#A0AEC0', fontSize: 12 }}
             height={30}
             />
             <YAxis 
             domain={[0, 100]}
             tick={{ fill: '#A0AEC0', fontSize: 12 }} 
             tickFormatter={(tick) => `${tick}%`}
-            label={{ value: '유지율', angle: -90, position: 'insideLeft', fill: '#A0AEC0', fontSize: 12, dx: 10 }}
+            label={{ value: '유지율 (Retention)', angle: -90, position: 'insideLeft', fill: '#A0AEC0', fontSize: 12, dx: 10 }}
             />
             <Tooltip content={<CustomTooltip />} />
-            <Legend wrapperStyle={{fontSize: "12px", bottom: 0}} />
+            <Legend 
+              wrapperStyle={{fontSize: "12px", bottom: 0}}
+              formatter={(value, entry) => {
+                const map: {[key: string]: string} = {
+                    'average': '채널 평균 (Channel Avg)',
+                    'topVideo': '인기 영상 (Top Video)',
+                }
+                return map[value] || value;
+              }}
+            />
             <ReferenceLine y={50} label={{ value: '50%', position: 'insideTopLeft', fill: '#A0AEC0', fontSize: 10 }} stroke="#636363" strokeDasharray="3 3" />
             <Line 
             type="monotone" 
             dataKey="average" 
-            name="채널 평균"
+            name="average"
             stroke="#4FD1C5" 
             strokeWidth={2}
             dot={false}
@@ -70,7 +80,7 @@ const RetentionChart: React.FC<RetentionChartProps> = ({ data }) => {
             <Line 
             type="monotone" 
             dataKey="topVideo" 
-            name="인기 영상"
+            name="topVideo"
             stroke="#F6E05E" 
             strokeWidth={2}
             dot={false}

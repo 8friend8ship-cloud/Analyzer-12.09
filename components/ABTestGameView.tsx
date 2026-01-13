@@ -12,7 +12,8 @@ const LEADERBOARD_SIZE = 10;
 
 const gameFilters: FilterState = {
   minViews: 1000, videoLength: 'any', videoFormat: 'any',
-  period: 'any', sortBy: 'viewCount', resultsLimit: 100,
+  period: '30',
+  sortBy: 'viewCount', resultsLimit: 100,
   country: 'KR', category: 'all',
 };
 
@@ -101,7 +102,7 @@ const ABTestGameView: React.FC<ABTestGameViewProps> = ({ user, appSettings, onBa
 
         // 4. Sort by views to establish "Tiers" for comparison
         // We want to compare High vs Mid/Low to make it a bit challenging but logical
-        const sortedPool = [...selectedPool].sort((a, b) => b.viewsPerHour - a.viewsPerHour);
+        const sortedPool = [...selectedPool].sort((a, b) => b.viewCount - a.viewCount);
         
         const topTierEndIndex = Math.floor(sortedPool.length * 0.3); // Top 30%
         const midTierStartIndex = topTierEndIndex;
@@ -228,7 +229,7 @@ const ABTestGameView: React.FC<ABTestGameViewProps> = ({ user, appSettings, onBa
         // If the user explicitly wants to reset, they can reload the page.
         
         try {
-            const apiKey = user.isAdmin ? appSettings.apiKeys.youtube : (user.apiKeyYoutube || appSettings.apiKeys.youtube);
+            const apiKey = appSettings.apiKeys.youtube;
             if (!apiKey) throw new Error("YouTube API 키가 필요합니다.");
             
             // Check if we already have data for this keyword to avoid re-fetching API quota if possible
@@ -279,7 +280,7 @@ const ABTestGameView: React.FC<ABTestGameViewProps> = ({ user, appSettings, onBa
     const renderWelcome = () => (
         <div className="text-center">
             <h1 className="text-3xl font-bold text-white">썸네일 A/B 테스트 게임</h1>
-            <p className="text-gray-400 mt-2 max-w-xl mx-auto">어떤 썸네일이 더 높은 조회수를 기록했을까요? 당신의 감을 테스트해보세요!</p>
+            <p className="text-gray-400 mt-2 max-w-xl mx-auto">어떤 썸네일이 더 높은 조회수를 기록했을까요? 성과가 좋은 콘텐츠에 대한 감을 길러보세요!</p>
             <form onSubmit={(e) => { e.preventDefault(); startGame(); }} className="max-w-md mx-auto my-8 flex gap-2">
                 <input type="text" value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="게임 주제 키워드 (예: 캠핑)" className="flex-grow bg-gray-700 border-gray-600 rounded-md p-3 text-lg" />
                 <Button type="submit">게임 시작</Button>
@@ -373,7 +374,7 @@ const ABTestGameView: React.FC<ABTestGameViewProps> = ({ user, appSettings, onBa
             <p className="text-6xl font-bold my-4">{score} / {TOTAL_ROUNDS}</p>
             {isHighScore && !scoreSubmitted && (
                 <form onSubmit={handleLeaderboardSubmit} className="max-w-sm mx-auto my-6">
-                    <p className="text-green-400 font-semibold mb-2">🎉 최고 기록 달성! 랭킹에 이름을 남기세요.</p>
+                    <p className="text-green-400 font-semibold mb-2">최고 기록 달성! 랭킹에 이름을 남기세요.</p>
                     <div className="flex gap-2">
                         <input type="text" value={playerName} onChange={e => setPlayerName(e.target.value)} placeholder="이름 (3글자 이상)" minLength={3} required className="flex-grow bg-gray-700 border-gray-600 rounded-md p-2"/>
                         <Button type="submit">등록</Button>
@@ -389,7 +390,7 @@ const ABTestGameView: React.FC<ABTestGameViewProps> = ({ user, appSettings, onBa
     
     const Leaderboard: React.FC = () => (
         <div className="bg-gray-800/60 p-4 rounded-lg border border-gray-700/50">
-            <h3 className="font-bold text-lg text-yellow-300 mb-3 text-center">🏆 명예의 전당 (Top 10)</h3>
+            <h3 className="font-bold text-lg text-yellow-300 mb-3 text-center">명예의 전당 (Top 10)</h3>
             {leaderboard.length > 0 ? (
                 <ol className="space-y-2">
                     {leaderboard.map((entry, i) => (

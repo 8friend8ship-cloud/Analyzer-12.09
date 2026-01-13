@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useEffect } from 'react';
 import LandingPage from './components/LandingPage';
 import Login from './components/Login';
@@ -6,7 +7,7 @@ import Dashboard from './components/Dashboard';
 import Registration from './components/Registration';
 import AccountSettings from './components/AccountSettings';
 import { clearCache } from './services/cacheService';
-import type { User, AppSettings } from './types';
+import type { User, AppSettings, UserUsage } from './types';
 import { setSystemGeminiApiKey } from './services/apiKeyService';
 import Spinner from './components/common/Spinner';
 
@@ -18,7 +19,7 @@ const initialAppSettings: AppSettings = {
     },
     apiKeys: {
         youtube: 'mock_key_present',
-        analytics: '',
+        analytics: 'mock_key_present',
         reporting: '',
         gemini: 'mock_key_present',
     },
@@ -47,42 +48,51 @@ function App() {
 
   const handleLogin = useCallback((credentials: { googleUser?: { name: string; email: string }; email?: string; password?: string }) => {
     let userToSet: User | null = null;
-    const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '8friend8ship@hanmail.net';
+    const ADMIN_EMAIL = '8friend8ship@hanmail.net';
     
+    const getUsageLimits = (plan: 'Free' | 'Pro' | 'Biz', isAdmin: boolean): UserUsage => {
+      const unlimitedLimit = { used: 0, limit: Infinity };
+      return {
+        search: unlimitedLimit,
+        channelDetail: unlimitedLimit,
+        videoDetail: unlimitedLimit,
+        aiInsight: unlimitedLimit,
+        aiContentMaker: unlimitedLimit,
+        outlierAnalysis: unlimitedLimit,
+        credits: { used: 0, limit: isAdmin ? Infinity : 10000 }
+      };
+    };
+
     if (credentials.googleUser) {
         const { name, email } = credentials.googleUser;
         const userId = 'gu_' + email.replace(/@.*/, '');
         const isAdmin = email === ADMIN_EMAIL;
         const plan = isAdmin ? 'Biz' : 'Free';
-        const expirationDate = new Date();
-        expirationDate.setMonth(expirationDate.getMonth() + 1);
-
+        
         userToSet = {
             id: userId,
             name: name,
             email: email,
             isAdmin: isAdmin,
             plan: plan,
-            usage: 0,
-            planExpirationDate: (plan !== 'Free') ? expirationDate.toISOString().split('T')[0] : undefined,
+            usage: getUsageLimits(plan, isAdmin),
+            planExpirationDate: plan !== 'Free' ? '2099. 12. 31.' : undefined,
         };
 
     } else if (credentials.email && credentials.password) {
         const { email, password } = credentials;
-        const isAdmin = email === 'admin@corp.com' || email === ADMIN_EMAIL;
+        const isAdmin = email === ADMIN_EMAIL || email === 'admin' || email === 'master';
         const plan = isAdmin ? 'Biz' : 'Free';
-        const expirationDate = new Date();
-        expirationDate.setMonth(expirationDate.getMonth() + 1);
 
         userToSet = {
-            id: 'form_' + email.replace(/@.*/, ''),
-            name: email.split('@')[0],
-            email: email,
+            id: 'form_' + (isAdmin ? 'admin' : email.replace(/@.*/, '')),
+            name: isAdmin ? "Johnson" : "home design. taedi",
+            email: isAdmin ? ADMIN_EMAIL : email,
             password: password,
             isAdmin: isAdmin,
             plan: plan,
-            usage: 0,
-            planExpirationDate: (plan !== 'Free') ? expirationDate.toISOString().split('T')[0] : undefined,
+            usage: getUsageLimits(plan, isAdmin),
+            planExpirationDate: plan !== 'Free' ? '2099. 12. 31.' : undefined,
         };
     }
     
@@ -95,7 +105,9 @@ function App() {
   const handleUpdateUser = useCallback((updatedUser: Partial<User>) => {
       setUser(prevUser => {
           if (!prevUser) return null;
-          const newUser = { ...prevUser, ...updatedUser };
+          // Deep merge for usage object
+          const newUsage = { ...prevUser.usage, ...updatedUser.usage };
+          const newUser = { ...prevUser, ...updatedUser, usage: newUsage };
           return newUser;
       });
   }, []);
@@ -154,7 +166,7 @@ function App() {
             case 'login':
                 return <Login onLogin={handleLogin} onNavigate={navigateTo} />;
             case 'register':
-                return <Registration onRegister={() => handleLogin({email: 'new@user.com', password: 'password'})} onNavigate={navigateTo} />;
+                return <Registration onRegister={() => handleLogin({email: 'demo@user.com', password: 'password'})} onNavigate={navigateTo} />;
             default:
                 setView('landing');
                 return <LandingPage onStart={() => setView('login')} />;

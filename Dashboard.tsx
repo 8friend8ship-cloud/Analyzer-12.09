@@ -7,7 +7,7 @@ import Spinner from './common/Spinner';
 import ChannelDetailView from './ChannelDetailView';
 import AdminDashboard from './AdminDashboard';
 import UpgradeModal from './UpgradeModal'; 
-import TopChartsView from './RankingView'; 
+import RankingView from './RankingView'; 
 import WorkflowView from './WorkflowView'; 
 import VideoDetailView from './VideoDetailView'; 
 import ThumbnailAnalysisView from './ThumbnailAnalysisView'; 
@@ -18,11 +18,9 @@ import MyChannelAnalytics from './MyChannelAnalytics';
 import IdentityFinderView from './IdentityFinderView';
 import CollectionView from './CollectionView';
 import ComparisonView from './ComparisonView';
-import HelpModal from './HelpModal';
-import InfluencerMarketingView from './InfluencerMarketingView';
 import { logQuery, getPopularQueries, pruneQueries } from '../services/queryAnalyticsService'; 
 import { fetchYouTubeData, fetchChannelSearchData } from '../services/youtubeService'; // Updated import
-import type { VideoData, FilterState, User, AppSettings, PopularQuery, OutlierViewState, ThumbnailViewState, TopChartsViewState, ChannelRankingData, AnalysisMode } from '../types';
+import type { VideoData, FilterState, User, AppSettings, PopularQuery, OutlierViewState, ThumbnailViewState, RankingViewState, ChannelRankingData, AnalysisMode } from '../types';
 import AdAnalysis from './AdAnalysis';
 import LengthChart from './charts/LengthChart';
 import ViewsDistributionChart from './charts/ViewsDistributionChart';
@@ -47,7 +45,7 @@ const initialFilterState: FilterState = {
   category: 'all',
 };
 
-type ViewType = 'main' | 'admin' | 'topCharts' | 'channelDetail' | 'workflow' | 'videoDetail' | 'thumbnailAnalysis' | 'outlierAnalysis' | 'myChannel' | 'abTestGame' | 'identityFinder' | 'collections' | 'comparison' | 'influencerMarketing';
+type ViewType = 'main' | 'admin' | 'ranking' | 'channelDetail' | 'workflow' | 'videoDetail' | 'thumbnailAnalysis' | 'outlierAnalysis' | 'myChannel' | 'abTestGame' | 'identityFinder' | 'collections' | 'comparison';
 type SearchTab = 'video' | 'channel';
 
 // Navigation State Interface for the History Stack
@@ -86,11 +84,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
     const [popularQueries, setPopularQueries] = useState<PopularQuery[]>([]);
 
     const [isChatOpen, setIsChatOpen] = useState(false);
-    const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
 
     const [outlierViewState, setOutlierViewState] = useState<OutlierViewState | null>(null);
     const [thumbnailViewState, setThumbnailViewState] = useState<ThumbnailViewState | null>(null);
-    const [topChartsViewState, setTopChartsViewState] = useState<TopChartsViewState | null>(null);
+    const [rankingViewState, setRankingViewState] = useState<RankingViewState | null>(null);
     
     const [selectedChannels, setSelectedChannels] = useState<Record<string, { name: string }>>({});
 
@@ -281,14 +278,26 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
 
     const handleWorkflowNavigate = useCallback(async (featureId: string) => {
         switch (featureId) {
-            case 'outliers':
-                navigateTo('outlierAnalysis');
+            case 'channel_analytics':
+                setView('main');
+                setSearchTab('channel');
+                setQuery('');
+                setTimeout(() => document.getElementById('query')?.focus(), 100);
+                break;
+            case 'video_analytics':
+                setView('main');
+                setSearchTab('video');
+                setQuery('');
+                setTimeout(() => document.getElementById('query')?.focus(), 100);
                 break;
             case 'top_charts':
-                navigateTo('topCharts');
+                navigateTo('ranking');
                 break;
             case 'thumbnail_search':
                 navigateTo('thumbnailAnalysis');
+                break;
+            case 'outliers':
+                navigateTo('outlierAnalysis');
                 break;
             case 'ab_test':
                 navigateTo('abTestGame');
@@ -299,36 +308,30 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
             case 'collections':
                 navigateTo('collections');
                 break;
-            case 'influencer_marketing':
-                navigateTo('influencerMarketing');
+            case 'channel_comparison':
+                navigateTo('comparison');
                 break;
             case 'my_channel_analytics':
                 navigateTo('myChannel');
                 break;
-            case 'channel_comparison':
-                navigateTo('comparison');
-                break;
             default:
                 alert(`'${featureId}' 기능은 현재 준비 중입니다. (This feature is coming soon.)`);
         }
-    }, [navigateTo]);
+    }, [navigateTo, appSettings.apiKeys.youtube]);
 
     const QuickStartView: React.FC<{
       onQuerySelect: (query: string, mode: AnalysisMode) => void;
     }> = ({ onQuerySelect }) => {
       return (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 animate-fade-in">
-              <div className="max-w-3xl w-full bg-gray-800/50 p-8 rounded-2xl border border-gray-700/50">
+              <div className="max-w-2xl w-full bg-gray-800/50 p-8 rounded-2xl border border-gray-700/50">
                   <div className="w-16 h-16 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 text-blue-400 mx-auto mb-4 border border-blue-500/30">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-2h4v2H10zm5.91-4.5H8.09c-.49 0-.85-.59-.57-1.02l1.9-2.92c.2-.31.54-.51.92-.51h3.32c.38 0 .72.2.92.51l1.9 2.92c.28.43-.08 1.02-.57 1.02z"/>
                     </svg>
                   </div>
-                  <h2 className="text-3xl font-bold text-white">어떤 스토리를 찾고 계신가요? (What story are you looking for?)</h2>
-                  <p className="mt-2 text-gray-400 mb-6">
-                    데이터를 통해 유튜브 채널 성장의 다음 단서를 찾아보세요.<br/>키워드나 채널을 입력하여 분석을 시작할 수 있습니다.<br/>
-                    (Find the next clue for your YouTube channel's growth through data.<br/>You can start by entering a keyword or channel.)
-                  </p>
+                  <h2 className="text-3xl font-bold text-white">어떤 스토리를 찾고 계신가요?</h2>
+                  <p className="mt-2 text-gray-400 mb-6">AI 가이드 Johnson과 함께 데이터 속 숨겨진 이야기를 발견하세요.<br/>키워드나 채널을 입력하여 첫 단서를 찾아보세요.</p>
                   {popularQueries.length > 0 && (
                       <div>
                           <h3 className="text-sm font-semibold text-gray-500 mb-3">인기 검색어 (Popular Queries)</h3>
@@ -345,43 +348,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                           </div>
                       </div>
                   )}
-
-                  <div className="mt-12 pt-6 border-t border-yellow-500/30 text-left">
-                        <div className="flex items-center gap-3 mb-3">
-                            <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs font-bold rounded-md border border-yellow-500/30 uppercase">
-                                Simulation Mode & Policy Compliance
-                            </span>
-                        </div>
-                        <p className="text-sm text-gray-300 mb-4">
-                            Since API access is suspended, we deployed a Simulation Mode with mock data to demonstrate compliance.
-                            <br/><span className="text-xs text-gray-500">(API가 정지되어 있어, 컴플라이언스 증명을 위해 모의 데이터 모드를 배포했습니다.)</span>
-                        </p>
-                        
-                        <ul className="space-y-3 text-gray-300 text-sm">
-                            <li className="flex items-start gap-3 p-3 bg-gray-900/50 rounded-lg">
-                                <span className="text-blue-400 font-bold mt-0.5">1.</span>
-                                <div>
-                                    <b className="text-white">Central API Key:</b> Users are not required to provide API keys. Access is managed centrally by the administrator.
-                                    <br/><span className="text-gray-500 text-xs">(사용자는 개인 API 키를 입력할 필요가 없습니다.)</span>
-                                </div>
-                            </li>
-                            <li className="flex items-start gap-3 p-3 bg-gray-900/50 rounded-lg">
-                                <span className="text-blue-400 font-bold mt-0.5">2.</span>
-                                <div>
-                                    <b className="text-white">Official Data Source:</b> All general analysis uses public data from the official YouTube Data API.
-                                    <br/><span className="text-gray-500 text-xs">(모든 일반 분석은 YouTube 공식 API의 공개 데이터만 사용합니다.)</span>
-                                </div>
-                            </li>
-                            <li className="flex items-start gap-3 p-3 bg-gray-900/50 rounded-lg">
-                                <span className="text-blue-400 font-bold mt-0.5">3.</span>
-                                <div>
-                                    <b className="text-white">Limited Analytics Scope:</b> The Analytics API (private data) is used exclusively within the 'AI Channel Diagnosis' feature. This feature can only connect to the user's own personal or brand YouTube channels that are linked to their authenticated Google account.
-                                    <br/><span className="text-gray-500 text-xs">(비공개 Analytics API는 'AI 채널 진단' 기능에서, 로그인된 Google 계정에 연결된 <b>본인 소유의 개인/브랜드 채널</b>에만 연결할 수 있습니다.)</span>
-                                </div>
-                            </li>
-                        </ul>
-                         <p className="mt-4 text-xs text-gray-400 text-center">This simulation is designed to operate under these strict compliance principles.</p>
-                  </div>
               </div>
           </div>
       );
@@ -389,7 +355,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
 
     const DataSummaryView = ({ data }: { data: VideoData[] }) => (
         <div className="mb-6 animate-fade-in">
-            <h2 className="text-xl font-bold mb-4">검색 결과 (Search Results)</h2>
+            <h2 className="text-xl font-bold mb-4">검색 결과 요약 (Search Results Summary)</h2>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 h-64"><ViewsDistributionChart data={data} /></div>
                 <div className="lg:col-span-1 h-64"><LengthChart data={data} /></div>
@@ -448,14 +414,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                 );
             case 'admin':
                 return <AdminDashboard onBack={handleBack} settings={appSettings} onUpdateSettings={onUpdateAppSettings} />;
-            case 'topCharts':
-                 return <TopChartsView 
+            case 'ranking':
+                 return <RankingView 
                             user={user} 
                             appSettings={appSettings} 
                             onShowChannelDetail={handleShowChannelDetail} 
                             onShowVideoDetail={handleShowVideoDetail} 
-                            savedState={topChartsViewState}
-                            onSaveState={setTopChartsViewState}
+                            savedState={rankingViewState}
+                            onSaveState={setRankingViewState}
                         />;
             case 'channelDetail':
                  return <ChannelDetailView 
@@ -501,7 +467,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
             case 'abTestGame':
                 return <ABTestGameView user={user} appSettings={appSettings} onBack={handleBack} />;
             case 'myChannel':
-                return <MyChannelAnalytics user={user} appSettings={appSettings} onShowChannelDetail={handleShowChannelDetail} />;
+                return <MyChannelAnalytics user={user} appSettings={appSettings} />;
             case 'identityFinder':
                 return <IdentityFinderView onBack={handleBack} />;
             case 'collections':
@@ -513,8 +479,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                             onBack={handleBack} 
                             initialChannelIds={comparisonChannelIds || undefined}
                         />;
-            case 'influencerMarketing':
-                return <InfluencerMarketingView user={user} onBack={() => navigateTo('workflow')} />;
             default:
                 return null;
         }
@@ -530,11 +494,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                     planLimit={planLimit}
                     onLogout={onLogout} 
                     onOpenChat={() => setIsChatOpen(true)} 
-                    onOpenHelp={() => setIsHelpModalOpen(true)}
                     onShowAdmin={() => navigateTo('admin')} 
                     onNavigate={onNavigate}
                     onShowMain={() => navigateTo('main')}
-                    onShowTopCharts={() => navigateTo('topCharts')}
+                    onShowRanking={() => navigateTo('ranking')}
                     onShowWorkflow={() => navigateTo('workflow')}
                     onShowMyChannel={() => navigateTo('myChannel')}
                     onShowComparison={() => navigateTo('comparison')}
@@ -570,14 +533,25 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
             </button>
             <Chatbot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
             {isUpgradeModalOpen && <UpgradeModal onClose={handleCloseUpgradeModal} />}
-            {isHelpModalOpen && <HelpModal onClose={() => setIsHelpModalOpen(false)} />}
 
             <footer className="flex-shrink-0 w-full text-center p-4 mt-auto text-xs text-gray-600 border-t border-gray-800">
+                <p className="mb-2">
+                    본 서비스는 YouTube API를 사용하며,&nbsp;
+                    <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-blue-400 underline">
+                        YouTube 서비스 약관
+                    </a>
+                    &nbsp;및&nbsp;
+                    <a href="http://www.google.com/policies/privacy" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-blue-400 underline">
+                        Google 개인정보처리방침
+                    </a>
+                    을 준수합니다.
+                    <br/>
+                    <span className="text-gray-700">(This service uses YouTube API Services and complies with the YouTube Terms of Service and Google Privacy Policy.)</span>
+                </p>
                 <p>
-                    모든 분석 결과는 참고용 가이드이며, 서비스는 이를 기반으로 한 결정에 대해 책임을 지지 않습니다. 본 서비스는 YouTube API를 사용하며{' '}
-                    <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-blue-400 underline">YouTube 서비스 약관</a>
-                    {' '}및{' '}
-                    <a href="http://www.google.com/policies/privacy" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-blue-400 underline">Google 개인정보처리방침</a>을 준수합니다.
+                    모든 분석 결과는 참고용이며, 서비스는 이를 기반으로 한 결정에 대해 책임을 지지 않습니다.
+                     <br/>
+                    <span className="text-gray-700">(All analysis results are for reference only and the service is not responsible for decisions made based on this data.)</span>
                 </p>
             </footer>
         </div>

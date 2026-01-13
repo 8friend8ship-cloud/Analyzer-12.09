@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { VideoData } from '../types';
-import { getAIAdKeywords } from '../services/geminiService';
+import { getAITopicKeywords } from '../services/geminiService';
 
 interface AdAnalysisProps {
   videos: VideoData[];
@@ -39,10 +39,10 @@ const AdAnalysis: React.FC<AdAnalysisProps> = ({ videos }) => {
       setIsLoading(true);
       setError(null);
       try {
-        const adKeywords = await getAIAdKeywords(videos);
-        setKeywords(adKeywords);
+        const topicKeywords = await getAITopicKeywords(videos);
+        setKeywords(topicKeywords);
       } catch (err) {
-        setError("AI 키워드 분석에 실패했습니다.");
+        setError("키워드 추천 생성에 실패했습니다. (Failed to generate keyword recommendations.)");
         console.error(err);
       } finally {
         setIsLoading(false);
@@ -71,12 +71,12 @@ const AdAnalysis: React.FC<AdAnalysisProps> = ({ videos }) => {
     if (videos.length > 0) {
          return <div className="flex justify-center items-center h-full"><SmallSpinner /></div>;
     }
-    return <div className="text-center text-sm text-gray-500">검색 결과가 있으면 자동으로 분석을 시작합니다.</div>;
+    return <div className="text-center text-sm text-gray-500">검색 결과가 있으면 자동으로 추천을 시작합니다.<br/>(Recommendations will start automatically with search results.)</div>;
   };
 
   return (
     <div className="bg-gray-900/50 p-4 rounded-lg h-full flex flex-col">
-      <h4 className="font-semibold mb-3 text-gray-300">쇼핑/광고 연계성 분석</h4>
+      <h4 className="font-semibold text-center mb-3 text-gray-300">Content OS 토픽 키워드 제안 (Topic Keywords)<br/><span className="text-xs font-normal text-gray-400">(상위 {videos.length}개 영상 기준) (Based on top {videos.length} videos)</span></h4>
       <div className="flex-grow min-h-[50px] flex items-center justify-center">
         {renderContent()}
       </div>

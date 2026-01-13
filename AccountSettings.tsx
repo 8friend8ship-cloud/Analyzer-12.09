@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import type { User, FeatureUsage } from '../types';
 import HelpTooltip from './common/HelpTooltip';
@@ -154,6 +153,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onNavigate }) =
         { key: 'videoDetail', title: '영상 상세 조회 (Video Detail View)', tooltip: '영상 상세 분석 페이지를 조회한 횟수입니다.' },
         { key: 'aiInsight', title: 'AI 인사이트 (AI Insight)', tooltip: '검색 결과에 대한 AI 분석 요약을 생성한 횟수입니다.' },
         { key: 'aiContentMaker', title: 'AI 유튜브 콘텐츠 메이커 (AI Content Maker)', tooltip: '워크플로우의 AI 기반 콘텐츠 생성 도구를 사용한 횟수입니다.' },
+        { key: 'revenueCalculator', title: '유튜브 수익 계산기 (Revenue Calculator)', tooltip: '영상 또는 채널의 예상 수익을 조회한 횟수입니다.' },
         { key: 'outlierAnalysis', title: '아웃라이어 분석 (Outlier Analysis)', tooltip: '아웃라이어 및 트렌드 분석 기능을 사용한 횟수입니다.' },
     ];
     

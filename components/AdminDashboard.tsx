@@ -1,5 +1,7 @@
 
-import React, { useState, useRef } from 'react';
+
+
+import React, { useState } from 'react';
 import ApiKeyModal from './ApiKeyModal';
 import EditUserModal from './EditUserModal';
 import type { AppSettings, Plan, User } from '../types';
@@ -36,8 +38,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
 
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserForModal | null>(null);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Handlers now update the parent state via onUpdateSettings prop
   const handlePlanChange = (planKey: 'pro' | 'biz', field: 'analyses' | 'price', value: string) => {
@@ -89,51 +89,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
       setEditingUser(null);
   };
 
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const text = e.target?.result;
-        if (typeof text !== 'string') throw new Error("File is not a text file");
-        const importedSettings = JSON.parse(text);
-        
-        // Construct a partial settings object to update
-        const settingsToUpdate: Partial<AppSettings> = {};
-        if (typeof importedSettings.freePlanLimit === 'number') {
-            settingsToUpdate.freePlanLimit = importedSettings.freePlanLimit;
-        }
-        if (importedSettings.plans?.pro && importedSettings.plans?.biz) {
-            settingsToUpdate.plans = importedSettings.plans;
-        }
-        if (importedSettings.apiKeys) {
-            settingsToUpdate.apiKeys = importedSettings.apiKeys;
-        }
-
-        if (Object.keys(settingsToUpdate).length > 0) {
-            onUpdateSettings(settingsToUpdate);
-            alert('설정을 성공적으로 가져왔습니다.');
-        } else {
-            alert('가져올 유효한 설정이 파일에 없습니다.');
-        }
-
-      } catch (error) {
-        console.error("Failed to parse settings file:", error);
-        alert('잘못된 설정 파일입니다.');
-      }
-    };
-    reader.readAsText(file);
-    if(fileInputRef.current) {
-        fileInputRef.current.value = "";
-    }
-  };
-
   const handleClearCache = () => {
     clearCache();
     alert('애플리케이션 캐시가 모두 삭제되었습니다.');
@@ -141,7 +96,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
   
 
   const apiConfigs = [
-    { key: 'youtube' as const, name: 'YouTube Data API v3', description: '채널 정보 및 비디오 데이터 수집에 사용됩니다.' },
+    { key: 'youtube' as const, name: 'YouTube Data API v3', description: '채널/영상 등 공개 데이터 수집에 사용됩니다.' },
+    { key: 'analytics' as const, name: 'YouTube Analytics API', description: '인증된 채널의 비공개 데이터(수익, 시청자 통계 등)에 사용됩니다.' },
     { key: 'gemini' as const, name: 'Gemini API', description: 'AI 기능(연관 키워드, AI 분석)에 사용됩니다.' },
   ];
 
@@ -192,17 +148,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
             <button onClick={() => handleSaveSettings('요금제')} className="mt-4 w-full px-4 py-2 text-sm font-semibold rounded-md bg-green-600 hover:bg-green-700">요금제 변경사항 저장</button>
           </div>
            <div className="bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
-            <h2 className="text-xl font-semibold mb-2">설정 및 캐시 관리</h2>
-            <p className="text-sm text-gray-400 mb-4">백업 파일로부터 설정을 복원합니다.</p>
-            <div className="flex gap-4">
-              <button onClick={handleImportClick} className="flex-1 px-4 py-3 text-sm font-bold rounded-md bg-blue-600 hover:bg-blue-700">설정 가져오기 (json)</button>
-              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" style={{ display: 'none' }} />
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-700/50">
-                 <h3 className="font-semibold text-gray-300 mb-2">세션 캐시 관리</h3>
-                 <p className="text-xs text-gray-400 mb-3">현재 브라우저 세션에 저장된 API 응답 캐시를 지웁니다. 데이터가 갱신되지 않는 문제가 있을 때 사용하세요.</p>
-                 <button onClick={handleClearCache} className="w-full px-4 py-3 text-sm font-bold rounded-md bg-red-600 hover:bg-red-700">세션 캐시 전체 삭제</button>
-            </div>
+                <h2 className="text-xl font-semibold mb-2">세션 캐시 관리</h2>
+                <p className="text-sm text-gray-400 mb-4">현재 브라우저 세션에 저장된 API 응답 캐시를 지웁니다. 데이터가 갱신되지 않는 문제가 있을 때 사용하세요.</p>
+                <button onClick={handleClearCache} className="w-full px-4 py-3 text-sm font-bold rounded-md bg-red-600 hover:bg-red-700">세션 캐시 전체 삭제</button>
           </div>
 
         </div>

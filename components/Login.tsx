@@ -1,4 +1,5 @@
 
+
 import React, { useCallback, useEffect, useState } from 'react';
 import TermsModal from './TermsModal';
 import PrivacyPolicyModal from './PrivacyPolicyModal';
@@ -39,6 +40,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
   const [password, setPassword] = useState('');
   const [isTermsOpen, setIsTermsOpen] = useState(false);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
+  const isDevEnvironment = window.location.hostname === 'localhost';
 
   const handleGoogleLogin = useCallback((response: any) => {
     try {
@@ -51,14 +53,14 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
         }
     } catch (e) {
         console.error("Error decoding Google token", e);
-        alert("Google 로그인에 실패했습니다. 다시 시도해주세요.");
+        alert("Google 로그인에 실패했습니다. (Google login failed. Please try again.)");
     }
   }, [onLogin]);
   
   const handleFormLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      alert('이메일과 비밀번호를 입력해주세요.');
+      alert('이메일과 비밀번호를 입력해주세요. (Please enter your email and password.)');
       return;
     }
     onLogin({ email, password });
@@ -102,68 +104,61 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                   Content OS
               </h1>
               <p className="mt-2 text-gray-400">
-                  유튜브 데이터 분석을 시작하세요.
+                  영상 데이터 분석을 시작하세요. (Start your video data analysis.)
               </p>
           </div>
 
-          <form className="space-y-4" onSubmit={handleFormLogin}>
-              <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-300 text-left">이메일 주소</label>
-                  <input id="email" name="email" type="email" autoComplete="email" required 
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  />
-              </div>
-              <div>
-                  <label htmlFor="password"className="block text-sm font-medium text-gray-300 text-left">비밀번호</label>
-                  <input id="password" name="password" type="password" autoComplete="current-password" required 
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  />
-              </div>
-              <div className="text-right text-sm">
-                  <a href="#" className="font-medium text-blue-400 hover:text-blue-300">비밀번호를 잊으셨나요?</a>
-              </div>
-              <div>
-                  <button
-                      type="submit"
-                      className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
-                  >
-                      로그인
-                  </button>
-              </div>
-          </form>
-
-          <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-600" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-gray-800 text-gray-400">또는</span>
-              </div>
-          </div>
-
-          <div>
-              <div id="google-signin-button" className="w-full flex justify-center"></div>
-          </div>
+          {isDevEnvironment ? (
+            <form className="space-y-4" onSubmit={handleFormLogin}>
+                <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-300 text-left">이메일 주소 (Email Address)</label>
+                    <input id="email" name="email" type="email" autoComplete="email" required 
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                </div>
+                <div>
+                    <label htmlFor="password"className="block text-sm font-medium text-gray-300 text-left">비밀번호 (Password)</label>
+                    <input id="password" name="password" type="password" autoComplete="current-password" required 
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    />
+                </div>
+                <div className="text-right text-sm">
+                    <a href="#" className="font-medium text-blue-400 hover:text-blue-300">비밀번호를 잊으셨나요? (Forgot password?)</a>
+                </div>
+                <div>
+                    <button
+                        type="submit"
+                        className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+                    >
+                        로그인 (Log In)
+                    </button>
+                </div>
+            </form>
+          ) : (
+            <div>
+                <div id="google-signin-button" className="w-full flex justify-center"></div>
+            </div>
+          )}
           
           <div className="text-sm text-center">
               <p className="text-gray-400">
-                  계정이 없으신가요?{' '}
+                  계정이 없으신가요? (Don't have an account?){' '}
                   <button onClick={() => onNavigate('register')} className="font-medium text-blue-400 hover:text-blue-300">
-                      가입하기
+                      가입하기 (Sign Up)
                   </button>
               </p>
           </div>
 
           <div className="text-center text-xs text-gray-500 pt-4 border-t border-gray-700">
-              <p>로그인함으로써, 귀하는 Content OS의</p>
+              <p>로그인함으로써, 귀하는 Content OS의 (By logging in, you agree to the)</p>
               <div className="flex justify-center gap-4 mt-1">
-                  <button onClick={() => setIsTermsOpen(true)} className="underline hover:text-gray-300">서비스 이용약관</button>
-                  <span>및</span>
-                  <button onClick={() => setIsPrivacyOpen(true)} className="underline hover:text-gray-300">개인정보처리방침</button>
+                  <button onClick={() => setIsTermsOpen(true)} className="underline hover:text-gray-300">서비스 이용약관 (Terms of Service)</button>
+                  <span>및 (and)</span>
+                  <button onClick={() => setIsPrivacyOpen(true)} className="underline hover:text-gray-300">개인정보처리방침 (Privacy Policy)</button>
               </div>
               <p className="mt-1">에 동의하는 것으로 간주됩니다.</p>
           </div>

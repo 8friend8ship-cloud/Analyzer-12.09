@@ -33,13 +33,13 @@ const CommentAnalysisModal: React.FC<CommentAnalysisModalProps> = ({ video, user
                 const apiKey = appSettings.apiKeys.youtube;
 
                 if (!apiKey) {
-                    throw new Error("시스템 YouTube API 키가 설정되지 않았습니다. 관리자에게 문의하여 키를 등록해주세요.");
+                    throw new Error("시스템 YouTube API 키가 설정되지 않았습니다. (System API key is not set.)");
                 }
 
                 const comments = await fetchVideoComments(video.id, apiKey);
                 if (comments.length === 0) {
                     setInsights({
-                        summary: "분석할 댓글이 없습니다. 영상에 댓글이 없거나 댓글 수집에 실패했을 수 있습니다.",
+                        summary: "분석할 댓글이 없습니다. (No comments to analyze.)",
                         positivePoints: [],
                         negativePoints: [],
                     });
@@ -49,7 +49,7 @@ const CommentAnalysisModal: React.FC<CommentAnalysisModalProps> = ({ video, user
                 const aiInsights = await getAICommentInsights(comments);
                 setInsights(aiInsights);
             } catch (err) {
-                const errorMessage = err instanceof Error ? err.message : "댓글 분석에 실패했습니다. API 키 할당량을 확인해주세요.";
+                const errorMessage = err instanceof Error ? err.message : "댓글 분석에 실패했습니다. (Comment analysis failed.)";
                 setError(errorMessage);
             } finally {
                 setIsLoading(false);
@@ -64,7 +64,7 @@ const CommentAnalysisModal: React.FC<CommentAnalysisModalProps> = ({ video, user
             <div className="bg-gray-800 border border-gray-700 rounded-lg shadow-xl w-full max-w-2xl text-gray-200 flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
                 <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-700">
                     <div>
-                        <h2 className="text-lg font-semibold">AI 댓글 분석</h2>
+                        <h2 className="text-lg font-semibold">Content OS 댓글 분석 (Comment Analysis)</h2>
                         <p className="text-xs text-gray-400 truncate max-w-md" title={video.title}>{video.title}</p>
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
@@ -77,26 +77,26 @@ const CommentAnalysisModal: React.FC<CommentAnalysisModalProps> = ({ video, user
                     ) : insights && (
                         <div className="space-y-6">
                             <div>
-                                <h3 className="font-semibold text-lg mb-2 flex items-center gap-2 text-yellow-400"><SparklesIcon /> AI 요약</h3>
+                                <h3 className="font-semibold text-lg mb-2 flex items-center gap-2 text-yellow-400"><SparklesIcon /> Content OS 요약 (Summary)</h3>
                                 <p className="text-sm text-gray-300 bg-gray-900/50 p-3 rounded-md">{insights.summary}</p>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <h3 className="font-semibold text-lg mb-2 flex items-center gap-2 text-green-400"><ThumbsUpIcon /> 긍정적 반응</h3>
+                                    <h3 className="font-semibold text-lg mb-2 flex items-center gap-2 text-green-400"><ThumbsUpIcon /> 좋았던 점 (Pros)</h3>
                                     <ul className="space-y-2 list-inside">
                                         {insights.positivePoints.map((point, i) => (
                                             <li key={i} className="text-sm p-2 bg-green-900/30 rounded-md border-l-4 border-green-500">{point}</li>
                                         ))}
-                                        {insights.positivePoints.length === 0 && <li className="text-sm text-gray-500 p-2 bg-gray-900/30 rounded-md">긍정적인 반응이 없습니다.</li>}
+                                        {insights.positivePoints.length === 0 && <li className="text-sm text-gray-500 p-2 bg-gray-900/30 rounded-md">긍정적인 반응이 없습니다. (No positive feedback.)</li>}
                                     </ul>
                                 </div>
                                 <div>
-                                    <h3 className="font-semibold text-lg mb-2 flex items-center gap-2 text-red-400"><ThumbsDownIcon /> 부정적/개선 제안</h3>
+                                    <h3 className="font-semibold text-lg mb-2 flex items-center gap-2 text-red-400"><ThumbsDownIcon /> 아쉬운 점 / 개선 제안 (Cons / Suggestions)</h3>
                                     <ul className="space-y-2 list-inside">
                                         {insights.negativePoints.map((point, i) => (
                                             <li key={i} className="text-sm p-2 bg-red-900/30 rounded-md border-l-4 border-red-500">{point}</li>
                                         ))}
-                                        {insights.negativePoints.length === 0 && <li className="text-sm text-gray-500 p-2 bg-gray-900/30 rounded-md">부정적인 반응이 없습니다.</li>}
+                                        {insights.negativePoints.length === 0 && <li className="text-sm text-gray-500 p-2 bg-gray-900/30 rounded-md">부정적인 반응이 없습니다. (No negative feedback.)</li>}
                                     </ul>
                                 </div>
                             </div>
@@ -105,7 +105,7 @@ const CommentAnalysisModal: React.FC<CommentAnalysisModalProps> = ({ video, user
                 </div>
                  <div className="flex-shrink-0 p-4 border-t border-gray-700 text-right">
                     <button onClick={onClose} className="px-4 py-2 text-sm font-semibold rounded-md bg-gray-600 hover:bg-gray-500">
-                        닫기
+                        닫기 (Close)
                     </button>
                 </div>
             </div>

@@ -4,7 +4,7 @@ interface ViewershipHeatmapProps {
   data: number[][]; // 7 days (rows) x 24 hours (cols)
 }
 
-const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+const DAYS = ['일(Sun)', '월(Mon)', '화(Tue)', '수(Wed)', '목(Thu)', '금(Fri)', '토(Sat)'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 const ViewershipHeatmap: React.FC<ViewershipHeatmapProps> = ({ data }) => {
@@ -23,7 +23,7 @@ const ViewershipHeatmap: React.FC<ViewershipHeatmapProps> = ({ data }) => {
   return (
     <div className="w-full overflow-x-auto">
         <div className="flex justify-end items-center gap-2 text-xs text-gray-400 mb-2">
-            <span>적음</span>
+            <span>적음 (Less)</span>
             <div className="flex gap-0.5">
                 <div className="w-3 h-3 rounded-sm bg-blue-900"></div>
                 <div className="w-3 h-3 rounded-sm bg-blue-800"></div>
@@ -31,7 +31,7 @@ const ViewershipHeatmap: React.FC<ViewershipHeatmapProps> = ({ data }) => {
                 <div className="w-3 h-3 rounded-sm bg-blue-600"></div>
                 <div className="w-3 h-3 rounded-sm bg-blue-500"></div>
             </div>
-            <span>많음</span>
+            <span>많음 (More)</span>
         </div>
         <table className="w-full border-separate" style={{ borderSpacing: '2px' }}>
             <thead>
@@ -52,7 +52,7 @@ const ViewershipHeatmap: React.FC<ViewershipHeatmapProps> = ({ data }) => {
                             <td key={hourIndex}>
                                 <div
                                     className={`w-full h-6 rounded-sm ${getColor(activity)}`}
-                                    title={`${day}요일 ${hourIndex}시: 활동량 ${activity}`}
+                                    title={`${day} ${hourIndex}h: Activity ${activity}`}
                                 ></div>
                             </td>
                         ))}

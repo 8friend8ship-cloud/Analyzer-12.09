@@ -1,4 +1,3 @@
-
 // This service provides a global way to set and get the Gemini API key.
 // It manages a system-wide key and a user-specific key, prioritizing the user's key.
 
@@ -26,7 +25,7 @@ export function setUserGeminiApiKey(key: string | null) {
  * @throws {Error} if no key is configured.
  */
 export function getGeminiApiKey(): string {
-    const key = systemGeminiKey || process.env.API_KEY;
+    const key = systemGeminiKey; // In simulation/browser mode, only rely on the system key set via AppSettings.
     if (!key) {
         console.error("Gemini API Key is not configured. Please set it in admin settings.");
         throw new Error("Gemini API Key is not configured.");

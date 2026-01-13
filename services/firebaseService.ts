@@ -1,67 +1,78 @@
+// This service simulates a Firebase connection for caching using browser localStorage.
+// This allows for persistent caching across sessions to reduce API calls.
 
+const CACHE_PREFIX = 'contentos-cache:';
+const STALE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
-
-import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
-
-// Placeholder configuration. 
-// The app will check if these are real values before attempting to connect.
-const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY || "YOUR_API_KEY",
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN || "YOUR_PROJECT.firebaseapp.com",
-  projectId: process.env.FIREBASE_PROJECT_ID || "crypto-sphere-468511-a7",
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "YOUR_PROJECT.appspot.com",
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "YOUR_SENDER_ID",
-  appId: process.env.FIREBASE_APP_ID || "YOUR_APP_ID"
-};
-
-let db: any = null;
-
-try {
-    // CRITICAL FIX: Do NOT attempt to initialize if keys are placeholders.
-    // This prevents the "Black Screen" on deployment when keys aren't set yet.
-    if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY" && !firebaseConfig.apiKey.includes("YOUR_")) {
-        const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        console.log("[Firebase] Initialized successfully.");
-    } else {
-        console.warn("[Firebase] Config missing or using placeholders. Firestore features (Central Cache) are disabled. App will run in standalone mode.");
-    }
-} catch (e) {
-    console.error("[Firebase] Initialization failed:", e);
-    // Ensure db is null so the app falls back gracefully
-    db = null;
+interface CacheItem<T> {
+    data: T;
+    lastFetched: string; // ISO timestamp
 }
 
-export const getRankingFromFirestore = async (key: string) => {
-    // Safety check: If DB isn't ready, behave as if data is missing (cache miss)
-    if (!db) return null;
-    
+/**
+ * Retrieves an item from the cache if it's considered "fresh".
+ * @param key The key for the cached item.
+ * @returns The cached data or null if not found or stale.
+ */
+export const getFromCache = <T>(key: string): T | null => {
+    const fullKey = CACHE_PREFIX + key;
     try {
-        const docRef = doc(db, "rankings", key);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-            return docSnap.data().data;
+        const itemStr = localStorage.getItem(fullKey);
+        if (!itemStr) {
+            return null;
         }
-        return null;
+        const item: CacheItem<T> = JSON.parse(itemStr);
+        const isStale = new Date().getTime() - new Date(item.lastFetched).getTime() > STALE_DURATION;
+
+        if (isStale) {
+            console.log(`[Cache] STALE data for key: ${key}. Will re-fetch.`);
+            localStorage.removeItem(fullKey);
+            return null;
+        }
+        
+        console.log(`[Cache] FRESH data found for key: ${key}.`);
+        return item.data;
+
     } catch (e) {
-        console.error("[Firestore] Read error (continuing with live API):", e);
+        console.error(`[Cache] Error reading from localStorage for key ${key}:`, e);
+        // Clear corrupted data
+        localStorage.removeItem(fullKey);
         return null;
     }
 };
 
-export const setRankingInFirestore = async (key: string, data: any) => {
-    // Safety check: If DB isn't ready, skip saving
-    if (!db) return;
-    
+/**
+ * Stores an item in the cache with a current timestamp.
+ * @param key The key for the item to be cached.
+ * @param data The data to store.
+ */
+export const setInCache = <T>(key: string, data: T): void => {
+    const fullKey = CACHE_PREFIX + key;
+    const item: CacheItem<T> = {
+        data,
+        lastFetched: new Date().toISOString(),
+    };
+
     try {
-        const docRef = doc(db, "rankings", key);
-        await setDoc(docRef, {
-            data: data,
-            timestamp: new Date().toISOString()
-        });
-        console.log(`[Firestore] Data saved for key: ${key}`);
+        localStorage.setItem(fullKey, JSON.stringify(item));
+        console.log(`[Cache] Data SET for key: ${key}`);
     } catch (e) {
-        console.error("[Firestore] Write error:", e);
+        console.error(`[Cache] Error writing to localStorage for key ${key}. Storage might be full.`, e);
+    }
+};
+
+/**
+ * Clears all items from the app's cache.
+ */
+export const clearFirebaseCache = (): void => {
+    try {
+        Object.keys(localStorage).forEach(key => {
+            if (key.startsWith(CACHE_PREFIX)) {
+                localStorage.removeItem(key);
+            }
+        });
+        console.log('[Cache] Firebase cache simulation cleared successfully.');
+    } catch (e) {
+        console.error('[Cache] Error clearing cache:', e);
     }
 };

@@ -10,6 +10,11 @@ interface IdentityFinderViewProps {
 
 // --- Data Structures ---
 
+const BrainCircuitIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5a3 3 0 1 0-5.993.142M9 8a3 3 0 1 0 5.183 2.378M12 19a3 3 0 1 0 5.993-.142M15 16a3 3 0 1 0-5.183-2.378M14 12a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"/><path d="M12 12h.01"/><path d="M17.5 14.5a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"/><path d="M17.5 9.5a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"/><path d="M6.5 14.5a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"/><path d="M6.5 9.5a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"/></svg>;
+
+const JohnsonIcon = () => <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0 text-white shadow-md border-2 border-blue-400/50"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-2h4v2H10zm5.91-4.5H8.09c-.49 0-.85-.59-.57-1.02l1.9-2.92c.2-.31.54-.51.92-.51h3.32c.38 0 .72.2.92.51l1.9 2.92c.28.43-.08 1.02-.57 1.02z"/></svg></div>;
+
+
 // Extended Question Pool (~180 options)
 const QUESTION_POOL: Record<string, IdentityOption[]> = {
     'A': [ // PART A: 본능적 끌림 & 메인 카테고리 탐색
@@ -215,6 +220,16 @@ const STAGE_TITLES: Record<string, { title: string; desc: string }> = {
     'F': { title: "PART F. 핵심 세계관 (Series Key)", desc: "마지막입니다. 지속 가능한 '시리즈' 하나를 기획한다면?" }
 };
 
+const JOHNSON_DIALOGUE: Record<string, { preamble: string, preamble_en: string, question: string, question_en: string }> = {
+    'A': { preamble: "좋아, 시작해볼까? 먼저, **네 마음**이 어디로 향하는지부터 보자.", preamble_en: "Alright, shall we start? First, let's see where **your heart** is heading.", question: "복잡하게 생각하지 말고, 그냥 **본능적으로 가장 끌리는** 썸네일 하나만 골라봐.", question_en: "Don't overthink it. Just pick the one thumbnail you're **instinctively most drawn to**." },
+    'B': { preamble: "오케이, 첫인상은 알았어. 이제 그걸 **어떻게 요리할지** 정해볼까?", preamble_en: "Okay, I've got your first impression. Now, let's decide **how you'd cook it**.", question: "같은 주제라도 **어떤 포맷**으로 만들 때 네가 더 신나게 만들 수 있을 것 같아?", question_en: "Even with the same topic, which **format** do you think you'd be more excited to create?" },
+    'C': { preamble: "좋아, 요리법도 정했고... 이제 **누구를 위한 요리인지** 생각해보자.", preamble_en: "Great, recipe's set... Now, let's think about **who this dish is for**.", question: "네가 **가장 깊이 공감하고**, '아, 이건 내 얘기인데?' 싶은 썸네일은 뭐야?", question_en: "Which thumbnail do you **resonate with the most**, thinking, 'Ah, this is my story'?" },
+    'D': { preamble: "누구에게 줄지도 정했네. 그럼 이제 **어떤 분위기**로 대접할지 볼까?", preamble_en: "We've decided who to serve. Now, let's see **what mood** we're setting.", question: "네 채널의 **전반적인 느낌**, 즉 '톤앤매너'를 결정한다면 어떤 쪽에 가까워?", question_en: "If you were to decide on your channel's **overall vibe**, its 'tone and manner,' which of these is it closer to?" },
+    'E': { preamble: "분위기도 잡았고... 거의 다 왔어. 이제 **메인 메뉴**를 정할 시간이야.", preamble_en: "The mood is set... We're almost there. Time to decide on the **main course**.", question: "여러 가지 관심사 중에서, 네가 **가장 자신 있게 파고들 수 있는** 세부 주제는 뭐야?", question_en: "Among your various interests, what's the specific topic you feel **most confident diving deep into**?" },
+    'F': { preamble: "마지막 질문이야. 이 모든 걸 엮어서 **하나의 세계관**으로 만들 차례야.", preamble_en: "Last question. It's time to weave all this into **a single universe**.", question: "네가 앞으로 **1년 동안 꾸준히 할 수 있는** 단 하나의 콘텐츠 시리즈를 고른다면?", question_en: "If you had to pick just one content series that you could **consistently produce for a year**, what would it be?" }
+};
+
+
 // --- Helper: Age Calculation ---
 const getAgeValue = (range: string): number => {
     // Fine-grained mapping
@@ -300,13 +315,13 @@ const IdentityFinderView: React.FC<IdentityFinderViewProps> = ({ onBack }) => {
                     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
                 }
                 
-                // Select top 12 (3x the previous 4-5)
+                // Select top 12
                 const selectedOptions = shuffled.slice(0, 12);
                 
                 return {
                     id: stageId,
-                    title: STAGE_TITLES[stageId].title,
-                    description: STAGE_TITLES[stageId].desc,
+                    title: `STEP ${stageId}`,
+                    description: 'Select one that resonates most with you.',
                     options: selectedOptions
                 };
             });
@@ -339,6 +354,7 @@ const IdentityFinderView: React.FC<IdentityFinderViewProps> = ({ onBack }) => {
 
         let score = 100;
         const penalties: string[] = [];
+        const penalties_en: string[] = [];
 
         // 1. Category Consistency
         const catA = answers['A'].traits.category;
@@ -347,121 +363,87 @@ const IdentityFinderView: React.FC<IdentityFinderViewProps> = ({ onBack }) => {
 
         if (catA !== catB) {
             score -= 15;
-            penalties.push(`[카테고리 혼란] '${catA}'(A)와 '${catB}'(B)를 섞어서 선택했습니다.`);
+            penalties.push(`첫 선택('${catA}')과 다른 형식('${catB}')을 골랐습니다. 이는 흥미와 실행 간의 간극을 의미할 수 있습니다.`);
+            penalties_en.push(`You chose a different format ('${catB}') from your initial interest ('${catA}'). This may indicate a gap between interest and execution.`);
         }
         if (catA !== catE && catB !== catE) {
             score -= 10;
-            penalties.push(`[세부 장르 불일치] 최종 장르(${catE})가 초기 선택과 다릅니다.`);
+            penalties.push(`최종 장르('${catE}')가 초반의 흥미와 다릅니다. 채널 방향이 흔들릴 가능성이 있습니다.`);
+            penalties_en.push(`The final genre ('${catE}') differs from your initial interest. Your channel direction may be unstable.`);
         }
 
-        // 2. Age Consistency (Implicit vs Explicit)
+        // 2. Age Consistency
         const ageA = answers['A'].traits.age;
         const ageC = answers['C'].traits.age;
-        
         const valA = getAgeValue(ageA);
         const valC = getAgeValue(ageC);
 
         if (Math.abs(valA - valC) >= 20) {
             score -= 25;
-            penalties.push(`[타겟 연령 충돌] ${ageA} 취향과 ${ageC} 취향이 충돌합니다.`);
+            penalties.push(`끌리는 콘텐츠(${ageA})와 공감하는 콘텐츠(${ageC})의 세대 차이가 큽니다. 타겟 시청자 설정에 어려움을 겪을 수 있습니다.`);
+            penalties_en.push(`There's a large generational gap between content you're drawn to (${ageA}) and content you relate to (${ageC}). This may cause difficulty in setting a target audience.`);
         }
 
         // 3. Tone Consistency
         const toneA = answers['A'].traits.tone;
         const toneD = answers['D'].traits.tone;
-        
         const isFast = (t: string) => ['Fun', 'Shock', 'Info'].includes(t);
         const isSlow = (t: string) => ['Healing', 'Emotional'].includes(t);
 
         if ((isFast(toneA) && isSlow(toneD)) || (isSlow(toneA) && isFast(toneD))) {
             score -= 15;
-            penalties.push(`[톤앤매너 부조화] 자극과 힐링이 섞여 있어 시청자가 혼란스러울 수 있습니다.`);
-        }
-
-        // 4. Gender Consistency
-        const genderA = answers['A'].traits.gender || 'Neutral';
-        const genderC = answers['C'].traits.gender || 'Neutral';
-        if (genderA !== 'Neutral' && genderC !== 'Neutral' && genderA !== genderC) {
-            score -= 10;
-            penalties.push(`[성별 타겟 혼재] 남성향과 여성향 콘텐츠가 섞여 있습니다.`);
+            penalties.push(`자극적인(빠른) 콘텐츠와 편안한(느린) 콘텐츠를 동시에 선호합니다. 채널의 톤앤매너가 불분명해질 수 있습니다.`);
+            penalties_en.push(`You prefer both stimulating (fast) and relaxing (slow) content. This can make your channel's tone and manner unclear.`);
         }
 
         score = Math.max(30, Math.min(100, score));
 
         // Persona Construction
         const dominantCategory = catE;
-        const dominantAge = ageC; // Use explicit age from C
+        const dominantAge = ageC;
         const dominantTone = toneD;
         const dominantKeyword = answers['F'].traits.keyword;
         const genderBias = getGenderScore(answers);
-
         const personaString = `${dominantAge} 타겟 | ${genderBias} | ${dominantCategory} | ${dominantTone} 감성`;
-
-        // Strategy
         let statusMessage = "";
         let strategy = "";
+        let statusMessage_en = "";
+        let strategy_en = "";
         
         if (score >= 90) {
-            statusMessage = "🌟 최상위 콘텐츠 일관성";
+            statusMessage = "최상위 콘텐츠 일관성";
+            statusMessage_en = "Excellent Content Consistency";
             strategy = "완벽합니다. 이 키워드 조합으로 5개 영상을 연달아 올리면 시청자가 반응할 확률이 매우 높습니다.";
+            strategy_en = "Perfect. Uploading five consecutive videos with this keyword combination has a very high probability of eliciting viewer response.";
         } else if (score >= 70) {
-            statusMessage = "⚖️ 성장 잠재력 보유 (재정비 필요)";
+            statusMessage = "성장 잠재력 보유 (재정비 필요)";
+            statusMessage_en = "Potential for Growth (Needs Refinement)";
             strategy = "좋은 방향이지만, " + (penalties[0] || "타겟을 조금 더 좁힐 필요가 있습니다.");
+            strategy_en = "It's a good direction, but " + (penalties_en[0] || "you need to narrow down your target a bit more.");
         } else {
-            statusMessage = "🚨 채널 방향성 긴급 점검 필요";
+            statusMessage = "채널 방향성 긴급 점검 필요";
+            statusMessage_en = "Urgent Review of Channel Direction Needed";
             strategy = "하고 싶은 게 너무 많습니다. '내가 좋아하는 것' 말고 '타겟이 반응하는 것' 하나만 남기고 버리는 용기가 필요합니다.";
+            strategy_en = "You want to do too many things. You need the courage to abandon everything except for the one thing 'your target audience reacts to,' not just 'what you like.'";
         }
-
-        const profile = {
-            category: dominantCategory,
-            age: dominantAge,
-            tone: dominantTone,
-            keyword: dominantKeyword,
-            persona: personaString,
-            gender: genderBias
-        };
-
+        const profile = { category: dominantCategory, age: dominantAge, tone: dominantTone, keyword: dominantKeyword, persona: personaString, gender: genderBias };
         const recs = [
-            { title: `${answers['F'].text} - 1편`, concept: "시리즈의 시작, 세계관 정립" },
-            { title: `[${dominantKeyword}] ${answers['D'].text} 스타일 편집본`, concept: "톤앤매너 강화" },
-            { title: `${answers['E'].text} 모음집`, concept: "조회수 보장형 콘텐츠" },
-            { title: `${dominantAge}가 공감하는 ${dominantKeyword} 이야기`, concept: "타겟 저격" },
-            { title: `(쇼츠) ${answers['B'].text} 하이라이트`, concept: "유입 확대용 숏폼" }
+            { title: `${answers['F'].text} - 1편`, concept: "시리즈의 시작, 세계관 정립", concept_en: "Start of the series, establishing the world" },
+            { title: `[${dominantKeyword}] ${answers['D'].text} 스타일 편집본`, concept: "톤앤매너 강화", concept_en: "Strengthening tone & manner" },
+            { title: `${answers['E'].text} 모음집`, concept: "조회수 보장형 콘텐츠", concept_en: "Guaranteed-view content" }
         ];
-
         const keywords = generateKeywords(answers);
 
         try {
-            // Using Promise.all to fetch recommendations while simulating a minimum analysis time for UX
             const minDelay = new Promise(resolve => setTimeout(resolve, 2000));
             const aiFetch = getAIChannelRecommendations(dominantCategory, dominantKeyword);
-            
             const [_, recommendedChannels] = await Promise.all([minDelay, aiFetch]);
 
-            setResult({
-                score,
-                profile,
-                seriesRecommendations: recs,
-                recommendedKeywords: keywords,
-                statusMessage,
-                strategy,
-                analysisLog: penalties,
-                recommendedChannels: recommendedChannels || { korea: [], global: [] }
-            });
+            setResult({ score, profile, seriesIdeas: recs, suggestedKeywords: keywords, statusMessage, statusMessage_en, strategy, strategy_en, analysisLog: penalties, analysisLog_en: penalties_en, suggestedChannels: recommendedChannels || { korea: [], global: [] } });
             setState('result');
-
         } catch (error) {
             console.error("Analysis Failed", error);
-             setResult({
-                score,
-                profile,
-                seriesRecommendations: recs,
-                recommendedKeywords: keywords,
-                statusMessage,
-                strategy,
-                analysisLog: penalties,
-                recommendedChannels: { korea: [], global: [] }
-            });
+            setResult({ score, profile, seriesIdeas: recs, suggestedKeywords: keywords, statusMessage, statusMessage_en, strategy, strategy_en, analysisLog: penalties, analysisLog_en: penalties_en, suggestedChannels: { korea: [], global: [] } });
             setState('result');
         }
     };
@@ -479,24 +461,13 @@ const IdentityFinderView: React.FC<IdentityFinderViewProps> = ({ onBack }) => {
 
     const ChannelRecommendations = ({ channels, title, icon }: { channels: { name: string; reason: string }[], title: string, icon: string }) => (
         <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 h-full">
-            <h3 className="font-bold text-white mb-4 flex items-center gap-2">
-                <span className="text-xl">{icon}</span> {title}
-            </h3>
+            <h3 className="font-bold text-white mb-4 flex items-center gap-2"><span className="text-xl">{icon}</span> {title}</h3>
             <div className="grid grid-cols-1 gap-3">
-                {channels.map((channel, i) => (
+                {channels.map((channel) => (
                     <div key={channel.name} className="bg-gray-900/50 p-3 rounded-lg border border-gray-600/50 hover:border-blue-500 transition-colors">
                         <div className="flex justify-between items-start mb-2">
                             <h4 className="font-bold text-sm text-blue-300">{channel.name}</h4>
-                            <a 
-                                href={`https://www.youtube.com/results?search_query=${encodeURIComponent(channel.name)}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-gray-500 hover:text-white"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                </svg>
-                            </a>
+                            <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(channel.name)}`} target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg></a>
                         </div>
                         <p className="text-xs text-gray-400 leading-snug">{channel.reason}</p>
                     </div>
@@ -508,63 +479,49 @@ const IdentityFinderView: React.FC<IdentityFinderViewProps> = ({ onBack }) => {
     if (state === 'intro') {
         return (
             <div className="flex flex-col items-center justify-center h-full p-6 animate-fade-in text-center max-w-2xl mx-auto">
-                <div className="w-24 h-24 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center mb-6 text-5xl shadow-lg shadow-blue-500/30">
-                    🧬
-                </div>
-                <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">크리에이터 DNA 6단계 진단 (6-Step Creator DNA Diagnosis)</h1>
+                <div className="w-24 h-24 bg-gradient-to-br from-blue-600 to-purple-600 rounded-full flex items-center justify-center mb-6 text-white p-5 shadow-lg shadow-blue-500/30"><BrainCircuitIcon /></div>
+                <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">크리에이터 DNA 진단 (Creator DNA Diagnosis)</h1>
                 <p className="text-gray-300 text-lg mb-8 leading-relaxed">
-                    가장 성공적인 채널은 크리에이터의 성향과 일치합니다. (The most successful channels align with the creator's personality.)<br/>
-                    6단계 질문을 통해 당신의 크리에이터 DNA를 분석하고,<br/>
-                    <span className="text-blue-300 font-semibold">가장 잘 맞는 채널 방향성</span>과 콘텐츠 아이디어를 추천받으세요.<br/>
-                    (Analyze your Creator DNA through 6 steps and get recommendations for channel direction and content ideas that suit you best.)
+                    안녕하세요! AI 가이드 Johnson입니다.<br/>
+                    6단계 질문을 통해 당신도 몰랐던 크리에이터 DNA를 함께 발견해봐요.<br/>
+                    <span className="text-blue-300 font-semibold">당신에게 가장 잘 맞는 채널 방향성</span>과 콘텐츠 아이디어를 찾을 수 있을 거예요.
                 </p>
                 <div className="space-y-4 w-full max-w-sm">
-                    <Button onClick={handleStart} className="w-full py-4 text-lg font-bold shadow-lg transform transition hover:scale-105 bg-blue-600 hover:bg-blue-500 border-none">
-                        진단 시작하기 (Start Diagnosis)
-                    </Button>
-                    <Button onClick={onBack} variant="secondary" className="w-full py-3">
-                        뒤로 가기 (Go Back)
-                    </Button>
+                    <Button onClick={handleStart} className="w-full py-4 text-lg font-bold shadow-lg transform transition hover:scale-105 bg-blue-600 hover:bg-blue-500 border-none">진단 시작하기</Button>
+                    <Button onClick={onBack} variant="secondary" className="w-full py-3">뒤로 가기</Button>
                 </div>
             </div>
         );
     }
 
-    if (state === 'loading_quiz') {
-        return <div className="flex justify-center items-center h-full"><Spinner message="오늘의 질문 세트를 구성하고 있습니다..." /></div>;
-    }
+    if (state === 'loading_quiz') { return <div className="flex justify-center items-center h-full"><Spinner message="오늘의 질문 세트를 구성하고 있습니다..." /></div>; }
 
     if (state === 'quiz') {
         const stage = activeStages[currentStageIdx];
+        const dialogue = JOHNSON_DIALOGUE[stage.id];
         const progress = ((currentStageIdx) / activeStages.length) * 100;
 
         return (
             <div className="flex flex-col h-full max-w-6xl mx-auto p-4 md:p-6 animate-fade-in">
                 <div className="mb-6">
-                    <div className="flex justify-between text-xs text-gray-400 mb-2">
-                        <span>STEP {currentStageIdx + 1} / {activeStages.length}</span>
-                        <span>{stage.title}</span>
-                    </div>
-                    <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden">
-                        <div className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div>
-                    </div>
+                    <div className="flex justify-between text-xs text-gray-400 mb-2"><span>STEP {currentStageIdx + 1} / {activeStages.length}</span></div>
+                    <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden"><div className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div></div>
                 </div>
                 
-                <div className="text-center mb-8">
-                    <h2 className="text-2xl font-bold text-white mb-2">{stage.title}</h2>
-                    <p className="text-gray-400 text-sm">{stage.description}</p>
+                <div className="mb-6 bg-gray-800/50 p-4 rounded-lg border border-gray-700/50 flex items-start gap-4">
+                    <JohnsonIcon />
+                    <div>
+                        <p className="text-gray-300 text-sm mb-1" dangerouslySetInnerHTML={{ __html: dialogue.preamble.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>') }}></p>
+                        <p className="text-gray-500 text-xs mb-3 italic">{dialogue.preamble_en}</p>
+                        <p className="text-white font-semibold whitespace-pre-line" dangerouslySetInnerHTML={{ __html: dialogue.question.replace(/\*\*(.*?)\*\*/g, '<strong class="text-blue-300">$1</strong>') }}></p>
+                        <p className="text-gray-400 text-xs whitespace-pre-line mt-1 italic">{dialogue.question_en}</p>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto pb-4">
                     {stage.options.map((option, idx) => (
-                        <button
-                            key={idx}
-                            onClick={() => handleSelectOption(option)}
-                            className="relative group bg-gray-800 border-2 border-gray-700 hover:border-blue-500 p-4 rounded-xl text-left transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/10 flex flex-col justify-center min-h-[100px]"
-                        >
-                            <span className="text-gray-200 group-hover:text-white font-medium text-base leading-snug">
-                                {option.text}
-                            </span>
+                        <button key={idx} onClick={() => handleSelectOption(option)} className="relative group bg-gray-800 border-2 border-gray-700 hover:border-blue-500 p-4 rounded-xl text-left transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/10 flex flex-col justify-center min-h-[100px]">
+                            <span className="text-gray-200 group-hover:text-white font-medium text-base leading-snug">{option.text}</span>
                         </button>
                     ))}
                 </div>
@@ -577,145 +534,97 @@ const IdentityFinderView: React.FC<IdentityFinderViewProps> = ({ onBack }) => {
             <div className="flex flex-col items-center justify-center h-full p-6 animate-fade-in">
                 <Spinner message="DNA 패턴을 해독하고 있습니다..." />
                 <div className="mt-8 space-y-3 text-center text-sm text-gray-400">
-                    <p className="animate-pulse">🧠 카테고리 일관성 검사 중...</p>
-                    <p className="animate-pulse delay-100">📉 타겟 연령 및 성별 분석 중...</p>
-                    <p className="animate-pulse delay-200">🔍 톤앤매너 적합도 스코어링...</p>
-                    <p className="animate-pulse delay-300">🔑 필승 키워드 조합 생성 중...</p>
+                    <p className="animate-pulse [animation-delay:0s]">🧠 카테고리 일관성 검사 중... (Checking category consistency...)</p>
+                    <p className="animate-pulse [animation-delay:0.2s]">📉 타겟 연령 및 성별 분석 중... (Analyzing target age & gender...)</p>
+                    <p className="animate-pulse [animation-delay:0.4s]">🔍 톤앤매너 적합도 분석 중... (Analyzing tone & manner suitability...)</p>
+                    <p className="animate-pulse [animation-delay:0.6s]">🔑 필승 키워드 조합 생성 중... (Generating winning keywords...)</p>
                 </div>
             </div>
         );
     }
 
-    // Result View
     return (
         <div className="flex flex-col h-full p-4 md:p-8 overflow-y-auto animate-fade-in">
-            <style>{`
-                .pdf-mode .no-print { display: none !important; }
-                .pdf-mode { background-color: #1f2937 !important; color: white !important; padding: 20px !important; }
-            `}</style>
-
             <div className="max-w-6xl mx-auto w-full" ref={reportRef}>
-                <header className="text-center mb-8">
+                 <header className="text-center mb-8">
                     <p className="text-blue-400 font-bold tracking-widest uppercase text-xs mb-2">Creator DNA Report</p>
-                    <h1 className="text-3xl font-bold text-white">크리에이터 DNA 진단 결과 (Creator DNA Diagnosis)</h1>
+                    <h1 className="text-3xl font-bold text-white">Johnson의 생각 정리 (Johnson's Thoughts)</h1>
+                    <p className="text-gray-400 mt-2">이건 평가표가 아니야. 지금까지 네가 고른 선택을 하나의 방향으로 정리해본 지도야.<br/><span className="text-sm text-gray-500">This isn't an evaluation sheet. It's a map organizing your choices into a single direction.</span></p>
                 </header>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    {/* Score Card */}
                     <div className="lg:col-span-4 space-y-6">
-                        <div className="bg-gray-800 p-8 rounded-3xl border border-gray-700 text-center relative overflow-hidden shadow-2xl">
-                            <p className="text-gray-400 mb-4 font-medium">콘텐츠 방향성 일관성 점수<br/>(Content Direction Consistency Score)</p>
-                            <div className={`text-7xl font-black mb-2 ${getScoreColor(result!.score)}`}>
-                                {result!.score}
-                            </div>
-                            <p className="text-sm text-gray-500 mb-6">/ 100점</p>
+                        <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 text-center shadow-lg min-h-[240px] flex flex-col justify-center">
+                            <p className="text-gray-400 mb-2 font-medium">콘텐츠 방향성 일관성<br/><span className="text-xs">(Content Direction Consistency)</span></p>
                             
-                            <div className="bg-gray-900/50 rounded-xl p-4 border border-gray-600">
-                                <p className={`font-bold text-lg ${getScoreColor(result!.score)}`}>{result!.statusMessage}</p>
+                            <div className="flex-grow flex flex-col justify-center">
+                                <p className={`font-black text-3xl leading-tight ${getScoreColor(result!.score)}`}>{result!.statusMessage}</p>
+                                <p className={`text-base text-gray-400 mt-2`}>{result!.statusMessage_en}</p>
                             </div>
-                            <p className="text-xs text-gray-600 mt-3">* 이 점수는 사용자의 선택에 기반한 콘텐츠 방향성의 일관성을 나타내며, 채널의 실제 성과와는 무관할 수 있습니다.</p>
                         </div>
 
                         <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700">
-                            <h3 className="font-bold text-white mb-4 flex items-center gap-2">
-                                <span className="text-xl">🕵️</span> 발견된 시청자 페르소나 (Discovered Audience Persona)
-                            </h3>
-                            <div className="space-y-4">
-                                <div className="flex justify-between border-b border-gray-700 pb-2">
-                                    <span className="text-gray-400 text-sm">주력 카테고리</span>
-                                    <span className="text-white font-semibold">{result!.profile.category}</span>
-                                </div>
-                                <div className="flex justify-between border-b border-gray-700 pb-2">
-                                    <span className="text-gray-400 text-sm">타겟 (연령/성별)</span>
-                                    <span className="text-white font-semibold">{result!.profile.age} / {result!.profile.gender}</span>
-                                </div>
-                                <div className="flex justify-between border-b border-gray-700 pb-2">
-                                    <span className="text-gray-400 text-sm">핵심 키워드</span>
-                                    <span className="text-white font-semibold">{result!.profile.keyword}</span>
-                                </div>
-                                <div className="pt-2">
-                                    <p className="text-xs text-blue-300 bg-blue-900/20 p-3 rounded-lg border border-blue-500/20 leading-relaxed">
-                                        "{result!.profile.persona}"
-                                    </p>
-                                </div>
+                            <h3 className="font-bold text-white mb-4">DNA 프로필 (DNA Profile)</h3>
+                            <div className="space-y-3 text-sm">
+                                <div className="flex justify-between"><span className="text-gray-400">주력 카테고리</span><span className="font-semibold">{result!.profile.category}</span></div>
+                                <div className="flex justify-between"><span className="text-gray-400">타겟 (연령/성별)</span><span className="font-semibold">{result!.profile.age} / {result!.profile.gender}</span></div>
+                                <div className="flex justify-between"><span className="text-gray-400">핵심 키워드</span><span className="font-semibold">{result!.profile.keyword}</span></div>
+                                <div className="pt-2"><p className="text-xs text-blue-300 bg-blue-900/20 p-2 rounded-lg border border-blue-500/20">"{result!.profile.persona}"</p></div>
                             </div>
                         </div>
+                        {result!.analysisLog.length > 0 && (
+                            <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700">
+                                <h3 className="font-bold text-white mb-3">함께 생각해볼 점 (Points to Consider)</h3>
+                                <ul className="space-y-2 text-xs text-gray-400 list-disc list-inside">
+                                    {result!.analysisLog.map((log, i) => <li key={i}>{log}<br/><span className="text-gray-500 italic">{result!.analysisLog_en[i]}</span></li>)}
+                                </ul>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Analysis & Strategy */}
                     <div className="lg:col-span-8 space-y-6">
-                        {/* Keyword Strategy */}
                         <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700">
-                            <h3 className="font-bold text-white mb-4 text-lg flex items-center gap-2">🔑 AI 추천 채널 키워드 전략 (AI Recommended Keywords)</h3>
-                            <div className="mb-4">
-                                <p className="text-xs text-blue-400 font-bold mb-2 uppercase">Core Keywords (채널 정체성)</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {result!.recommendedKeywords?.core.map((kw, i) => (
-                                        <span key={i} className="px-3 py-1.5 bg-blue-600 text-white font-bold rounded-lg text-sm shadow-md">
-                                            {kw}
-                                        </span>
-                                    ))}
-                                </div>
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray-400 font-bold mb-2 uppercase">Side Keywords (유입 확장)</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {result!.recommendedKeywords?.side.map((kw, i) => (
-                                        <span key={i} className="px-3 py-1 bg-gray-700 text-gray-300 text-xs rounded-full">
-                                            {kw}
-                                        </span>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Strategy Content */}
-                        <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700">
-                            <h3 className="font-bold text-white mb-4 text-lg">📢 AI 성장 전략 가이드 (AI Growth Strategy Guide)</h3>
-                            <p className="text-gray-300 leading-relaxed whitespace-pre-line mb-6 text-sm">
-                                {result!.strategy}
-                            </p>
+                            <h3 className="font-bold text-white mb-4 text-lg">📢 Johnson의 성장 전략 가이드 (Johnson's Growth Strategy Guide)</h3>
+                            <p className="text-gray-300 mb-2 text-sm">{result!.strategy}</p>
+                            <p className="text-gray-400 text-xs italic mb-4">{result!.strategy_en}</p>
                             
-                            <h4 className="font-semibold text-yellow-400 mb-3 text-sm uppercase tracking-wide">Must-Do: 추천 콘텐츠 시리즈</h4>
-                            <div className="space-y-3">
-                                {result!.seriesRecommendations.map((rec, i) => (
-                                    <div key={i} className="flex items-start gap-3 bg-gray-700/50 p-3 rounded-lg">
-                                        <div className="bg-gray-600 text-gray-300 w-6 h-6 rounded flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
-                                            {i + 1}
-                                        </div>
-                                        <div>
-                                            <p className="text-white font-medium text-sm">{rec.title}</p>
-                                            <p className="text-xs text-gray-400 mt-0.5">의도: {rec.concept}</p>
-                                        </div>
+                            <h4 className="font-semibold text-yellow-400 mb-3 text-sm uppercase">콘텐츠 아이디어 (Content Ideas)</h4>
+                            <div className="space-y-2">
+                                {result!.seriesIdeas.map((rec, i) => (
+                                    <div key={i} className="flex items-start gap-3 bg-gray-700/50 p-2 rounded-lg">
+                                        <div className="bg-gray-600 text-xs w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</div>
+                                        <div><p className="text-white text-sm">{rec.title}</p><p className="text-xs text-gray-400">의도: {rec.concept} <span className="text-gray-500 italic">({rec.concept_en})</span></p></div>
                                     </div>
                                 ))}
                             </div>
                         </div>
 
-                        {/* Benchmarking Channels - Split View */}
-                        {result!.recommendedChannels && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <ChannelRecommendations 
-                                    title="국내 벤치마킹 (Korea)" 
-                                    icon="🇰🇷" 
-                                    channels={result!.recommendedChannels.korea} 
-                                />
-                                <ChannelRecommendations 
-                                    title="글로벌 벤치마킹 (Global)" 
-                                    icon="🌎" 
-                                    channels={result!.recommendedChannels.global} 
-                                />
+                        <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700">
+                            <h3 className="font-bold text-white mb-4 text-lg">🚀 Your First Step Today</h3>
+                            <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4 text-center">
+                                 <p className="text-green-300 text-sm">
+                                    지금 바로 <b className="text-white">'탐색'</b> 메뉴로 이동해서, 당신의 핵심 키워드인
+                                    <br/><span className="text-green-500 text-xs italic">Go to the <b className="text-white">'Explore'</b> menu and search for your core keyword:</span>
+                                </p>
+                                <p className="text-2xl font-bold my-2 text-white">"{result!.suggestedKeywords.core[1].substring(1)}"</p>
+                                <p className="text-green-300 text-sm">
+                                    를 검색하고, 상위 영상 3개를 <b className="text-white">'컬렉션'</b>에 저장해보세요.<br/>그게 당신 채널의 첫 번째 '지도'가 될 거예요.
+                                    <br/><span className="text-green-500 text-xs italic">Save the top 3 videos to your <b className="text-white">'Collection'</b>.<br/>That will be your channel's first 'map'.</span>
+                                </p>
                             </div>
-                        )}
+                        </div>
+                        
+                        {result!.suggestedChannels && (<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <ChannelRecommendations title="국내 벤치마킹 (Korea)" icon="🇰🇷" channels={result!.suggestedChannels.korea} />
+                                <ChannelRecommendations title="글로벌 벤치마킹 (Global)" icon="🌎" channels={result!.suggestedChannels.global} />
+                        </div>)}
 
-                        {/* Action Buttons */}
-                        <div className="flex gap-2 pt-2 no-print">
-                             <Button onClick={reset} className="flex-1 py-3 bg-gray-700 hover:bg-gray-600">
-                                🔄 다시 진단
-                            </Button>
-                            <Button onClick={onBack} className="flex-1 py-3 bg-blue-600 hover:bg-blue-500">
-                                종료
-                            </Button>
+                        <div className="text-center pt-4">
+                            <p className="text-lg text-white mb-4">이 결과 보고 ‘아… 맞다’ 싶어, 아니면 ‘뭔가 어색한지’ 솔직하게 느껴봐.<br/><span className="text-sm text-gray-400">After seeing this result, honestly consider if it feels right or if something seems off.</span></p>
+                            <div className="flex gap-4 max-w-md mx-auto">
+                                <Button onClick={onBack} className="flex-1 py-3">✅ 이 방향으로 가볼래 (Go this way)</Button>
+                                <Button onClick={reset} variant="secondary" className="flex-1 py-3">🔄 다시 생각해볼래 (Rethink)</Button>
+                            </div>
                         </div>
                     </div>
                 </div>
