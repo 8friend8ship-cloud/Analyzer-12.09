@@ -2,6 +2,7 @@ import { GoogleGenAI, Type, Chat } from "@google/genai";
 import type { VideoData, AIInsights, AnalysisMode, ComparisonInsights, ChannelAnalysisData, AudienceProfile, AIThumbnailInsights, MyChannelAnalyticsData, CommentInsights, AI6StepReport, VideoDetailData, VideoComment } from '../types';
 import { getGeminiApiKey } from './apiKeyService';
 import { get, set } from './cacheService';
+import { handleGeminiError } from './errorService';
 
 const countryToLanguageMap: { [key: string]: string } = {
     'US': 'English',
@@ -29,6 +30,7 @@ const countryToLanguageMap: { [key: string]: string } = {
     'BN': 'Malay',
     'PG': 'English',
     'KR': 'Korean',
+    'BR': 'Portuguese',
 };
 
 
@@ -42,7 +44,7 @@ export const translateKeyword = async (keyword: string, targetCountry: string): 
 
   console.log(`Translating "${keyword}" to ${targetLanguage} for country ${targetCountry}`);
 
-  try {
+    try {
     const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
     const translationPrompt = `Translate the following Korean keyword into ${targetLanguage}. Return only the translated keyword and nothing else.\nKorean keyword: "${keyword}"`;
     
@@ -57,6 +59,7 @@ export const translateKeyword = async (keyword: string, targetCountry: string): 
 
   } catch (error) {
     console.error("Error calling Gemini API for translation:", error);
+    // For translation, we might want to just return the original keyword instead of throwing
     return `${keyword} (${targetCountry} translation)`;
   }
 };
@@ -81,6 +84,7 @@ export const getAIChannelRecommendations = async (category: string, keyword: str
         return JSON.parse(text);
     } catch (error) {
         console.error("Error getting AI channel recommendations:", error);
+        // We don't throw here to avoid breaking the UI, but we could
         return { korea: [], global: [] };
     }
 };
@@ -118,7 +122,7 @@ export const getAIInsights = async (videoData: VideoData[], query: string, mode:
         return result;
     } catch (error) {
         console.error("Error getting AI insights:", error);
-        throw error;
+        throw handleGeminiError(error);
     }
 };
 
@@ -141,7 +145,7 @@ export const getAIComparisonInsights = async (channelA: {query: string, videos: 
         return JSON.parse(text);
     } catch (error) {
         console.error("Error in getAIComparisonInsights:", error);
-        throw error;
+        throw handleGeminiError(error);
     }
 };
 
@@ -208,7 +212,7 @@ export const getAIChannelComprehensiveAnalysis = async (
         return JSON.parse(text);
     } catch(e) {
         console.error("Error in getAIChannelComprehensiveAnalysis", e);
-        throw e;
+        throw handleGeminiError(e);
     }
 };
 
@@ -238,7 +242,7 @@ export const getAIChannelDashboardInsights = async (
         return JSON.parse(text);
     } catch(e) {
         console.error("Error in getAIChannelDashboardInsights", e);
-        throw e;
+        throw handleGeminiError(e);
     }
 };
 
@@ -382,7 +386,7 @@ export const getAIThumbnailAnalysis = async (
         return JSON.parse(text);
     } catch (e) {
         console.error("Error in getAIThumbnailAnalysis:", e);
-        throw e;
+        throw handleGeminiError(e);
     }
 };
 
@@ -423,7 +427,7 @@ export const getAITrendingInsight = async (
         return JSON.parse(text);
     } catch (e) {
         console.error("Error in getAITrendingInsight", e);
-        throw e;
+        throw handleGeminiError(e);
     }
 };
 

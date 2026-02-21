@@ -40,7 +40,24 @@ const countryOptions = [
     { label: "대한민국 (Korea)", value: "KR" },
     { label: "미국 (USA)", value: "US" },
     { label: "일본 (Japan)", value: "JP" },
-    // Simplified for brevity
+    { label: "영국 (UK)", value: "GB" },
+    { label: "독일 (Germany)", value: "DE" },
+    { label: "프랑스 (France)", value: "FR" },
+    { label: "중국 (China)", value: "CN" },
+    { label: "러시아 (Russia)", value: "RU" },
+    { label: "캐나다 (Canada)", value: "CA" },
+    { label: "호주 (Australia)", value: "AU" },
+    { label: "베트남 (Vietnam)", value: "VN" },
+    { label: "인도네시아 (Indonesia)", value: "ID" },
+    { label: "태국 (Thailand)", value: "TH" },
+    { label: "말레이시아 (Malaysia)", value: "MY" },
+    { label: "싱가포르 (Singapore)", value: "SG" },
+    { label: "필리핀 (Philippines)", value: "PH" },
+    { label: "멕시코 (Mexico)", value: "MX" },
+    { label: "브라질 (Brazil)", value: "BR" },
+    { label: "인도 (India)", value: "IN" },
+    { label: "대만 (Taiwan)", value: "TW" },
+    { label: "홍콩 (Hong Kong)", value: "HK" },
 ];
 
 const initialFilterState: FilterState = {
@@ -83,8 +100,32 @@ const FilterBar: React.FC<FilterBarProps> = ({
 }) => {
   const [translatedKeyword, setTranslatedKeyword] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
-  const [relatedKeywords, setRelatedKeywords] = useState<string[]>([]);
-  const [isFetchingKeywords, setIsFetchingKeywords] = useState(false);
+
+  // Automatic translation when country or query changes
+  useEffect(() => {
+    const triggerTranslation = async () => {
+      if (!query.trim() || filters.country === 'KR') {
+        setTranslatedKeyword(null);
+        return;
+      }
+
+      setIsTranslating(true);
+      try {
+        // For Global (WW), we default to English (US) translation
+        const targetCountry = filters.country === 'WW' ? 'US' : filters.country;
+        const result = await translateKeyword(query, targetCountry);
+        setTranslatedKeyword(result);
+      } catch (error) {
+        console.error("Translation error:", error);
+        setTranslatedKeyword(null);
+      } finally {
+        setIsTranslating(false);
+      }
+    };
+
+    const timer = setTimeout(triggerTranslation, 600); // Debounce translation
+    return () => clearTimeout(timer);
+  }, [query, filters.country]);
 
   const handleFilterChange = useCallback(<K extends keyof FilterState>(key: K, value: FilterState[K]) => {
     onFiltersChange(prev => ({ ...prev, [key]: value }));
@@ -95,16 +136,31 @@ const FilterBar: React.FC<FilterBarProps> = ({
     setTranslatedKeyword(null);
   }
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     let searchQuery = query;
+    
     // Translation logic remains useful for keyword searches in foreign countries
-    if (searchTab === 'video') {
-        const isForeignSearch = filters.country !== 'KR' && filters.country !== 'WW';
-        if (isForeignSearch && translatedKeyword && translatedKeyword !== "번역 실패 (Translation Failed)") {
+    const isForeignSearch = filters.country !== 'KR';
+    
+    if (isForeignSearch) {
+        // If translation is in progress or hasn't happened yet, we try to get it now
+        if (isTranslating || !translatedKeyword) {
+            try {
+                const targetCountry = filters.country === 'WW' ? 'US' : filters.country;
+                const result = await translateKeyword(query, targetCountry);
+                if (result) {
+                    searchQuery = result;
+                    setTranslatedKeyword(result);
+                }
+            } catch (err) {
+                console.error("Manual translation during submit failed", err);
+            }
+        } else if (translatedKeyword && translatedKeyword !== "번역 실패 (Translation Failed)") {
             searchQuery = translatedKeyword;
         }
     }
+    
     onAnalyze(searchQuery, searchTab);
   };
   
@@ -125,6 +181,16 @@ const FilterBar: React.FC<FilterBarProps> = ({
         <form onSubmit={handleSubmit} className="flex-grow flex items-center gap-2">
           <div className="flex-grow relative">
             <input id="query" type="text" value={query} onChange={(e) => onQueryChange(e.target.value)} placeholder={searchTab === 'video' ? '영상 키워드 검색' : '채널 키워드, URL 또는 핸들 검색'} className="block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2.5 placeholder-gray-400" />
+            {isTranslating && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                </div>
+            )}
+            {translatedKeyword && !isTranslating && (
+                <div className="absolute -bottom-6 left-0 text-[10px] text-blue-400 font-medium animate-fade-in">
+                    AI 번역됨: {translatedKeyword}
+                </div>
+            )}
           </div>
           <Button type="submit" disabled={isLoading || !query} className="flex-shrink-0 !py-2.5">
             {isLoading ? '검색 중... (Searching...)' : '검색 (Search)'}
