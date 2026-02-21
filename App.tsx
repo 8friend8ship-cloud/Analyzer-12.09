@@ -18,10 +18,10 @@ const initialAppSettings: AppSettings = {
         biz: { name: 'Biz', analyses: 200, price: 29000 },
     },
     apiKeys: {
-        youtube: 'mock_key_present',
-        analytics: 'mock_key_present',
+        youtube: (import.meta.env.VITE_YOUTUBE_API_KEY as string) || '',
+        analytics: '',
         reporting: '',
-        gemini: 'mock_key_present',
+        gemini: (import.meta.env.VITE_GEMINI_API_KEY as string) || '',
     },
     analyticsConnection: null,
 };

@@ -132,7 +132,7 @@ export const getAIComparisonInsights = async (channelA: {query: string, videos: 
     
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-3-pro-preview',
+            model: 'gemini-3.1-pro-preview',
             contents: prompt,
             config: { responseMimeType: "application/json" }
         });
@@ -199,7 +199,7 @@ export const getAIChannelComprehensiveAnalysis = async (
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-3-pro-preview',
+            model: 'gemini-3.1-pro-preview',
             contents: prompt,
             config: { responseMimeType: "application/json" }
         });
@@ -229,7 +229,7 @@ export const getAIChannelDashboardInsights = async (
     Respond ONLY in the specified JSON structure.`;
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-3-pro-preview',
+            model: 'gemini-3.1-pro-preview',
             contents: prompt,
             config: { responseMimeType: "application/json" }
         });
@@ -319,7 +319,7 @@ export const getAIDeepDiveReport = async (videoData: VideoDetailData): Promise<A
 
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-3-pro-preview",
+            model: "gemini-3.1-pro-preview",
             contents: prompt,
             config: {
                 systemInstruction: systemInstruction,
@@ -373,7 +373,7 @@ export const getAIThumbnailAnalysis = async (
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-3-pro-preview',
+            model: 'gemini-3.1-pro-preview',
             contents: prompt,
             config: { responseMimeType: "application/json" }
         });

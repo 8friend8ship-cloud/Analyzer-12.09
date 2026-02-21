@@ -346,41 +346,34 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                       </div>
                   )}
 
-                  <div className="mt-12 pt-6 border-t border-yellow-500/30 text-left">
+                  <div className="mt-12 pt-6 border-t border-blue-500/30 text-left">
                         <div className="flex items-center gap-3 mb-3">
-                            <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs font-bold rounded-md border border-yellow-500/30 uppercase">
-                                Simulation Mode & Policy Compliance
+                            <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs font-bold rounded-md border border-blue-500/30 uppercase">
+                                Live API Connected
                             </span>
                         </div>
                         <p className="text-sm text-gray-300 mb-4">
-                            Since API access is suspended, we deployed a Simulation Mode with mock data to demonstrate compliance.
-                            <br/><span className="text-xs text-gray-500">(API가 정지되어 있어, 컴플라이언스 증명을 위해 모의 데이터 모드를 배포했습니다.)</span>
+                            Content OS is now connected to the official YouTube Data API and Gemini AI.
+                            <br/><span className="text-xs text-gray-500">(Content OS가 YouTube 공식 API 및 Gemini AI에 연결되었습니다.)</span>
                         </p>
                         
                         <ul className="space-y-3 text-gray-300 text-sm">
                             <li className="flex items-start gap-3 p-3 bg-gray-900/50 rounded-lg">
                                 <span className="text-blue-400 font-bold mt-0.5">1.</span>
                                 <div>
-                                    <b className="text-white">Central API Key:</b> Users are not required to provide API keys. Access is managed centrally by the administrator.
-                                    <br/><span className="text-gray-500 text-xs">(사용자는 개인 API 키를 입력할 필요가 없습니다.)</span>
+                                    <b className="text-white">Real-time Data:</b> All analysis results are based on real-time data from YouTube.
+                                    <br/><span className="text-gray-500 text-xs">(모든 분석 결과는 YouTube의 실시간 데이터를 기반으로 합니다.)</span>
                                 </div>
                             </li>
                             <li className="flex items-start gap-3 p-3 bg-gray-900/50 rounded-lg">
                                 <span className="text-blue-400 font-bold mt-0.5">2.</span>
                                 <div>
-                                    <b className="text-white">Official Data Source:</b> All general analysis uses public data from the official YouTube Data API.
-                                    <br/><span className="text-gray-500 text-xs">(모든 일반 분석은 YouTube 공식 API의 공개 데이터만 사용합니다.)</span>
-                                </div>
-                            </li>
-                            <li className="flex items-start gap-3 p-3 bg-gray-900/50 rounded-lg">
-                                <span className="text-blue-400 font-bold mt-0.5">3.</span>
-                                <div>
-                                    <b className="text-white">Limited Analytics Scope:</b> The Analytics API (private data) is used exclusively within the 'AI Channel Diagnosis' feature. This feature can only connect to the user's own personal or brand YouTube channels that are linked to their authenticated Google account.
-                                    <br/><span className="text-gray-500 text-xs">(비공개 Analytics API는 'AI 채널 진단' 기능에서, 로그인된 Google 계정에 연결된 <b>본인 소유의 개인/브랜드 채널</b>에만 연결할 수 있습니다.)</span>
+                                    <b className="text-white">AI Insights:</b> Gemini AI provides deep strategic insights for your content.
+                                    <br/><span className="text-gray-500 text-xs">(Gemini AI가 콘텐츠에 대한 깊이 있는 전략적 인사이트를 제공합니다.)</span>
                                 </div>
                             </li>
                         </ul>
-                         <p className="mt-4 text-xs text-gray-400 text-center">This simulation is designed to operate under these strict compliance principles.</p>
+                         <p className="mt-4 text-xs text-gray-400 text-center">Data is processed in compliance with YouTube API Services Terms of Service.</p>
                   </div>
               </div>
           </div>

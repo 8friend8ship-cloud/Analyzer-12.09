@@ -1,8 +1,8 @@
-import React, { ReactNode, ErrorInfo } from 'react';
+import * as React from 'react';
 
 // FIX: Renamed generic 'Props' and 'State' to be more specific to avoid potential naming conflicts.
 interface ErrorBoundaryProps {
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
 interface ErrorBoundaryState {
@@ -10,9 +10,12 @@ interface ErrorBoundaryState {
 }
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  // FIX: Refactored state initialization to use a constructor for broader compatibility. This may resolve issues with 'this.props' type inference in some environments.
+  public props: ErrorBoundaryProps;
+  public state: ErrorBoundaryState;
+
   constructor(props: ErrorBoundaryProps) {
     super(props);
+    this.props = props;
     this.state = { hasError: false };
   }
 
@@ -21,7 +24,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     // You can also log the error to an error reporting service
     console.error("Uncaught error:", error, errorInfo);
   }

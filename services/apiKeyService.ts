@@ -25,9 +25,9 @@ export function setUserGeminiApiKey(key: string | null) {
  * @throws {Error} if no key is configured.
  */
 export function getGeminiApiKey(): string {
-    const key = systemGeminiKey; // In simulation/browser mode, only rely on the system key set via AppSettings.
+    const key = systemGeminiKey || (import.meta.env.VITE_GEMINI_API_KEY as string); 
     if (!key) {
-        console.error("Gemini API Key is not configured. Please set it in admin settings.");
+        console.error("Gemini API Key is not configured. Please set it in admin settings or environment variables.");
         throw new Error("Gemini API Key is not configured.");
     }
     return key;
