@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { startChatSession } from '../services/geminiService';
-import type { ChatMessage } from '../types';
+import { reportIssue } from '../services/systemService';
+import type { ChatMessage, User } from '../types';
 import { GenerateContentResponse } from '@google/genai';
 
 interface ChatbotProps {
     isOpen: boolean;
     onClose: () => void;
+    user: User;
 }
 
 const VlingBotIcon = () => (
@@ -23,7 +25,7 @@ const suggestions = [
     "시스템 문제 신고 (Report Issue)",
 ];
 
-const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose }) => {
+const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose, user }) => {
     const [messages, setMessages] = useState<ChatMessage[]>([
         { role: 'model', text: "👋 안녕하세요, Content OS AI 챗봇 Johnson이에요!\n궁금한 점이 있다면 무엇이든 물어보세요!" }
     ]);
@@ -51,6 +53,10 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose }) => {
         if (messageText === "시스템 문제 신고 (Report Issue)") {
             setMessages(prev => [...prev, { role: 'user', text: messageText }]);
             setIsLoading(true);
+            
+            // Real reporting
+            reportIssue(user.email, "사용자가 챗봇을 통해 시스템 문제를 신고했습니다.");
+            
             setTimeout(() => {
                 setMessages(prev => [...prev, { role: 'model', text: "⚠️ 시스템 문제 신고가 접수되었습니다.\n관리자에게 해당 내용이 전달되었으며, 최대한 빨리 확인 후 조치하겠습니다.\n불편을 드려 죄송합니다." }]);
                 setIsLoading(false);

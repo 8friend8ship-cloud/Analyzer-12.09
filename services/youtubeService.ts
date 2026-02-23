@@ -349,7 +349,7 @@ export const fetchRankingData = async (
                 part: 'snippet,statistics,contentDetails',
                 chart: 'mostPopular',
                 regionCode: (filters.country && filters.country !== 'WW') ? filters.country : 'US',
-                videoCategoryId: filters.category === 'all' ? '0' : filters.category,
+                ...(filters.category !== 'all' && { videoCategoryId: filters.category }),
                 maxResults: '50'
             }, apiKey);
 
@@ -403,10 +403,13 @@ export const fetchRankingData = async (
         } else {
             // For channels, YouTube doesn't have a "mostPopular" chart.
             // We'll search for top channels in the category.
+            const categoryName = filters.category === 'all' ? '' : (YOUTUBE_CATEGORIES_KR[filters.category] || '');
+            const searchQuery = categoryName ? `${categoryName} channel` : 'popular channel';
+            
             const searchData = await fetchFromYouTube('search', {
                 part: 'snippet',
                 type: 'channel',
-                q: filters.category === 'all' ? '*' : YOUTUBE_CATEGORIES_KR[filters.category] || '*',
+                q: searchQuery,
                 order: 'viewCount', // Best available proxy for "popular"
                 regionCode: (filters.country && filters.country !== 'WW') ? filters.country : 'US',
                 maxResults: '50'
