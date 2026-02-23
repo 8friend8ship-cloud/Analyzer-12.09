@@ -133,7 +133,7 @@ const SubscriptionManagementTab: React.FC = () => (
     </div>
 );
 
-const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onNavigate }) => {
+const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onNavigate, onUpdateUser }) => {
     const [activeTab, setActiveTab] = useState('usage');
 
     const tabs = [

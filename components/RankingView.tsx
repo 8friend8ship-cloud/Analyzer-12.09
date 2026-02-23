@@ -204,9 +204,9 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
             .filter(video => 
                 video && 
                 typeof video.channelSubscriberCount === 'number' && 
-                video.channelSubscriberCount >= 1000 && 
+                video.channelSubscriberCount >= 100 && // Lowered from 1000
                 typeof video.viewCount === 'number' &&
-                video.viewCount >= 10000
+                video.viewCount >= 1000 // Lowered from 10000
             )
             .sort((a, b) => {
                 const subA = a.channelSubscriberCount || 1;
@@ -396,9 +396,11 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
                                             }
                                             <td className="p-3">
                                                 <div className="flex items-center gap-2">
-                                                    <img src={video.channelThumbnailUrl} alt={video.channelName} className="w-8 h-8 rounded-full" />
+                                                    <button onClick={() => onShowChannelDetail(video.channelId)} className="flex-shrink-0">
+                                                        <img src={video.channelThumbnailUrl} alt={video.channelName} className="w-8 h-8 rounded-full hover:ring-2 hover:ring-blue-500 transition-all" />
+                                                    </button>
                                                     <div className="min-w-0">
-                                                        <p className="text-xs text-white truncate font-semibold">{video.channelName}</p>
+                                                        <button onClick={() => onShowChannelDetail(video.channelId)} className="text-xs text-white truncate font-semibold hover:text-blue-400 block text-left">{video.channelName}</button>
                                                         <p className="text-xs text-gray-400">{formatSubscribers(video.channelSubscriberCount)}</p>
                                                         <div className="flex flex-wrap gap-1 mt-0.5">
                                                             {(video.channelCategoryTags || []).slice(0,1).map(tag => <span key={tag} className="px-1 py-0.5 text-[9px] bg-gray-600 text-gray-300 rounded">{tag}</span>)}

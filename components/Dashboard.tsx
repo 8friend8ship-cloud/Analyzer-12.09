@@ -15,6 +15,7 @@ import OutlierAnalysisView from './OutlierAnalysisView';
 import ABTestGameView from './ABTestGameView'; 
 import Chatbot from './Chatbot'; 
 import MyChannelAnalytics from './MyChannelAnalytics';
+import AccountSettings from './AccountSettings';
 import IdentityFinderView from './IdentityFinderView';
 import CollectionView from './CollectionView';
 import ComparisonView from './ComparisonView';
@@ -47,7 +48,7 @@ const initialFilterState: FilterState = {
   category: 'all',
 };
 
-type ViewType = 'main' | 'admin' | 'topCharts' | 'channelDetail' | 'workflow' | 'videoDetail' | 'thumbnailAnalysis' | 'outlierAnalysis' | 'myChannel' | 'abTestGame' | 'identityFinder' | 'collections' | 'comparison' | 'influencerMarketing';
+type ViewType = 'main' | 'admin' | 'topCharts' | 'channelDetail' | 'workflow' | 'videoDetail' | 'thumbnailAnalysis' | 'outlierAnalysis' | 'myChannel' | 'abTestGame' | 'identityFinder' | 'collections' | 'comparison' | 'influencerMarketing' | 'account';
 type SearchTab = 'video' | 'channel';
 
 // Navigation State Interface for the History Stack
@@ -508,6 +509,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                         />;
             case 'influencerMarketing':
                 return <InfluencerMarketingView user={user} onBack={() => navigateTo('workflow')} />;
+            case 'account':
+                return <AccountSettings user={user} onNavigate={(target) => navigateTo('main')} onUpdateUser={onUpdateUser} />;
             default:
                 return null;
         }

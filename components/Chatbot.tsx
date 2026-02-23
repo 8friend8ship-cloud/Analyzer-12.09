@@ -20,7 +20,7 @@ const suggestions = [
     "Content OS는 어떤 서비스인가요?",
     "광고주를 위한 기능은 뭐가 있나요?",
     "유튜버를 위한 기능은 뭐가 있나요?",
-    "콘텐츠 OS 등급이 뭐야?",
+    "시스템 문제 신고 (Report Issue)",
 ];
 
 const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose }) => {
@@ -47,6 +47,16 @@ const Chatbot: React.FC<ChatbotProps> = ({ isOpen, onClose }) => {
 
     const sendMessage = async (messageText: string) => {
         if (!messageText.trim() || isLoading) return;
+
+        if (messageText === "시스템 문제 신고 (Report Issue)") {
+            setMessages(prev => [...prev, { role: 'user', text: messageText }]);
+            setIsLoading(true);
+            setTimeout(() => {
+                setMessages(prev => [...prev, { role: 'model', text: "⚠️ 시스템 문제 신고가 접수되었습니다.\n관리자에게 해당 내용이 전달되었으며, 최대한 빨리 확인 후 조치하겠습니다.\n불편을 드려 죄송합니다." }]);
+                setIsLoading(false);
+            }, 1000);
+            return;
+        }
 
         setIsLoading(true);
         setShowSuggestions(false);

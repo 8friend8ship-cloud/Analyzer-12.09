@@ -13,8 +13,9 @@ import type {
     AI6StepReport,
     ChannelRankingData,
     ChannelVideo,
-    BenchmarkComparisonData
+    BenchmarkComparisonData,
 } from '../types';
+import { YOUTUBE_CATEGORIES_KR } from '../types';
 import { 
     getAICommentInsights,
     getAIDeepDiveReport,
@@ -227,7 +228,7 @@ export const fetchChannelAnalysis = async (channelId: string, apiKey: string): P
     
     try {
         const channelData = await fetchFromYouTube('channels', {
-            part: 'snippet,statistics,brandingSettings',
+            part: 'snippet,statistics,brandingSettings,contentDetails',
             id: channelId
         }, apiKey);
 
@@ -237,46 +238,53 @@ export const fetchChannelAnalysis = async (channelId: string, apiKey: string): P
 
         const channel = channelData.items[0];
         
-        // Fetch recent videos
-        const searchData = await fetchFromYouTube('search', {
-            part: 'snippet',
-            channelId: channelId,
-            order: 'date',
-            type: 'video',
-            maxResults: '50'
-        }, apiKey);
+        // Fetch recent videos using the channel's "uploads" playlist
+        // This costs 1 quota unit instead of 100 units for the /search endpoint!
+        const uploadsPlaylistId = channel.contentDetails?.relatedPlaylists?.uploads;
+        let videoIds = '';
+        
+        if (uploadsPlaylistId) {
+            const playlistData = await fetchFromYouTube('playlistItems', {
+                part: 'snippet',
+                playlistId: uploadsPlaylistId,
+                maxResults: '50'
+            }, apiKey);
+            videoIds = playlistData.items.map((item: any) => item.snippet.resourceId.videoId).filter(Boolean).join(',');
+        }
+        let videoList: ChannelVideo[] = [];
+        
+        if (videoIds) {
+            const videosData = await fetchFromYouTube('videos', {
+                part: 'snippet,statistics,contentDetails',
+                id: videoIds
+            }, apiKey);
 
-        const videoIds = searchData.items.map((item: any) => item.id.videoId).join(',');
-        const videosData = await fetchFromYouTube('videos', {
-            part: 'snippet,statistics,contentDetails',
-            id: videoIds
-        }, apiKey);
+            videoList = videosData.items.map((item: any): ChannelVideo => {
+                const views = parseInt(item.statistics.viewCount) || 0;
+                const likes = parseInt(item.statistics.likeCount) || 0;
+                const comments = parseInt(item.statistics.commentCount) || 0;
 
-        const videoList: ChannelVideo[] = videosData.items.map((item: any): ChannelVideo => {
-            const views = parseInt(item.statistics.viewCount) || 0;
-            const likes = parseInt(item.statistics.likeCount) || 0;
-            const comments = parseInt(item.statistics.commentCount) || 0;
+                const durationMatch = item.contentDetails.duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+                const hours = parseInt(durationMatch[1]) || 0;
+                const minutes = parseInt(durationMatch[2]) || 0;
+                const seconds = parseInt(durationMatch[3]) || 0;
+                const totalMinutes = (hours * 60) + minutes + (seconds / 60);
 
-            const durationMatch = item.contentDetails.duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
-            const hours = parseInt(durationMatch[1]) || 0;
-            const minutes = parseInt(durationMatch[2]) || 0;
-            const seconds = parseInt(durationMatch[3]) || 0;
-            const totalMinutes = (hours * 60) + minutes + (seconds / 60);
-
-            return {
-                id: item.id,
-                title: item.snippet.title,
-                thumbnailUrl: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default.url,
-                publishedAt: item.snippet.publishedAt,
-                viewCount: views,
-                likeCount: likes,
-                commentCount: comments,
-                engagementRate: views > 0 ? ((likes + comments) / views) * 100 : 0,
-                isShorts: totalMinutes <= 1,
-                durationMinutes: totalMinutes,
-                tags: item.snippet.tags || []
-            };
-        });
+                return {
+                    id: item.id,
+                    title: item.snippet.title,
+                    thumbnailUrl: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default.url,
+                    publishedAt: item.snippet.publishedAt,
+                    viewCount: views,
+                    likeCount: likes,
+                    commentCount: comments,
+                    engagementRate: views > 0 ? ((likes + comments) / views) * 100 : 0,
+                    isShorts: totalMinutes <= 1,
+                    durationMinutes: totalMinutes,
+                    tags: item.snippet.tags || []
+                };
+            });
+        }
 
         const now = new Date();
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -345,20 +353,24 @@ export const fetchRankingData = async (
                 maxResults: '50'
             }, apiKey);
 
-            const channelIds = Array.from(new Set(data.items.map((item: any) => item.snippet.channelId))).join(',');
-            const channelsData = await fetchFromYouTube('channels', {
-                part: 'statistics,snippet',
-                id: channelIds
-            }, apiKey);
+            const channelIds = Array.from(new Set(data.items.map((item: any) => item.snippet.channelId))).filter(Boolean).join(',');
+            let channelMap: any = {};
+            
+            if (channelIds) {
+                const channelsData = await fetchFromYouTube('channels', {
+                    part: 'statistics,snippet',
+                    id: channelIds
+                }, apiKey);
 
-            const channelMap = channelsData.items.reduce((acc: any, curr: any) => {
-                acc[curr.id] = {
-                    subscriberCount: parseInt(curr.statistics.subscriberCount) || 0,
-                    thumbnailUrl: curr.snippet.thumbnails.default.url,
-                    categoryTags: curr.snippet.tags || []
-                };
-                return acc;
-            }, {});
+                channelMap = channelsData.items.reduce((acc: any, curr: any) => {
+                    acc[curr.id] = {
+                        subscriberCount: parseInt(curr.statistics.subscriberCount) || 0,
+                        thumbnailUrl: curr.snippet.thumbnails.default.url,
+                        categoryTags: curr.snippet.tags || []
+                    };
+                    return acc;
+                }, {});
+            }
 
             return data.items.map((item: any, index: number): VideoRankingData => {
                 const views = parseInt(item.statistics.viewCount) || 0;
@@ -394,14 +406,15 @@ export const fetchRankingData = async (
             const searchData = await fetchFromYouTube('search', {
                 part: 'snippet',
                 type: 'channel',
-                q: '*',
+                q: filters.category === 'all' ? '*' : YOUTUBE_CATEGORIES_KR[filters.category] || '*',
                 order: 'viewCount', // Best available proxy for "popular"
                 regionCode: (filters.country && filters.country !== 'WW') ? filters.country : 'US',
-                videoCategoryId: filters.category === 'all' ? '' : filters.category,
                 maxResults: '50'
             }, apiKey);
 
-            const channelIds = searchData.items.map((item: any) => item.id.channelId).join(',');
+            const channelIds = searchData.items.map((item: any) => item.id.channelId).filter(Boolean).join(',');
+            if (!channelIds) return [];
+
             const channelsData = await fetchFromYouTube('channels', {
                 part: 'snippet,statistics',
                 id: channelIds
