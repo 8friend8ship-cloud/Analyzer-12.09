@@ -6,7 +6,6 @@ import ApiKeyModal from './ApiKeyModal';
 import EditUserModal from './EditUserModal';
 import type { AppSettings, Plan, User } from '../types';
 import { clearCache } from '../services/cacheService';
-import { getSystemLogs, getReportedIssues, resolveIssue } from '../services/systemService';
 
 // Mock data for user management
 const initialUsers = [
@@ -39,19 +38,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
 
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserForModal | null>(null);
-
-  const [systemLogs, setSystemLogs] = useState(getSystemLogs());
-  const [reportedIssues, setReportedIssues] = useState(getReportedIssues());
-
-  const handleRefreshData = () => {
-    setSystemLogs(getSystemLogs());
-    setReportedIssues(getReportedIssues());
-  };
-
-  const handleResolveIssue = (id: number) => {
-    resolveIssue(id);
-    handleRefreshData();
-  };
 
   // Handlers now update the parent state via onUpdateSettings prop
   const handlePlanChange = (planKey: 'pro' | 'biz', field: 'analyses' | 'price', value: string) => {
@@ -108,17 +94,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
     alert('애플리케이션 캐시가 모두 삭제되었습니다.');
   };
   
-  const systemHealth = [
-    { name: 'API Server', status: 'Healthy', latency: '45ms' },
-    { name: 'Database', status: 'Healthy', latency: '12ms' },
-    { name: 'Cache Layer', status: 'Optimal', usage: `${Math.floor(Math.random() * 30 + 10)}%` },
-    { name: 'AI Model (Gemini)', status: 'Active', load: 'Low' },
-  ];
 
   const apiConfigs = [
     { key: 'youtube' as const, name: 'YouTube Data API v3', description: '채널/영상 등 공개 데이터 수집에 사용됩니다.' },
     { key: 'analytics' as const, name: 'YouTube Analytics API', description: '인증된 채널의 비공개 데이터(수익, 시청자 통계 등)에 사용됩니다.' },
-    { key: 'reporting' as const, name: 'YouTube Reporting API', description: '대규모 채널의 일괄 보고서 생성에 사용됩니다.' },
     { key: 'gemini' as const, name: 'Gemini API', description: 'AI 기능(연관 키워드, AI 분석)에 사용됩니다.' },
   ];
 
@@ -179,90 +158,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onBack, settings, onUpd
         {/* Right Column */}
         <div className="space-y-6">
           <div className="bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
-            <h2 className="text-xl font-semibold mb-4">시스템 상태 (System Health)</h2>
-            <div className="grid grid-cols-2 gap-4">
-              {systemHealth.map(item => (
-                <div key={item.name} className="bg-gray-900/50 p-3 rounded-md border border-gray-700/30">
-                  <p className="text-xs text-gray-500 uppercase font-bold">{item.name}</p>
-                  <div className="flex justify-between items-end mt-1">
-                    <span className="text-sm font-semibold text-green-400">{item.status}</span>
-                    <span className="text-[10px] text-gray-600">{item.latency || item.usage || item.load}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
-            <div className="flex justify-between items-center mb-4"><h2 className="text-xl font-semibold">사용자 관리</h2><button onClick={handleRefreshData} className="px-4 py-2 text-sm font-semibold rounded-md bg-gray-600 hover:bg-gray-500">새로고침</button></div>
+            <div className="flex justify-between items-center mb-4"><h2 className="text-xl font-semibold">사용자 관리</h2><button className="px-4 py-2 text-sm font-semibold rounded-md bg-gray-600 hover:bg-gray-500">새로고침</button></div>
             <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="text-xs text-gray-400"><tr><th className="p-2">이름</th><th className="p-2">요금제</th><th className="p-2">상태</th><th className="p-2">만료일</th><th className="p-2"></th></tr></thead><tbody className="divide-y divide-gray-700/50">{users.map(user => (<tr key={user.id}><td className="p-2"><div className="font-semibold text-white">{user.name} {user.isAdmin && <span className="text-xs text-yellow-400">(Admin)</span>}</div><div className="text-gray-400">{user.email}</div></td><td className="p-2">{user.plan}</td><td className="p-2">{user.status === 'Active' ? (<span className="px-2 py-1 text-xs font-semibold bg-green-500/30 text-green-300 rounded-full">{user.status}</span>) : (<span className="text-gray-500">{user.status}</span>)}</td><td className="p-2">{user.expires}</td><td className="p-2 text-right"><button onClick={() => openUserModal(user)} className="text-blue-400 hover:text-blue-300">수정</button></td></tr>))}</tbody></table></div>
           </div>
         </div>
         
-        <div className="lg:col-span-2 bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
-          <h2 className="text-xl font-semibold mb-4">최근 시스템 로그 (Recent System Logs)</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="text-gray-500 uppercase bg-gray-900/30">
-                <tr>
-                  <th className="p-2">Timestamp</th>
-                  <th className="p-2">User</th>
-                  <th className="p-2">Action</th>
-                  <th className="p-2">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-700/30">
-                {systemLogs.map((log, i) => (
-                  <tr key={i} className="hover:bg-gray-700/20">
-                    <td className="p-2 font-mono">{log.time}</td>
-                    <td className="p-2">{log.user}</td>
-                    <td className="p-2">{log.action}</td>
-                    <td className="p-2"><span className="text-green-400">{log.status}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="lg:col-span-2 bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
-          <h2 className="text-xl font-semibold mb-4">시스템 문제 신고 내역 (Reported Issues)</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="text-gray-500 uppercase bg-gray-900/30">
-                <tr>
-                  <th className="p-2">Timestamp</th>
-                  <th className="p-2">User</th>
-                  <th className="p-2">Message</th>
-                  <th className="p-2">Status</th>
-                  <th className="p-2">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-700/30">
-                {reportedIssues.map((issue) => (
-                  <tr key={issue.id} className="hover:bg-gray-700/20">
-                    <td className="p-2 font-mono">{issue.time}</td>
-                    <td className="p-2">{issue.user}</td>
-                    <td className="p-2">{issue.message}</td>
-                    <td className="p-2">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${issue.status === 'Resolved' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
-                        {issue.status}
-                      </span>
-                    </td>
-                    <td className="p-2">
-                      {issue.status === 'Pending' ? (
-                        <button onClick={() => handleResolveIssue(issue.id)} className="text-blue-400 hover:text-blue-300">해결 완료</button>
-                      ) : (
-                        <span className="text-gray-500">완료됨</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
         <div className="lg:col-span-2 bg-gray-800/80 rounded-lg p-6 border border-gray-700/50">
           <h2 className="text-xl font-semibold mb-2">API 키 관리</h2><p className="text-sm text-gray-400 mb-6">어플리케이션에서 사용하는 외부 API 키를 관리합니다. 키는 안전하게 저장됩니다.</p>
           <div className="space-y-4">

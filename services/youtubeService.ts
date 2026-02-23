@@ -13,9 +13,8 @@ import type {
     AI6StepReport,
     ChannelRankingData,
     ChannelVideo,
-    BenchmarkComparisonData,
+    BenchmarkComparisonData
 } from '../types';
-import { YOUTUBE_CATEGORIES_KR } from '../types';
 import { 
     getAICommentInsights,
     getAIDeepDiveReport,
@@ -30,6 +29,23 @@ import { getRawItem, set } from './cacheService';
 import { handleYouTubeError } from './errorService';
 
 const BASE_URL = 'https://www.googleapis.com/youtube/v3';
+
+const countryToLangCode: Record<string, string> = {
+    'US': 'en', 'GB': 'en', 'CA': 'en', 'AU': 'en', 'SG': 'en', 'PH': 'en', 'NZ': 'en', 'PG': 'en',
+    'KR': 'ko',
+    'JP': 'ja',
+    'DE': 'de',
+    'FR': 'fr',
+    'CN': 'zh-Hans', 'HK': 'zh-Hant', 'TW': 'zh-Hant',
+    'RU': 'ru',
+    'VN': 'vi',
+    'ID': 'id',
+    'TH': 'th',
+    'MY': 'ms', 'BN': 'ms',
+    'MX': 'es', 'CL': 'es', 'PE': 'es',
+    'IN': 'hi',
+    'BR': 'pt'
+};
 
 const fetchFromYouTube = async (endpoint: string, params: Record<string, string>, apiKey: string) => {
     const activeKey = apiKey || (import.meta.env.VITE_YOUTUBE_API_KEY as string);
@@ -68,11 +84,10 @@ export const fetchChannelSearchData = async (query: string, filters: FilterState
 
         if (filters.country && filters.country !== 'WW') {
             params.regionCode = filters.country;
-            params.relevanceLanguage = filters.country.toLowerCase();
-        } else {
-            // For Global, we don't set regionCode to allow global results, 
-            // but we can set relevanceLanguage to English to get more global results if desired.
-            // However, let's keep it empty for true global.
+            const lang = countryToLangCode[filters.country];
+            if (lang) params.relevanceLanguage = lang;
+        } else if (filters.country === 'WW') {
+            params.relevanceLanguage = 'en'; // Default global to English results
         }
 
         const searchData = await fetchFromYouTube('search', params, apiKey);
@@ -143,7 +158,10 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
 
         if (filters.country && filters.country !== 'WW') {
             searchParams.regionCode = filters.country;
-            searchParams.relevanceLanguage = filters.country.toLowerCase();
+            const lang = countryToLangCode[filters.country];
+            if (lang) searchParams.relevanceLanguage = lang;
+        } else if (filters.country === 'WW') {
+            searchParams.relevanceLanguage = 'en';
         }
 
         if (filters.videoFormat !== 'any') {
@@ -228,7 +246,7 @@ export const fetchChannelAnalysis = async (channelId: string, apiKey: string): P
     
     try {
         const channelData = await fetchFromYouTube('channels', {
-            part: 'snippet,statistics,brandingSettings,contentDetails',
+            part: 'snippet,statistics,brandingSettings',
             id: channelId
         }, apiKey);
 
@@ -238,53 +256,46 @@ export const fetchChannelAnalysis = async (channelId: string, apiKey: string): P
 
         const channel = channelData.items[0];
         
-        // Fetch recent videos using the channel's "uploads" playlist
-        // This costs 1 quota unit instead of 100 units for the /search endpoint!
-        const uploadsPlaylistId = channel.contentDetails?.relatedPlaylists?.uploads;
-        let videoIds = '';
-        
-        if (uploadsPlaylistId) {
-            const playlistData = await fetchFromYouTube('playlistItems', {
-                part: 'snippet',
-                playlistId: uploadsPlaylistId,
-                maxResults: '50'
-            }, apiKey);
-            videoIds = playlistData.items.map((item: any) => item.snippet.resourceId.videoId).filter(Boolean).join(',');
-        }
-        let videoList: ChannelVideo[] = [];
-        
-        if (videoIds) {
-            const videosData = await fetchFromYouTube('videos', {
-                part: 'snippet,statistics,contentDetails',
-                id: videoIds
-            }, apiKey);
+        // Fetch recent videos
+        const searchData = await fetchFromYouTube('search', {
+            part: 'snippet',
+            channelId: channelId,
+            order: 'date',
+            type: 'video',
+            maxResults: '50'
+        }, apiKey);
 
-            videoList = videosData.items.map((item: any): ChannelVideo => {
-                const views = parseInt(item.statistics.viewCount) || 0;
-                const likes = parseInt(item.statistics.likeCount) || 0;
-                const comments = parseInt(item.statistics.commentCount) || 0;
+        const videoIds = searchData.items.map((item: any) => item.id.videoId).join(',');
+        const videosData = await fetchFromYouTube('videos', {
+            part: 'snippet,statistics,contentDetails',
+            id: videoIds
+        }, apiKey);
 
-                const durationMatch = item.contentDetails.duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
-                const hours = parseInt(durationMatch[1]) || 0;
-                const minutes = parseInt(durationMatch[2]) || 0;
-                const seconds = parseInt(durationMatch[3]) || 0;
-                const totalMinutes = (hours * 60) + minutes + (seconds / 60);
+        const videoList: ChannelVideo[] = videosData.items.map((item: any): ChannelVideo => {
+            const views = parseInt(item.statistics.viewCount) || 0;
+            const likes = parseInt(item.statistics.likeCount) || 0;
+            const comments = parseInt(item.statistics.commentCount) || 0;
 
-                return {
-                    id: item.id,
-                    title: item.snippet.title,
-                    thumbnailUrl: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default.url,
-                    publishedAt: item.snippet.publishedAt,
-                    viewCount: views,
-                    likeCount: likes,
-                    commentCount: comments,
-                    engagementRate: views > 0 ? ((likes + comments) / views) * 100 : 0,
-                    isShorts: totalMinutes <= 1,
-                    durationMinutes: totalMinutes,
-                    tags: item.snippet.tags || []
-                };
-            });
-        }
+            const durationMatch = item.contentDetails.duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+            const hours = parseInt(durationMatch[1]) || 0;
+            const minutes = parseInt(durationMatch[2]) || 0;
+            const seconds = parseInt(durationMatch[3]) || 0;
+            const totalMinutes = (hours * 60) + minutes + (seconds / 60);
+
+            return {
+                id: item.id,
+                title: item.snippet.title,
+                thumbnailUrl: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default.url,
+                publishedAt: item.snippet.publishedAt,
+                viewCount: views,
+                likeCount: likes,
+                commentCount: comments,
+                engagementRate: views > 0 ? ((likes + comments) / views) * 100 : 0,
+                isShorts: totalMinutes <= 1,
+                durationMinutes: totalMinutes,
+                tags: item.snippet.tags || []
+            };
+        });
 
         const now = new Date();
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -349,28 +360,9 @@ export const fetchRankingData = async (
                 part: 'snippet,statistics,contentDetails',
                 chart: 'mostPopular',
                 regionCode: (filters.country && filters.country !== 'WW') ? filters.country : 'US',
-                ...(filters.category !== 'all' && { videoCategoryId: filters.category }),
+                videoCategoryId: filters.category === 'all' ? '0' : filters.category,
                 maxResults: '50'
             }, apiKey);
-
-            const channelIds = Array.from(new Set(data.items.map((item: any) => item.snippet.channelId))).filter(Boolean).join(',');
-            let channelMap: any = {};
-            
-            if (channelIds) {
-                const channelsData = await fetchFromYouTube('channels', {
-                    part: 'statistics,snippet',
-                    id: channelIds
-                }, apiKey);
-
-                channelMap = channelsData.items.reduce((acc: any, curr: any) => {
-                    acc[curr.id] = {
-                        subscriberCount: parseInt(curr.statistics.subscriberCount) || 0,
-                        thumbnailUrl: curr.snippet.thumbnails.default.url,
-                        categoryTags: curr.snippet.tags || []
-                    };
-                    return acc;
-                }, {});
-            }
 
             return data.items.map((item: any, index: number): VideoRankingData => {
                 const views = parseInt(item.statistics.viewCount) || 0;
@@ -379,7 +371,6 @@ export const fetchRankingData = async (
                 const minutes = parseInt(durationMatch[2]) || 0;
                 const seconds = parseInt(durationMatch[3]) || 0;
                 const totalSeconds = (hours * 3600) + (minutes * 60) + seconds;
-                const channelInfo = channelMap[item.snippet.channelId] || {};
 
                 return {
                     id: item.id,
@@ -392,38 +383,32 @@ export const fetchRankingData = async (
                     viewCount: views,
                     rankChange: 0,
                     channelTotalViews: 0,
-                    channelSubscriberCount: channelInfo.subscriberCount || 0,
-                    channelThumbnailUrl: channelInfo.thumbnailUrl,
+                    channelSubscriberCount: 0,
                     durationSeconds: totalSeconds,
                     isShorts: totalSeconds <= 60,
                     channelCountry: filters.country,
-                    tags: item.snippet.tags || []
                 };
             });
         } else {
             // For channels, YouTube doesn't have a "mostPopular" chart.
             // We'll search for top channels in the category.
-            const categoryName = filters.category === 'all' ? '' : (YOUTUBE_CATEGORIES_KR[filters.category] || '');
-            const searchQuery = categoryName ? `${categoryName} channel` : 'popular channel';
-            
             const searchData = await fetchFromYouTube('search', {
                 part: 'snippet',
                 type: 'channel',
-                q: searchQuery,
-                order: 'viewCount', // Best available proxy for "popular"
+                q: '*',
+                order: 'viewCount',
                 regionCode: (filters.country && filters.country !== 'WW') ? filters.country : 'US',
+                videoCategoryId: filters.category === 'all' ? '' : filters.category,
                 maxResults: '50'
             }, apiKey);
 
-            const channelIds = searchData.items.map((item: any) => item.id.channelId).filter(Boolean).join(',');
-            if (!channelIds) return [];
-
+            const channelIds = searchData.items.map((item: any) => item.id.channelId).join(',');
             const channelsData = await fetchFromYouTube('channels', {
                 part: 'snippet,statistics',
                 id: channelIds
             }, apiKey);
 
-            const results = channelsData.items.map((item: any): ChannelRankingData => ({
+            return channelsData.items.map((item: any, index: number): ChannelRankingData => ({
                 id: item.id,
                 name: item.snippet.title,
                 channelHandle: item.snippet.customUrl,
@@ -433,15 +418,10 @@ export const fetchRankingData = async (
                 newViewsInPeriod: 0,
                 videoCount: parseInt(item.statistics.videoCount) || 0,
                 viewCount: parseInt(item.statistics.viewCount) || 0,
-                rank: 0, // Will be set after sorting
+                rank: index + 1,
                 rankChange: 0,
                 channelCountry: item.snippet.country,
             }));
-
-            // Sort by subscriber count descending as requested
-            return results
-                .sort((a, b) => b.subscriberCount - a.subscriberCount)
-                .map((item, index) => ({ ...item, rank: index + 1 }));
         }
     } catch (error) {
         console.error("Error fetching ranking data:", error);

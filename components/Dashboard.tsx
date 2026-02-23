@@ -15,7 +15,6 @@ import OutlierAnalysisView from './OutlierAnalysisView';
 import ABTestGameView from './ABTestGameView'; 
 import Chatbot from './Chatbot'; 
 import MyChannelAnalytics from './MyChannelAnalytics';
-import AccountSettings from './AccountSettings';
 import IdentityFinderView from './IdentityFinderView';
 import CollectionView from './CollectionView';
 import ComparisonView from './ComparisonView';
@@ -48,7 +47,7 @@ const initialFilterState: FilterState = {
   category: 'all',
 };
 
-type ViewType = 'main' | 'admin' | 'topCharts' | 'channelDetail' | 'workflow' | 'videoDetail' | 'thumbnailAnalysis' | 'outlierAnalysis' | 'myChannel' | 'abTestGame' | 'identityFinder' | 'collections' | 'comparison' | 'influencerMarketing' | 'account';
+type ViewType = 'main' | 'admin' | 'topCharts' | 'channelDetail' | 'workflow' | 'videoDetail' | 'thumbnailAnalysis' | 'outlierAnalysis' | 'myChannel' | 'abTestGame' | 'identityFinder' | 'collections' | 'comparison' | 'influencerMarketing';
 type SearchTab = 'video' | 'channel';
 
 // Navigation State Interface for the History Stack
@@ -509,8 +508,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                         />;
             case 'influencerMarketing':
                 return <InfluencerMarketingView user={user} onBack={() => navigateTo('workflow')} />;
-            case 'account':
-                return <AccountSettings user={user} onNavigate={(target) => navigateTo('main')} onUpdateUser={onUpdateUser} />;
             default:
                 return null;
         }
@@ -564,7 +561,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
             >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
             </button>
-            <Chatbot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} user={user} />
+            <Chatbot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
             {isUpgradeModalOpen && <UpgradeModal onClose={handleCloseUpgradeModal} />}
             {isHelpModalOpen && <HelpModal onClose={() => setIsHelpModalOpen(false)} />}
 

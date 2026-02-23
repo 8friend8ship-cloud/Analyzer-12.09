@@ -101,9 +101,6 @@ const OverviewTab: React.FC<{ data: MyChannelAnalyticsData }> = ({ data }) => {
 
     return (
         <div className="space-y-8 animate-fade-in">
-            <div className="p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg text-sm text-blue-200">
-                <p>ℹ️ <strong>안내:</strong> 현재 분석 결과는 공개 YouTube API 데이터를 기반으로 한 <strong>추정치</strong>입니다. 수익 및 상세 시청자 통계와 같은 비공개 데이터는 향후 Google OAuth2 연동을 통해 제공될 예정입니다.</p>
-            </div>
             <AIInsightCard title="AI 월간 리포트 (AI Monthly Report)" insight={data.aiExecutiveSummary} />
             
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
