@@ -3,16 +3,40 @@ import React from 'react';
 import type { BenchmarkComparisonData } from '../types';
 import BenchmarkTrendChart from './charts/BenchmarkTrendChart';
 
-/*
-  This component has been deprecated and its functionality removed due to a request to disable channel-to-channel comparison features.
-*/
 const BenchmarkComparison: React.FC<{data: BenchmarkComparisonData}> = ({data}) => {
     return (
         <div className="bg-gray-800/60 p-6 rounded-lg border border-gray-700/50">
             <h3 className="font-semibold text-xl mb-3 text-yellow-300">
-                벤치마크 기능 비활성화 (Benchmark Feature Disabled)
+                AI 벤치마크 분석 (AI Benchmark Analysis)
             </h3>
-            <p className="text-gray-400">정책상의 이유로 채널 간 비교 기능이 비활성화되었습니다. (For policy reasons, the channel comparison feature has been disabled.)</p>
+            <p className="text-gray-300 mb-6">{data.aiSummary}</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h4 className="font-semibold text-gray-400 mb-4">주요 지표 비교</h4>
+                    <div className="space-y-4">
+                        {data.comparison.map((comp, idx) => (
+                            <div key={idx} className="bg-gray-700/50 p-4 rounded-lg flex justify-between items-center">
+                                <span className="text-gray-300">{comp.metric}</span>
+                                <div className="text-right">
+                                    <div className="text-sm text-gray-400">{data.myChannelName}</div>
+                                    <div className="font-bold text-white">{comp.myValue}</div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-sm text-gray-400">{data.benchmarkChannelName}</div>
+                                    <div className="font-bold text-blue-400">{comp.benchmarkValue}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div>
+                    <h4 className="font-semibold text-gray-400 mb-4">조회수 트렌드 비교 (최근 30일)</h4>
+                    <div className="h-64 bg-gray-700/30 rounded-lg p-4">
+                        <BenchmarkTrendChart />
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };
