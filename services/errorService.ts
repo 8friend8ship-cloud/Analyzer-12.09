@@ -28,6 +28,15 @@ export const handleYouTubeError = (error: any): APIError => {
         };
     }
 
+    if (message.includes('API Key is missing')) {
+        return {
+            type: APIErrorType.INVALID_KEY,
+            message: 'YouTube API 키가 설정되지 않았습니다.',
+            resolution: '관리자 설정에서 YouTube Data API v3 키를 입력해주세요.',
+            originalError: error
+        };
+    }
+
     if (message.includes('quotaExceeded') || message.includes('Quota exceeded')) {
         return {
             type: APIErrorType.QUOTA_EXCEEDED,

@@ -199,10 +199,6 @@ const OutlierAnalysisView: React.FC<OutlierAnalysisViewProps> = ({ user, appSett
     const handleKeywordClick = (keyword: string) => {
         setQuery(keyword);
         setMode('keyword');
-        setTimeout(() => {
-            const form = document.getElementById('outlier-search-form') as HTMLFormElement;
-            if (form) form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-        }, 100);
     };
 
     const handleAnalysis = useCallback(async (e?: React.FormEvent) => {
@@ -372,7 +368,7 @@ const OutlierAnalysisView: React.FC<OutlierAnalysisViewProps> = ({ user, appSett
                          {/* Top Keywords */}
                          <div className="bg-gray-800/80 p-4 rounded-lg">
                              <h3 className="font-bold text-yellow-400 mb-3 flex items-center gap-2"><span className="text-lg">🔥</span> Top 10 Surging Keywords</h3>
-                             <p className="text-xs text-gray-500 mb-3">Click to analyze immediately</p>
+                             <p className="text-xs text-gray-500 mb-3">Click to set keyword</p>
                              <div className="flex flex-wrap gap-2">
                                  {trendingData.topKeywords.map((kw, i) => (
                                      <button 
@@ -393,7 +389,7 @@ const OutlierAnalysisView: React.FC<OutlierAnalysisViewProps> = ({ user, appSett
                                  {trendingData.topChannels.map((ch, i) => (
                                      <div key={i} className="flex items-center justify-between bg-gray-700/50 p-2 rounded-md">
                                          <span className="font-medium text-gray-200 truncate"><span className="text-green-500 font-bold mr-2">{i+1}.</span> {ch}</span>
-                                         <button onClick={() => { setQuery(ch); setMode('channel'); handleAnalysis(); }} className="text-xs text-blue-400 hover:underline flex-shrink-0 ml-2">Analyze</button>
+                                         <button onClick={() => { setQuery(ch); setMode('channel'); }} className="text-xs text-blue-400 hover:underline flex-shrink-0 ml-2">Select</button>
                                      </div>
                                  ))}
                              </div>

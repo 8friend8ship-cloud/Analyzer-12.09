@@ -370,16 +370,88 @@ export const getAIThumbnailAnalysis = async (
   query: string
 ): Promise<AIThumbnailInsights> => {
     const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const prompt = `As "Content OS", analyze the YouTube thumbnails and titles for the keyword "${query}".
-    Provide a detailed strategic analysis. Respond ONLY in the specified JSON format.
-    - analysis: Qualitative analysis of common patterns.
-    - results: Actionable recommendations including concepts, text candidates, design guides, and title suggestions.`;
+    
+    const videoListString = videoData.map((v, i) => `${i+1}. Title: "${v.title}", Thumbnail URL: ${v.thumbnailUrl}`).join('\n');
+    
+    const prompt = `As "Content OS", analyze the following top-performing YouTube videos for the keyword "${query}".
+    
+    Videos:
+    ${videoListString}
+    
+    Provide a detailed strategic analysis of their titles and thumbnails. Respond ONLY in the specified JSON format.`;
 
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-3.1-pro-preview',
             contents: prompt,
-            config: { responseMimeType: "application/json" }
+            config: { 
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        analysis: {
+                            type: Type.OBJECT,
+                            properties: {
+                                focalPoint: { type: Type.STRING },
+                                colorContrast: { type: Type.STRING },
+                                faceEmotionCTR: { type: Type.STRING },
+                                textReadability: { type: Type.STRING },
+                                brandingConsistency: { type: Type.STRING },
+                                mobileReadability: { type: Type.STRING },
+                                categoryRelevance: { type: Type.STRING },
+                                titlePatterns: { type: Type.STRING },
+                                titleLength: { type: Type.STRING },
+                                titleCredibility: { type: Type.STRING }
+                            },
+                            required: ["focalPoint", "colorContrast", "faceEmotionCTR", "textReadability", "brandingConsistency", "mobileReadability", "categoryRelevance", "titlePatterns", "titleLength", "titleCredibility"]
+                        },
+                        results: {
+                            type: Type.OBJECT,
+                            properties: {
+                                thumbnailSummary: { type: Type.STRING },
+                                improvedConcepts: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            concept: { type: Type.STRING },
+                                            description: { type: Type.STRING }
+                                        },
+                                        required: ["concept", "description"]
+                                    }
+                                },
+                                textCandidates: {
+                                    type: Type.ARRAY,
+                                    items: { type: Type.STRING }
+                                },
+                                designGuide: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        colors: { type: Type.STRING },
+                                        fonts: { type: Type.STRING },
+                                        layout: { type: Type.STRING }
+                                    },
+                                    required: ["colors", "fonts", "layout"]
+                                },
+                                titleSummary: { type: Type.STRING },
+                                titleSuggestions: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            title: { type: Type.STRING },
+                                            reason: { type: Type.STRING }
+                                        },
+                                        required: ["title", "reason"]
+                                    }
+                                }
+                            },
+                            required: ["thumbnailSummary", "improvedConcepts", "textCandidates", "designGuide", "titleSummary", "titleSuggestions"]
+                        }
+                    },
+                    required: ["analysis", "results"]
+                }
+            }
         });
         const text = response.text;
         if (!text) throw new Error("Empty AI response");

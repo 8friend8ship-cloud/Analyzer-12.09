@@ -69,8 +69,11 @@ const VideoDetailView: React.FC<VideoDetailViewProps> = ({ videoId, user, appSet
                 const result = await fetchVideoDetails(videoId, apiKey);
                 setData(result);
                 addToCollection(createVideoCollectionItem(result));
-            } catch (err) {
-                setError(err instanceof Error ? err.message : "비디오 정보를 불러올 수 없습니다. (Could not load video data.)");
+            } catch (err: any) {
+                console.error("Failed to fetch video details:", err);
+                const errorMessage = err.message || (err instanceof Error ? err.message : "비디오 정보를 불러올 수 없습니다. (Could not load video data.)");
+                const resolution = err.resolution ? `\n\nResolution: ${err.resolution}` : "";
+                setError(errorMessage + resolution);
             } finally {
                 setIsLoading(false);
             }
@@ -92,9 +95,11 @@ const VideoDetailView: React.FC<VideoDetailViewProps> = ({ videoId, user, appSet
                 deepDiveReport
             } : null);
             setHasAnalyzed(true);
-        } catch (err) {
+        } catch (err: any) {
             console.error("Analysis failed", err);
-            setError("AI 분석 중 오류가 발생했습니다. (AI analysis failed.)");
+            const errorMessage = err.message || (err instanceof Error ? err.message : "AI 분석 중 오류가 발생했습니다. (AI analysis failed.)");
+            const resolution = err.resolution ? `\n\nResolution: ${err.resolution}` : "";
+            setError(errorMessage + resolution);
         } finally {
             setIsAnalyzing(false);
         }

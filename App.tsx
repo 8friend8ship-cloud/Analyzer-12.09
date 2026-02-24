@@ -19,8 +19,8 @@ const initialAppSettings: AppSettings = {
     },
     apiKeys: {
         youtube: (import.meta.env.VITE_YOUTUBE_API_KEY as string) || '',
-        analytics: '',
-        reporting: '',
+        analytics: (import.meta.env.VITE_YOUTUBE_ANALYTICS_API_KEY as string) || '',
+        reporting: (import.meta.env.VITE_YOUTUBE_REPORTING_API_KEY as string) || '',
         gemini: (import.meta.env.VITE_GEMINI_API_KEY as string) || '',
     },
     analyticsConnection: null,

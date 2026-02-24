@@ -1,38 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Button from './common/Button';
 import Spinner from './common/Spinner';
 import type { User, InfluencerChannelResult, InfluencerAnalysisDetail } from '../types';
+import { fetchYouTubeData, resolveChannelId, fetchChannelAnalysis } from '../services/youtubeService';
+import { getGeminiApiKey } from '../services/apiKeyService';
+import { GoogleGenAI, Type } from "@google/genai";
 
 interface InfluencerMarketingViewProps {
     user: User;
+    appSettings: any;
     onBack: () => void;
 }
 
-// --- Mock Data ---
-const mockResults: InfluencerChannelResult[] = [
-    { id: 'UC-1', name: 'RYUCAMP', thumbnailUrl: 'https://yt3.googleusercontent.com/ytc/AIdro_k-3_2j3J2-z3-z3-z3-z3-z3_z3_z3=s176-c-k-c0x00ffffff-no-rj-mo', subscriberCount: 1200000, matchRate: 99, algorithmReason: "이 채널의 2030 남성 시청층은 '감성'과 '전문성'을 중시합니다. '우드 스토브'나 '티타늄 컵' 같은 고품질 장비의 쇼핑 링크를 영상에 포함시킬 경우 높은 클릭률이 예상됩니다." },
-    { id: 'UC-2', name: 'Kirin Camp', thumbnailUrl: 'https://yt3.googleusercontent.com/ytc/AIdro_k-3_2j3J2-z3-z3-z3-z3-z3_z3_z3=s176-c-k-c0x00ffffff-no-rj-mo', subscriberCount: 2300000, matchRate: 98, algorithmReason: "고가 장비에 대한 신뢰도가 높은 채널입니다. '에어텐트'나 '텐트 트레일러' 등 고가의 상품을 공동구매 형태로 제안하면 높은 구매 전환율을 기대할 수 있습니다." },
-];
-
-const mockDetailReport: InfluencerAnalysisDetail = {
-    channelName: "칙칙품품",
-    keyword: "감성 캠핑 용품",
-    coreSummary: "칙칙품품 채널은 인물 중심의 브이로그로 시청자와의 유대감이 높습니다. '감성' 키워드에 반응하는 20대 여성 구독자층을 타겟으로 디자인 중심의 상품을 제안하기에 적합합니다. 크리에이터는 이 분석을 통해 자신의 채널에 맞는 상품을 소싱할 수 있습니다.",
-    audienceAlignment: {
-        score: 72,
-        reason: "시청자들은 기능보다 디자인과 분위기를 중시합니다. 따라서 '예쁜 캠핑 식기 세트'나 '감성 조명' 등의 상품에 대한 구매 전환율이 높을 것으로 예상됩니다."
-    },
-    contentSynergy: "영상 내에서 자연스럽게 상품을 사용하는 모습을 보여주고, '더보기'란과 고정 댓글에 제휴 구매 링크를 포함시키는 전략을 추천합니다. '내돈내산' 형식의 리뷰 콘텐츠가 신뢰도를 높일 것입니다.",
-    kpiRecommendations: {
-        core: ["제휴 링크 클릭률 (Affiliate Link CTR)", "구매 전환율 (Conversion Rate)"],
-        secondary: ["영상 댓글 내 상품 질문 수", "관련 상품 키워드 검색량 증가"]
-    },
-    finalConclusion: "저가-중가대의 디자인 중심 상품 판매에 적합한 채널"
-};
-
-
 // --- Main Component ---
-const InfluencerMarketingView: React.FC<InfluencerMarketingViewProps> = ({ user, onBack }) => {
+const InfluencerMarketingView: React.FC<InfluencerMarketingViewProps> = ({ user, appSettings, onBack }) => {
     const [view, setView] = useState<'input' | 'loading' | 'results'>('input');
     const [keyword, setKeyword] = useState('');
     const [myChannelUrl, setMyChannelUrl] = useState('');
@@ -41,56 +22,199 @@ const InfluencerMarketingView: React.FC<InfluencerMarketingViewProps> = ({ user,
     const [loadingStep, setLoadingStep] = useState(0);
     const [results, setResults] = useState<InfluencerChannelResult[]>([]);
     const [myChannelResult, setMyChannelResult] = useState<InfluencerChannelResult | null>(null);
-    const [topicKeywords, setTopicKeywords] = useState<string[]>([]);
     const [detailModalChannel, setDetailModalChannel] = useState<InfluencerChannelResult | null>(null);
+    const [detailReport, setDetailReport] = useState<InfluencerAnalysisDetail | null>(null);
+    const [isDetailLoading, setIsDetailLoading] = useState(false);
 
-    const handleCreditDeduction = () => {
-        // Credit system disabled for compliance review.
-        return true;
-    };
-
-    const handleSearch = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSearch = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        console.log("handleSearch called with keyword:", keyword);
         if (!keyword.trim()) {
             alert("분석할 상품 키워드를 입력해주세요.");
             return;
         }
-        if (!handleCreditDeduction()) return;
 
         setView('loading');
         setLoadingStep(0);
         setMyChannelResult(null);
+        setResults([]);
         
-        setTimeout(() => setLoadingStep(1), 500); 
-        setTimeout(() => setLoadingStep(2), 1500); 
-        setTimeout(() => setLoadingStep(3), 2800); 
-        setTimeout(() => setLoadingStep(4), 4000);
-        setTimeout(() => setLoadingStep(5), 5500); 
-        setTimeout(() => setLoadingStep(6), 7000); 
-        setTimeout(() => {
-            setTopicKeywords(['우드 스토브', '빈티지 램프', '티타늄 컵', '감성 캠핑 식기', '미니멀 캠핑 용품', '애견 캠핑 용품']);
-            setResults(mockResults);
+        try {
+            console.log("Starting analysis...");
+            const apiKey = appSettings.apiKeys.youtube;
+            if (!apiKey) throw new Error("YouTube API Key is required.");
+
+            setLoadingStep(1); // 상품 키워드 분석
+            console.log("Step 1 complete");
             
-            if (myChannelUrl) {
-                const mockMyResult: InfluencerChannelResult = {
-                    id: 'my-channel-id',
-                    name: '내 채널 (분석 요청)',
-                    thumbnailUrl: 'https://yt3.googleusercontent.com/ytc/AIdro_k-3_2j3J2-z3-z3-z3-z3-z3_z3_z3=s176-c-k-c0x00ffffff-no-rj-mo',
-                    subscriberCount: 550000,
-                    matchRate: 75,
-                    algorithmReason: "현재 채널은 '경험' 중심의 콘텐츠가 많습니다. '감성 캠핑용품'과의 적합도를 높이려면, 장비의 '스펙'과 '사용법'을 상세히 다루는 리뷰 콘텐츠 비중을 늘리는 것을 추천합니다.",
-                    isMyChannel: true,
+            setLoadingStep(2); // 벤치마킹 채널 검색
+            console.log("Fetching YouTube data for keyword:", keyword);
+            const videoData = await fetchYouTubeData('keyword', keyword, {
+                resultsLimit: 10,
+                country: filters.country,
+                category: 'all',
+                videoFormat: 'any',
+                period: 'any',
+                sortBy: 'relevance',
+                minViews: 0,
+                videoLength: 'any'
+            }, apiKey);
+            console.log("Fetched video data:", videoData.length, "items");
+
+            setLoadingStep(3); // 1차 필터링
+            // Extract unique channels
+            const uniqueChannels = Array.from(new Set(videoData.map(v => v.channelId)))
+                .map(id => videoData.find(v => v.channelId === id)!);
+            console.log("Unique channels:", uniqueChannels.length);
+
+            setLoadingStep(4); // AI 채널 매칭
+            console.log("Starting AI channel matching...");
+            const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+            const prompt = `As "Content OS", analyze these YouTube channels for product placement of "${keyword}".
+            Channels: ${uniqueChannels.map(c => c.channelTitle).join(', ')}
+            Provide a match rate (0-100) and a brief reason for each.`;
+
+            const aiResponse = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: prompt,
+                config: { 
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                channelName: { type: Type.STRING },
+                                matchRate: { type: Type.NUMBER },
+                                reason: { type: Type.STRING }
+                            },
+                            required: ["channelName", "matchRate", "reason"]
+                        }
+                    }
+                }
+            });
+
+            console.log("AI Response received");
+            const aiAnalysis = JSON.parse(aiResponse.text || '[]');
+            console.log("Parsed AI analysis:", aiAnalysis.length, "items");
+
+            const finalResults: InfluencerChannelResult[] = uniqueChannels.map(c => {
+                const analysis = aiAnalysis.find((a: any) => a.channelName === c.channelTitle) || { matchRate: 70, reason: "관련 콘텐츠를 다루고 있어 적합도가 있습니다." };
+                return {
+                    id: c.channelId,
+                    name: c.channelTitle,
+                    thumbnailUrl: c.thumbnailUrl, // Using video thumbnail as fallback
+                    subscriberCount: c.subscribers,
+                    matchRate: analysis.matchRate,
+                    algorithmReason: analysis.reason
                 };
-                setMyChannelResult(mockMyResult);
+            }).sort((a, b) => b.matchRate - a.matchRate).slice(0, 5);
+
+            setResults(finalResults);
+            console.log("Results set");
+
+            setLoadingStep(5); // 내 채널 적합도 분석
+            if (myChannelUrl) {
+                console.log("Analyzing my channel:", myChannelUrl);
+                const myChannelId = await resolveChannelId(myChannelUrl, apiKey);
+                if (myChannelId) {
+                    const myChannelData = await fetchChannelAnalysis(myChannelId, apiKey);
+                    const myPrompt = `Analyze the fit for product "${keyword}" on channel "${myChannelData.name}".`;
+                    
+                    const myAiResponse = await ai.models.generateContent({
+                        model: 'gemini-3-flash-preview',
+                        contents: myPrompt,
+                        config: { 
+                            responseMimeType: "application/json",
+                            responseSchema: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    matchRate: { type: Type.NUMBER },
+                                    reason: { type: Type.STRING }
+                                },
+                                required: ["matchRate", "reason"]
+                            }
+                        }
+                    });
+                    
+                    const myAnalysis = JSON.parse(myAiResponse.text || '{"matchRate": 50, "reason": "분석 불가"}');
+                    
+                    setMyChannelResult({
+                        id: myChannelData.id,
+                        name: myChannelData.name,
+                        thumbnailUrl: myChannelData.thumbnailUrl,
+                        subscriberCount: myChannelData.subscriberCount,
+                        matchRate: myAnalysis.matchRate,
+                        algorithmReason: myAnalysis.reason,
+                        isMyChannel: true
+                    });
+                    console.log("My channel analysis complete");
+                }
             }
 
+            setLoadingStep(6); // 리포트 생성
+            console.log("Setting view to results");
             setView('results');
-        }, 8000);
+
+        } catch (error) {
+            console.error("Influencer search error:", error);
+            alert("분석 중 오류가 발생했습니다: " + (error instanceof Error ? error.message : String(error)));
+            setView('input');
+        }
     };
     
-    const handleShowDetailReport = (channel: InfluencerChannelResult) => {
-        if (!handleCreditDeduction()) return;
+    const handleShowDetailReport = async (channel: InfluencerChannelResult) => {
         setDetailModalChannel(channel);
+        setIsDetailLoading(true);
+        setDetailReport(null);
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+            const prompt = `As "Content OS", generate an influencer marketing strategy report for placing the product "${keyword}" on the YouTube channel "${channel.name}".`;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-3.1-pro-preview',
+                contents: prompt,
+                config: { 
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            channelName: { type: Type.STRING },
+                            keyword: { type: Type.STRING },
+                            coreSummary: { type: Type.STRING },
+                            audienceAlignment: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    score: { type: Type.NUMBER },
+                                    reason: { type: Type.STRING }
+                                },
+                                required: ["score", "reason"]
+                            },
+                            contentSynergy: { type: Type.STRING },
+                            kpiRecommendations: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    core: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    secondary: { type: Type.ARRAY, items: { type: Type.STRING } }
+                                },
+                                required: ["core", "secondary"]
+                            },
+                            finalConclusion: { type: Type.STRING }
+                        },
+                        required: ["channelName", "keyword", "coreSummary", "audienceAlignment", "contentSynergy", "kpiRecommendations", "finalConclusion"]
+                    }
+                }
+            });
+
+            setDetailReport(JSON.parse(response.text || '{}'));
+        } catch (error) {
+            console.error("Detail report error:", error);
+            alert("리포트 생성 중 오류가 발생했습니다.");
+            setDetailModalChannel(null);
+        } finally {
+            setIsDetailLoading(false);
+        }
     };
 
     const loadingSteps = ["캐시 확인", "상품 키워드 분석", "벤치마킹 채널 검색", "1차 필터링", "AI 채널 매칭", "내 채널 적합도 분석", "리포트 생성"];
@@ -99,17 +223,18 @@ const InfluencerMarketingView: React.FC<InfluencerMarketingViewProps> = ({ user,
         <div className="max-w-3xl mx-auto text-center animate-fade-in">
             <h1 className="text-4xl font-bold">AI 상품 적합도 분석 (AI Product Fit Analysis)</h1>
             <p className="text-gray-400 mt-4 max-w-2xl mx-auto">내 채널과 특정 상품의 적합도를 분석하고, 벤치마킹 채널과 비교하여 수익화 전략을 구체화합니다.</p>
-            <form onSubmit={handleSearch} className="mt-8 flex flex-col gap-4 items-center">
+            <div className="mt-8 flex flex-col gap-4 items-center">
                 <div className="w-full max-w-xl flex flex-col sm:flex-row gap-2">
                     <input 
                         type="text"
                         value={keyword}
                         onChange={e => setKeyword(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleSearch(e as any); }}
                         placeholder="분석할 상품 키워드 (예: '감성 캠핑용품')"
                         className="flex-grow bg-gray-700/50 border border-gray-600 rounded-lg py-3 px-5 text-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
-                    <button type="button" onClick={() => setShowFilters(!showFilters)} className="px-4 py-3 bg-gray-600 hover:bg-gray-500 rounded-lg font-semibold">{showFilters ? '조건 닫기' : '상세 조건'}</button>
-                    <button type="submit" className="px-5 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-bold text-lg">분석 시작</button>
+                    <button type="button" onClick={() => setShowFilters(!showFilters)} className="px-4 py-3 bg-gray-600 hover:bg-gray-500 rounded-lg font-semibold whitespace-nowrap">{showFilters ? '조건 닫기' : '상세 조건'}</button>
+                    <button type="button" onClick={handleSearch} className="px-5 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-bold text-lg whitespace-nowrap">분석 시작</button>
                 </div>
                 {showFilters && (
                     <div className="w-full max-w-xl p-6 bg-gray-800/50 border border-gray-700 rounded-lg text-left flex flex-col gap-4 animate-fade-in">
@@ -137,7 +262,7 @@ const InfluencerMarketingView: React.FC<InfluencerMarketingViewProps> = ({ user,
                         </div>
                     </div>
                 )}
-            </form>
+            </div>
         </div>
     );
     
@@ -220,53 +345,61 @@ const InfluencerMarketingView: React.FC<InfluencerMarketingViewProps> = ({ user,
             <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setDetailModalChannel(null)}>
                 <div className="bg-gray-800 border border-gray-700 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
                     <div className="flex justify-between items-center p-4 border-b border-gray-700">
-                        <h2 className="text-lg font-semibold">AI 쇼핑 연동 전략 리포트: {mockDetailReport.channelName}</h2>
+                        <h2 className="text-lg font-semibold">AI 쇼핑 연동 전략 리포트: {detailModalChannel.name}</h2>
                         <button onClick={() => setDetailModalChannel(null)} className="text-gray-400 hover:text-white">&times;</button>
                     </div>
                     <div className="p-6 overflow-y-auto space-y-6 text-sm">
-                        <section>
-                            <h3 className="font-bold text-lg text-white mb-2">1. 핵심 요약 (Core Summary)</h3>
-                            <p className="p-3 bg-gray-900/50 rounded-md text-gray-300">{mockDetailReport.coreSummary}</p>
-                        </section>
-                        <section>
-                            <h3 className="font-bold text-lg text-white mb-2">2. 시청자-상품 적합도 (Audience-Product Fit)</h3>
-                            <div className="flex gap-4 items-center bg-gray-900/50 p-3 rounded-md">
-                                <div className="text-center">
-                                    <p className="text-3xl font-bold text-green-400">{mockDetailReport.audienceAlignment.score}%</p>
-                                    <p className="text-xs text-gray-400">적합도 (Fit)</p>
-                                </div>
-                                <p className="text-gray-300">{mockDetailReport.audienceAlignment.reason}</p>
+                        {isDetailLoading || !detailReport ? (
+                            <div className="flex flex-col items-center justify-center py-20">
+                                <Spinner message="리포트를 생성 중입니다..." />
                             </div>
-                        </section>
-                         <section>
-                            <h3 className="font-bold text-lg text-white mb-2">3. 추천 콘텐츠 전략 (Content Strategy)</h3>
-                            <div className="p-3 bg-gray-900/50 rounded-md text-yellow-300 italic border-l-4 border-yellow-500">{mockDetailReport.contentSynergy}</div>
-                        </section>
-                         <section>
-                            <h3 className="font-bold text-lg text-white mb-2">4. 예상 주요 성과 지표 (Expected KPIs)</h3>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <h4 className="font-semibold text-gray-300">핵심 지표 (Core KPIs)</h4>
-                                    <ul className="list-disc list-inside mt-1 text-gray-400">
-                                        {mockDetailReport.kpiRecommendations.core.map(kpi => <li key={kpi}>{kpi}</li>)}
-                                    </ul>
-                                </div>
-                                <div>
-                                    <h4 className="font-semibold text-gray-300">보조 지표 (Secondary KPIs)</h4>
-                                     <ul className="list-disc list-inside mt-1 text-gray-400">
-                                        {mockDetailReport.kpiRecommendations.secondary.map(kpi => <li key={kpi}>{kpi}</li>)}
-                                    </ul>
-                                </div>
-                            </div>
-                        </section>
-                         <section>
-                            <h3 className="font-bold text-lg text-white mb-2">5. 최종 결론 (Final Conclusion)</h3>
-                            <p className="p-3 bg-blue-900/30 text-blue-300 rounded-md font-semibold">{mockDetailReport.finalConclusion}</p>
-                        </section>
+                        ) : (
+                            <>
+                                <section>
+                                    <h3 className="font-bold text-lg text-white mb-2">1. 핵심 요약 (Core Summary)</h3>
+                                    <p className="p-3 bg-gray-900/50 rounded-md text-gray-300">{detailReport.coreSummary}</p>
+                                </section>
+                                <section>
+                                    <h3 className="font-bold text-lg text-white mb-2">2. 시청자-상품 적합도 (Audience-Product Fit)</h3>
+                                    <div className="flex gap-4 items-center bg-gray-900/50 p-3 rounded-md">
+                                        <div className="text-center">
+                                            <p className="text-3xl font-bold text-green-400">{detailReport.audienceAlignment.score}%</p>
+                                            <p className="text-xs text-gray-400">적합도 (Fit)</p>
+                                        </div>
+                                        <p className="text-gray-300">{detailReport.audienceAlignment.reason}</p>
+                                    </div>
+                                </section>
+                                 <section>
+                                    <h3 className="font-bold text-lg text-white mb-2">3. 추천 콘텐츠 전략 (Content Strategy)</h3>
+                                    <div className="p-3 bg-gray-900/50 rounded-md text-yellow-300 italic border-l-4 border-yellow-500">{detailReport.contentSynergy}</div>
+                                </section>
+                                 <section>
+                                    <h3 className="font-bold text-lg text-white mb-2">4. 예상 주요 성과 지표 (Expected KPIs)</h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <h4 className="font-semibold text-gray-300">핵심 지표 (Core KPIs)</h4>
+                                            <ul className="list-disc list-inside mt-1 text-gray-400">
+                                                {detailReport.kpiRecommendations.core.map(kpi => <li key={kpi}>{kpi}</li>)}
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-semibold text-gray-300">보조 지표 (Secondary KPIs)</h4>
+                                             <ul className="list-disc list-inside mt-1 text-gray-400">
+                                                {detailReport.kpiRecommendations.secondary.map(kpi => <li key={kpi}>{kpi}</li>)}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </section>
+                                 <section>
+                                    <h3 className="font-bold text-lg text-white mb-2">5. 최종 결론 (Final Conclusion)</h3>
+                                    <p className="p-3 bg-blue-900/30 text-blue-300 rounded-md font-semibold">{detailReport.finalConclusion}</p>
+                                </section>
+                            </>
+                        )}
                     </div>
                      <div className="flex justify-end gap-4 p-4 border-t border-gray-700">
                         <Button variant="secondary" onClick={() => setDetailModalChannel(null)}>닫기</Button>
-                        <Button variant="secondary">TXT 저장</Button>
+                        <Button variant="secondary" disabled={isDetailLoading || !detailReport}>TXT 저장</Button>
                     </div>
                 </div>
             </div>

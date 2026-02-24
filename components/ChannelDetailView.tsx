@@ -285,8 +285,11 @@ const SimilarChannelsTab: React.FC<{ channelId: string; appSettings: AppSettings
             try {
                 const data = await fetchSimilarChannels(channelId, apiKey);
                 setSimilarChannels(data);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : "Failed to find similar channels.");
+            } catch (err: any) {
+                console.error("Failed to fetch similar channels:", err);
+                const errorMessage = err.message || (err instanceof Error ? err.message : "Failed to find similar channels.");
+                const resolution = err.resolution ? `\n\nResolution: ${err.resolution}` : "";
+                setError(errorMessage + resolution);
             } finally {
                 setIsLoading(false);
             }
@@ -398,8 +401,11 @@ const ChannelDetailView: React.FC<ChannelDetailViewProps> = ({ channelId, user, 
                 const result = await fetchChannelAnalysis(channelId, apiKey);
                 setData(result);
                 addToCollection(createChannelCollectionItem(result));
-            } catch (err) {
-                setError(err instanceof Error ? err.message : "Could not load channel data.");
+            } catch (err: any) {
+                console.error("Failed to fetch channel analysis:", err);
+                const errorMessage = err.message || (err instanceof Error ? err.message : "Could not load channel data.");
+                const resolution = err.resolution ? `\n\nResolution: ${err.resolution}` : "";
+                setError(errorMessage + resolution);
             } finally {
                 setIsLoading(false);
             }

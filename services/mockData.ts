@@ -198,7 +198,7 @@ export const mockRankingData: { channels: ChannelRankingData[], videos: VideoRan
       channelName: `Channel ${i % 10}`,
       channelId: `channel_${i % 10}`,
       thumbnailUrl: originalVideo.thumbnailUrl,
-      publishedDate: originalVideo.publishedAt,
+      publishedAt: originalVideo.publishedAt,
       viewCount: 5000000 - i * 40000,
       rankChange: 0,
       channelTotalViews: 123456789,

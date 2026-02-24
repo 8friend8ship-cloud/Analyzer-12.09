@@ -2,7 +2,6 @@ import React, { useState, useCallback, useEffect } from 'react';
 import Spinner from './common/Spinner';
 import { fetchYouTubeData } from '../services/youtubeService';
 import { getAIThumbnailAnalysis } from '../services/geminiService';
-import { mockVideoData } from '../services/mockData';
 import type { User, AppSettings, VideoData, AIThumbnailInsights, FilterState, ThumbnailViewState } from '../types';
 
 interface ThumbnailAnalysisViewProps {
@@ -22,39 +21,6 @@ const analysisFilters: FilterState = {
   resultsLimit: 20,
   country: 'KR',
   category: 'all',
-};
-
-const mockThumbnailInsights: AIThumbnailInsights = {
-  analysis: {
-    focalPoint: "인물 중심, 특히 얼굴 클로즈업이 많아 감정 전달에 유리합니다.",
-    colorContrast: "대체로 고채도, 고대비 색상을 사용하여 시선을 사로잡습니다. 노란색과 빨간색이 자주 사용됩니다.",
-    faceEmotionCTR: "놀람, 기쁨 등 극적인 표정을 통해 사용자의 호기심을 자극합니다.",
-    textReadability: "크고 굵은 고딕 계열 폰트를 사용하여 모바일에서도 쉽게 읽힙니다.",
-    brandingConsistency: "일부 채널은 로고나 특정 색상 팔레트를 사용하여 일관성을 유지합니다.",
-    mobileReadability: "핵심 텍스트와 이미지가 중앙에 집중되어 모바일 가독성이 높습니다.",
-    categoryRelevance: "썸네일만 봐도 '캠핑'이라는 주제를 명확히 알 수 있습니다.",
-    titlePatterns: "'N가지 꿀팁', '절대 사지 마세요', '이거 하나로 끝' 등 정보성과 호기심을 자극하는 패턴이 많습니다.",
-    titleLength: "대부분 20-30자 내외의 짧고 간결한 제목을 사용합니다.",
-    titleCredibility: "일부 과장된 표현이 있으나, '내돈내산', '솔직 후기' 등의 키워드로 신뢰도를 보완합니다."
-  },
-  results: {
-    thumbnailSummary: "성과가 좋은 '캠핑' 썸네일은 자연 풍경 속에서 인물의 행복한 표정을 강조하며, '역대급', '필수템' 같은 강력한 키워드를 텍스트로 활용합니다.",
-    improvedConcepts: [
-      { concept: "Before & After", description: "낡은 캠핑 장비를 새 장비로 교체하는 전후 비교를 통해 제품의 매력을 극대화합니다." },
-      { concept: "문제 해결", description: "'캠핑가서 벌레 때문에 고생했다면?' 과 같이 시청자의 문제 상황을 제시하고 해결책을 암시합니다." }
-    ],
-    textCandidates: ["역대급 가성비", "이거 모르면 손해", "초보캠퍼 필수템"],
-    designGuide: {
-      colors: "따뜻한 주황색/노란색 계열을 포인트로, 자연의 녹색/파란색을 배경으로 사용하세요.",
-      fonts: "굵고 시인성 좋은 고딕체 (예: G마켓 산스, Pretendard)",
-      layout: "인물은 좌/우측에, 핵심 텍스트는 반대편 상단에 배치하여 시선을 유도하세요."
-    },
-    titleSummary: "정보의 효용성을 강조하거나, 시청자의 후회를 자극하는 방식의 제목이 효과적입니다. 구체적인 숫자나 모델명을 포함하여 전문성을 어필하는 것도 좋은 전략입니다.",
-    titleSuggestions: [
-      { title: "초보 캠퍼라면 절대 사지 말아야 할 캠핑용품 5가지 (내돈내산)", reason: "부정적 표현과 구체적인 숫자를 사용해 호기심을 극대화하고 신뢰도를 더합니다." },
-      { title: "이 영상 하나로 캠핑 준비 끝. (초보캠핑 가이드 A to Z)", reason: "시청자가 얻을 수 있는 가치를 명확히 제시하여 클릭을 유도합니다." }
-    ]
-  }
 };
 
 
@@ -101,17 +67,14 @@ const ThumbnailAnalysisView: React.FC<ThumbnailAnalysisViewProps> = ({ user, app
         throw new Error("해당 키워드로 인기 동영상을 찾을 수 없습니다.");
       }
       
-      // Simulate AI analysis with mock data, as requested
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate analysis delay
-      const aiInsights = mockThumbnailInsights;
+      const aiInsights = await getAIThumbnailAnalysis(videoData, searchQuery);
       
       setThumbnails(videoData);
       setInsights(aiInsights);
 
     } catch (err) {
-      setError("분석 중 오류가 발생하여 가상 데이터가 표시됩니다. (An error occurred during analysis. Displaying mock data.)");
-      setThumbnails(mockVideoData.slice(0, 10));
-      setInsights(mockThumbnailInsights);
+      console.error(err);
+      setError("분석 중 오류가 발생했습니다. (An error occurred during analysis.)");
     } finally {
       setIsLoading(false);
     }

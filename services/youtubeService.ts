@@ -92,7 +92,8 @@ export const fetchChannelSearchData = async (query: string, filters: FilterState
 
         const searchData = await fetchFromYouTube('search', params, apiKey);
 
-        const channelIds = searchData.items.map((item: any) => item.id.channelId).join(',');
+        const items = searchData.items || [];
+        const channelIds = items.map((item: any) => item.id.channelId).join(',');
         if (!channelIds) return [];
 
         const channelsData = await fetchFromYouTube('channels', {
@@ -100,7 +101,7 @@ export const fetchChannelSearchData = async (query: string, filters: FilterState
             id: channelIds
         }, apiKey);
 
-        return channelsData.items.map((item: any, index: number): ChannelRankingData => ({
+        return (channelsData.items || []).map((item: any, index: number): ChannelRankingData => ({
             id: item.id,
             name: item.snippet.title,
             channelHandle: item.snippet.customUrl,
@@ -175,7 +176,10 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
         }
 
         const searchData = await fetchFromYouTube('search', searchParams, apiKey);
-        const videoIds = searchData.items.map((item: any) => item.id.videoId).join(',');
+        const videoIds = (searchData.items || [])
+            .filter((item: any) => item.id.kind === 'youtube#video')
+            .map((item: any) => item.id.videoId)
+            .join(',');
         
         if (!videoIds) return [];
 
@@ -184,27 +188,28 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
             id: videoIds
         }, apiKey);
 
-        const channelIds = Array.from(new Set(videosData.items.map((v: any) => v.snippet.channelId))).join(',');
+        const items = videosData.items || [];
+        const channelIds = Array.from(new Set(items.map((v: any) => v.snippet.channelId))).join(',');
         const channelsData = await fetchFromYouTube('channels', {
             part: 'statistics',
             id: channelIds
         }, apiKey);
 
-        const channelStatsMap = channelsData.items.reduce((acc: any, curr: any) => {
+        const channelStatsMap = (channelsData.items || []).reduce((acc: any, curr: any) => {
             acc[curr.id] = parseInt(curr.statistics.subscriberCount) || 0;
             return acc;
         }, {});
 
-        return videosData.items.map((item: any): VideoData => {
+        return items.map((item: any): VideoData => {
             const views = parseInt(item.statistics.viewCount) || 0;
             const likes = parseInt(item.statistics.likeCount) || 0;
             const comments = parseInt(item.statistics.commentCount) || 0;
             
             // Parse ISO 8601 duration
-            const durationMatch = item.contentDetails.duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
-            const hours = parseInt(durationMatch[1]) || 0;
-            const minutes = parseInt(durationMatch[2]) || 0;
-            const seconds = parseInt(durationMatch[3]) || 0;
+            const durationMatch = item.contentDetails?.duration?.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+            const hours = parseInt(durationMatch?.[1] || '0') || 0;
+            const minutes = parseInt(durationMatch?.[2] || '0') || 0;
+            const seconds = parseInt(durationMatch?.[3] || '0') || 0;
             const totalMinutes = (hours * 60) + minutes + (seconds / 60);
 
             return {
@@ -265,21 +270,24 @@ export const fetchChannelAnalysis = async (channelId: string, apiKey: string): P
             maxResults: '50'
         }, apiKey);
 
-        const videoIds = searchData.items.map((item: any) => item.id.videoId).join(',');
+        const videoIds = (searchData.items || [])
+            .filter((item: any) => item.id.kind === 'youtube#video')
+            .map((item: any) => item.id.videoId)
+            .join(',');
         const videosData = await fetchFromYouTube('videos', {
             part: 'snippet,statistics,contentDetails',
             id: videoIds
         }, apiKey);
 
-        const videoList: ChannelVideo[] = videosData.items.map((item: any): ChannelVideo => {
+        const videoList: ChannelVideo[] = (videosData.items || []).map((item: any): ChannelVideo => {
             const views = parseInt(item.statistics.viewCount) || 0;
             const likes = parseInt(item.statistics.likeCount) || 0;
             const comments = parseInt(item.statistics.commentCount) || 0;
 
-            const durationMatch = item.contentDetails.duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
-            const hours = parseInt(durationMatch[1]) || 0;
-            const minutes = parseInt(durationMatch[2]) || 0;
-            const seconds = parseInt(durationMatch[3]) || 0;
+            const durationMatch = item.contentDetails?.duration?.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+            const hours = parseInt(durationMatch?.[1] || '0') || 0;
+            const minutes = parseInt(durationMatch?.[2] || '0') || 0;
+            const seconds = parseInt(durationMatch?.[3] || '0') || 0;
             const totalMinutes = (hours * 60) + minutes + (seconds / 60);
 
             return {
@@ -364,12 +372,38 @@ export const fetchRankingData = async (
                 maxResults: '50'
             }, apiKey);
 
+            // Fetch channel statistics to get subscriber counts for performance analysis
+            const channelIds = Array.from(new Set(data.items.map((item: any) => item.snippet.channelId))).join(',');
+            let channelStatsMap: Record<string, number> = {};
+            let channelThumbnailMap: Record<string, string> = {};
+            
+            if (channelIds) {
+                try {
+                    const channelsData = await fetchFromYouTube('channels', {
+                        part: 'snippet,statistics',
+                        id: channelIds
+                    }, apiKey);
+                    
+                    channelStatsMap = channelsData.items.reduce((acc: any, curr: any) => {
+                        acc[curr.id] = parseInt(curr.statistics.subscriberCount) || 0;
+                        return acc;
+                    }, {});
+
+                    channelThumbnailMap = channelsData.items.reduce((acc: any, curr: any) => {
+                        acc[curr.id] = curr.snippet.thumbnails.default.url;
+                        return acc;
+                    }, {});
+                } catch (e) {
+                    console.error("Failed to fetch channel stats for ranking:", e);
+                }
+            }
+
             return data.items.map((item: any, index: number): VideoRankingData => {
                 const views = parseInt(item.statistics.viewCount) || 0;
-                const durationMatch = item.contentDetails.duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
-                const hours = parseInt(durationMatch[1]) || 0;
-                const minutes = parseInt(durationMatch[2]) || 0;
-                const seconds = parseInt(durationMatch[3]) || 0;
+                const durationMatch = item.contentDetails?.duration?.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+                const hours = parseInt(durationMatch?.[1] || '0') || 0;
+                const minutes = parseInt(durationMatch?.[2] || '0') || 0;
+                const seconds = parseInt(durationMatch?.[3] || '0') || 0;
                 const totalSeconds = (hours * 3600) + (minutes * 60) + seconds;
 
                 return {
@@ -383,7 +417,8 @@ export const fetchRankingData = async (
                     viewCount: views,
                     rankChange: 0,
                     channelTotalViews: 0,
-                    channelSubscriberCount: 0,
+                    channelSubscriberCount: channelStatsMap[item.snippet.channelId] || 0,
+                    channelThumbnailUrl: channelThumbnailMap[item.snippet.channelId] || '',
                     durationSeconds: totalSeconds,
                     isShorts: totalSeconds <= 60,
                     channelCountry: filters.country,
@@ -392,23 +427,40 @@ export const fetchRankingData = async (
         } else {
             // For channels, YouTube doesn't have a "mostPopular" chart.
             // We'll search for top channels in the category.
-            const searchData = await fetchFromYouTube('search', {
+            const categoryNames: Record<string, string> = {
+                '1': 'Film Animation', '2': 'Autos Vehicles', '10': 'Music', '15': 'Pets Animals',
+                '17': 'Sports', '19': 'Travel Events', '20': 'Gaming', '22': 'People Blogs',
+                '23': 'Comedy', '24': 'Entertainment', '25': 'News Politics', '26': 'Howto Style',
+                '27': 'Education', '28': 'Science Technology', '29': 'Nonprofits Activism',
+            };
+            
+            const query = filters.category && filters.category !== 'all' 
+                ? categoryNames[filters.category] || '' 
+                : '';
+
+            const searchParams: any = {
                 part: 'snippet',
                 type: 'channel',
-                q: '*',
                 order: 'viewCount',
                 regionCode: (filters.country && filters.country !== 'WW') ? filters.country : 'US',
-                videoCategoryId: filters.category === 'all' ? '' : filters.category,
                 maxResults: '50'
-            }, apiKey);
+            };
+            
+            if (query) {
+                searchParams.q = query;
+            } else {
+                searchParams.q = 'a'; // Fallback query to get some popular channels
+            }
 
-            const channelIds = searchData.items.map((item: any) => item.id.channelId).join(',');
+            const searchData = await fetchFromYouTube('search', searchParams, apiKey);
+
+            const channelIds = (searchData.items || []).map((item: any) => item.id.channelId).join(',');
             const channelsData = await fetchFromYouTube('channels', {
                 part: 'snippet,statistics',
                 id: channelIds
             }, apiKey);
 
-            return channelsData.items.map((item: any, index: number): ChannelRankingData => ({
+            return (channelsData.items || []).map((item: any, index: number): ChannelRankingData => ({
                 id: item.id,
                 name: item.snippet.title,
                 channelHandle: item.snippet.customUrl,
@@ -469,10 +521,10 @@ export const fetchVideoDetails = async (videoId: string, apiKey: string): Promis
             id: video.snippet.channelId
         }, apiKey);
 
-        const durationMatch = video.contentDetails.duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
-        const hours = parseInt(durationMatch[1]) || 0;
-        const minutes = parseInt(durationMatch[2]) || 0;
-        const seconds = parseInt(durationMatch[3]) || 0;
+        const durationMatch = video.contentDetails?.duration?.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+        const hours = parseInt(durationMatch?.[1] || '0') || 0;
+        const minutes = parseInt(durationMatch?.[2] || '0') || 0;
+        const seconds = parseInt(durationMatch?.[3] || '0') || 0;
         const totalMinutes = (hours * 60) + minutes + (seconds / 60);
 
         const comments = await fetchVideoComments(videoId, apiKey);
@@ -560,7 +612,7 @@ export const fetchSimilarChannels = async (channelId: string, apiKey: string): P
             maxResults: '6'
         }, apiKey);
 
-        const similarChannels = searchData.items
+        const similarChannels = (searchData.items || [])
             .filter((item: any) => item.id.channelId !== channelId)
             .map((item: any) => item.id.channelId)
             .join(',');
@@ -572,7 +624,7 @@ export const fetchSimilarChannels = async (channelId: string, apiKey: string): P
             id: similarChannels
         }, apiKey);
 
-        return channelsData.items.map((item: any): SimilarChannelData => ({
+        return (channelsData.items || []).map((item: any): SimilarChannelData => ({
             id: item.id,
             name: item.snippet.title,
             handle: item.snippet.customUrl,

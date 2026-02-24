@@ -23,29 +23,25 @@ const CosBadge = () => <sup className="text-[9px] font-bold text-blue-400 border
 const countryOptions = [
     { label: "전세계 (Global)", value: "WW" },
     { label: "대한민국 (Korea)", value: "KR" },
-    { label: "뉴질랜드 (New Zealand)", value: "NZ" },
-    { label: "대만 (Taiwan)", value: "TW" },
-    { label: "독일 (Germany)", value: "DE" },
-    { label: "러시아 (Russia)", value: "RU" },
-    { label: "말레이시아 (Malaysia)", value: "MY" },
-    { label: "멕시코 (Mexico)", value: "MX" },
     { label: "미국 (USA)", value: "US" },
-    { label: "베트남 (Vietnam)", value: "VN" },
-    { label: "브루나이 (Brunei)", value: "BN" },
-    { label: "싱가포르 (Singapore)", value: "SG" },
-    { label: "영국 (UK)", value: "GB" },
-    { label: "인도 (India)", value: "IN" },
-    { label: "인도네시아 (Indonesia)", value: "ID" },
     { label: "일본 (Japan)", value: "JP" },
-    { label: "중국 (China)", value: "CN" },
-    { label: "칠레 (Chile)", value: "CL" },
-    { label: "캐나다 (Canada)", value: "CA" },
-    { label: "태국 (Thailand)", value: "TH" },
-    { label: "파푸아뉴기니 (Papua New Guinea)", value: "PG" },
-    { label: "페루 (Peru)", value: "PE" },
+    { label: "영국 (UK)", value: "GB" },
+    { label: "독일 (Germany)", value: "DE" },
     { label: "프랑스 (France)", value: "FR" },
-    { label: "필리핀 (Philippines)", value: "PH" },
+    { label: "중국 (China)", value: "CN" },
+    { label: "러시아 (Russia)", value: "RU" },
+    { label: "캐나다 (Canada)", value: "CA" },
     { label: "호주 (Australia)", value: "AU" },
+    { label: "베트남 (Vietnam)", value: "VN" },
+    { label: "인도네시아 (Indonesia)", value: "ID" },
+    { label: "태국 (Thailand)", value: "TH" },
+    { label: "말레이시아 (Malaysia)", value: "MY" },
+    { label: "싱가포르 (Singapore)", value: "SG" },
+    { label: "필리핀 (Philippines)", value: "PH" },
+    { label: "멕시코 (Mexico)", value: "MX" },
+    { label: "브라질 (Brazil)", value: "BR" },
+    { label: "인도 (India)", value: "IN" },
+    { label: "대만 (Taiwan)", value: "TW" },
     { label: "홍콩 (Hong Kong)", value: "HK" },
 ];
 
@@ -208,9 +204,9 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
             .filter(video => 
                 video && 
                 typeof video.channelSubscriberCount === 'number' && 
-                video.channelSubscriberCount >= 1000 && 
+                video.channelSubscriberCount >= 100 && // Lowered from 1000
                 typeof video.viewCount === 'number' &&
-                video.viewCount >= 10000
+                video.viewCount >= 1000 // Lowered from 10000
             )
             .sort((a, b) => {
                 const subA = a.channelSubscriberCount || 1;
@@ -254,9 +250,11 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
             } else {
                 setResults(Array.isArray(data) ? data : []);
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error("Failed to fetch ranking data:", err);
-            setError(err instanceof Error ? err.message : "Failed to load ranking data.");
+            const errorMessage = err.message || (err instanceof Error ? err.message : "Failed to load ranking data.");
+            const resolution = err.resolution ? `\n\nResolution: ${err.resolution}` : "";
+            setError(errorMessage + resolution);
             setResults([]);
         } finally {
             setIsLoading(false);
@@ -385,7 +383,7 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="p-3 text-center text-gray-300">{video.publishedDate.split('T')[0]}</td>
+                                            <td className="p-3 text-center text-gray-300">{video.publishedAt.split('T')[0]}</td>
                                             <td className="p-3 text-center font-semibold text-white">{formatNumber(video.viewCount)}</td>
                                             {activeTab === 'performance' && 
                                                 <td className="p-3 text-center font-bold text-purple-400 text-base">
@@ -400,9 +398,11 @@ const TopChartsView: React.FC<TopChartsViewProps> = ({ user, appSettings, onShow
                                             }
                                             <td className="p-3">
                                                 <div className="flex items-center gap-2">
-                                                    <img src={video.channelThumbnailUrl} alt={video.channelName} className="w-8 h-8 rounded-full" />
+                                                    <button onClick={() => onShowChannelDetail(video.channelId)} className="flex-shrink-0">
+                                                        <img src={video.channelThumbnailUrl} alt={video.channelName} className="w-8 h-8 rounded-full hover:ring-2 hover:ring-blue-500 transition-all" />
+                                                    </button>
                                                     <div className="min-w-0">
-                                                        <p className="text-xs text-white truncate font-semibold">{video.channelName}</p>
+                                                        <button onClick={() => onShowChannelDetail(video.channelId)} className="text-xs text-white truncate font-semibold hover:text-blue-400 block text-left">{video.channelName}</button>
                                                         <p className="text-xs text-gray-400">{formatSubscribers(video.channelSubscriberCount)}</p>
                                                         <div className="flex flex-wrap gap-1 mt-0.5">
                                                             {(video.channelCategoryTags || []).slice(0,1).map(tag => <span key={tag} className="px-1 py-0.5 text-[9px] bg-gray-600 text-gray-300 rounded">{tag}</span>)}

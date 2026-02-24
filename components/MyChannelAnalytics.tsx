@@ -273,8 +273,8 @@ const AudienceTab: React.FC<{ data: MyChannelAnalyticsData }> = ({ data }) => (
         <div>
             <h2 className="text-xl font-bold mb-2">시청자 인구통계 (Audience Demographics)</h2>
             <div className="text-sm text-yellow-300 bg-yellow-900/30 p-3 rounded-md border border-yellow-500/30 mb-4">
-              <strong>데이터 출처 (Data Source):</strong> 이 데이터는 YouTube Analytics API를 통해 제공된 실제 측정값입니다.<br/>
-              (This data represents actual measurements provided via the YouTube Analytics API.)
+              <strong>데이터 출처 안내 (Data Source Notice):</strong> YouTube Analytics API는 채널 소유자의 권한(OAuth)이 필요하므로, 본 데모에서는 공개된 채널 데이터를 기반으로 AI가 추정한 가상 데이터를 제공합니다.<br/>
+              (Since YouTube Analytics API requires channel owner authorization (OAuth), this demo provides AI-estimated virtual data based on public channel data.)
             </div>
             <AudienceCharts profile={data.audienceProfile} totalViews={data.kpi.viewsLast30d} />
         </div>
@@ -284,80 +284,43 @@ const AudienceTab: React.FC<{ data: MyChannelAnalyticsData }> = ({ data }) => (
 
 // --- New Workflow Components ---
 
-const getMockUserChannels = (user: User) => [
-    {
-        id: 'mock-channel-1',
-        name: `${user.name}의 브이로그`,
-        thumbnailUrl: `https://i.pravatar.cc/150?u=${user.id}_1`,
-        subscribers: '1.23M'
-    },
-    {
-        id: 'mock-channel-2',
-        name: `${user.name}의 게임 채널`,
-        thumbnailUrl: `https://i.pravatar.cc/150?u=${user.id}_2`,
-        subscribers: '154K'
-    }
-];
-
 const ChannelSelectionStep: React.FC<{
     user: User;
-    onSelectAndStart: () => void;
+    onSelectAndStart: (channelId: string) => void;
     isLoading: boolean;
 }> = ({ user, onSelectAndStart, isLoading }) => {
-    const userChannels = getMockUserChannels(user);
-    const [selectedChannelId, setSelectedChannelId] = useState<string | null>(userChannels[0]?.id || null);
+    const [channelInput, setChannelInput] = useState<string>('');
 
     return (
         <div className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto px-4 animate-fade-in py-20">
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-3 text-center">AI 채널 진단</h1>
             <p className="text-gray-400 text-center mb-6 text-lg">
-                분석을 원하는 본인 소유의 YouTube 채널을 선택하세요.
+                분석을 원하는 YouTube 채널의 핸들(@handle) 또는 ID를 입력하세요.
             </p>
 
             <div className="w-full text-center text-sm text-yellow-300 bg-yellow-900/30 p-3 rounded-md border border-yellow-500/30 mb-8">
               <strong>데이터 출처 안내 (Data Source Notice):</strong>
               <p className="mt-1">
-                현재 로그인된 Google 계정에 연결된 채널 목록만 표시됩니다. 본 서비스는 YouTube API 정책을 준수하여 사용자 본인 소유의 채널에 대한 분석만 지원합니다.
-                <br/>
-                <span className="text-yellow-500 text-xs">
-                  (Only channels linked to the currently logged-in Google account are displayed. In compliance with YouTube API policies, this service only supports analysis of channels you own.)
-                </span>
+                본 서비스는 YouTube API 정책을 준수하여 공개된 채널 데이터를 기반으로 분석을 수행합니다.
               </p>
             </div>
 
             <div className="w-full space-y-4 mb-8">
-                {userChannels.map(channel => (
-                    <button
-                        key={channel.id}
-                        onClick={() => setSelectedChannelId(channel.id)}
-                        className={`w-full p-4 rounded-xl border-2 transition-all flex items-center gap-4 text-left ${selectedChannelId === channel.id ? 'bg-blue-900/50 border-blue-500 ring-2 ring-blue-500/50' : 'bg-gray-800 border-gray-700 hover:border-gray-600'}`}
-                    >
-                        <img src={channel.thumbnailUrl} alt={channel.name} className="w-16 h-16 rounded-full flex-shrink-0" />
-                        <div>
-                            <p className="font-bold text-lg text-white">{channel.name}</p>
-                            <p className="text-sm text-gray-400">{channel.subscribers} subscribers</p>
-                        </div>
-                        {selectedChannelId === channel.id && (
-                             <div className="ml-auto flex-shrink-0">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                </svg>
-                            </div>
-                        )}
-                    </button>
-                ))}
-                 <div className="text-center text-sm text-gray-500 p-4 border-2 border-dashed border-gray-700 rounded-xl">
-                    <p>+ 채널 추가 (준비 중)</p>
-                    <p className="text-xs mt-1">Google 계정에 연결된 다른 채널을 추가할 수 있습니다.</p>
-                </div>
+                <input
+                    type="text"
+                    value={channelInput}
+                    onChange={(e) => setChannelInput(e.target.value)}
+                    placeholder="예: @MrBeast 또는 UCX6OQ3DkcsbYNE6H8uQQuVA"
+                    className="w-full p-4 bg-gray-800 border-2 border-gray-700 rounded-xl text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 transition-all"
+                />
             </div>
 
             <button
-                onClick={onSelectAndStart}
-                disabled={isLoading || !selectedChannelId}
+                onClick={() => onSelectAndStart(channelInput)}
+                disabled={isLoading || !channelInput.trim()}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl text-lg shadow-lg transition-all transform hover:scale-[1.01] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-                {isLoading ? '분석 준비 중...' : '선택 채널로 진단 시작'}
+                {isLoading ? '분석 준비 중...' : '입력한 채널로 진단 시작'}
             </button>
         </div>
     );
@@ -384,24 +347,23 @@ const MyChannelAnalytics: React.FC<MyChannelAnalyticsProps> = ({ user, appSettin
     const [recommendations, setRecommendations] = useState<{ name: string; reason: string }[]>([]);
     const [isRecommending, setIsRecommending] = useState(false);
     
-    const handleStartAnalysis = async () => {
+    const handleStartAnalysis = async (inputChannel: string) => {
         setViewState('loading');
         try {
             const dataApiKey = appSettings.apiKeys.youtube;
             const analyticsApiKey = appSettings.apiKeys.analytics;
             if (!dataApiKey || !analyticsApiKey) throw new Error("YouTube API and Analytics API keys are required.");
             
-            // In a real app, this ID would come from the channel selection step.
-            // For this simulation, "me" is a placeholder to fetch the mock data.
-            const channelId = "me"; 
+            const resolvedChannelId = await youtubeService.resolveChannelId(inputChannel, dataApiKey);
+            if (!resolvedChannelId) throw new Error("채널을 찾을 수 없습니다.");
 
-            const fullDashboardData = await youtubeService.fetchMyChannelAnalytics(channelId, dataApiKey, analyticsApiKey);
+            const fullDashboardData = await youtubeService.fetchMyChannelAnalytics(resolvedChannelId, dataApiKey, analyticsApiKey);
             
             setData(fullDashboardData);
             setViewState('dashboard');
         } catch (e) {
             console.error(e);
-            alert("분석에 실패했습니다. API 키를 확인해주세요.");
+            alert("분석에 실패했습니다. API 키와 채널 정보를 확인해주세요.");
             setViewState('channel_selection');
         }
     };
