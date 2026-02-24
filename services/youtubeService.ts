@@ -93,7 +93,10 @@ export const fetchChannelSearchData = async (query: string, filters: FilterState
         const searchData = await fetchFromYouTube('search', params, apiKey);
 
         const items = searchData.items || [];
-        const channelIds = items.map((item: any) => item.id.channelId).join(',');
+        const channelIds = items
+            .filter((item: any) => item.id && item.id.channelId)
+            .map((item: any) => item.id.channelId)
+            .join(',');
         if (!channelIds) return [];
 
         const channelsData = await fetchFromYouTube('channels', {
@@ -136,8 +139,8 @@ export const resolveChannelId = async (query: string, apiKey: string): Promise<s
             maxResults: '1'
         }, apiKey);
 
-        if (searchData.items && searchData.items.length > 0) {
-            return searchData.items[0].id.channelId;
+        if (searchData.items && searchData.items.length > 0 && searchData.items[0].id) {
+            return searchData.items[0].id.channelId || null;
         }
         return null;
     } catch (error) {
@@ -454,7 +457,10 @@ export const fetchRankingData = async (
 
             const searchData = await fetchFromYouTube('search', searchParams, apiKey);
 
-            const channelIds = (searchData.items || []).map((item: any) => item.id.channelId).join(',');
+            const channelIds = (searchData.items || [])
+                .filter((item: any) => item.id && item.id.channelId)
+                .map((item: any) => item.id.channelId)
+                .join(',');
             const channelsData = await fetchFromYouTube('channels', {
                 part: 'snippet,statistics',
                 id: channelIds
@@ -613,7 +619,7 @@ export const fetchSimilarChannels = async (channelId: string, apiKey: string): P
         }, apiKey);
 
         const similarChannels = (searchData.items || [])
-            .filter((item: any) => item.id.channelId !== channelId)
+            .filter((item: any) => item.id && item.id.channelId && item.id.channelId !== channelId)
             .map((item: any) => item.id.channelId)
             .join(',');
 
