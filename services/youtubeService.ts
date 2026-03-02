@@ -416,7 +416,7 @@ export const fetchRankingData = async (
                     channelName: item.snippet.channelTitle,
                     channelId: item.snippet.channelId,
                     thumbnailUrl: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default.url,
-                    publishedDate: item.snippet.publishedAt,
+                    publishedAt: item.snippet.publishedAt,
                     viewCount: views,
                     rankChange: 0,
                     channelTotalViews: 0,
