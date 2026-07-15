@@ -165,7 +165,12 @@ export const fetchYouTubeData = async (mode: AnalysisMode, query: string, filter
             const lang = countryToLangCode[filters.country];
             if (lang) searchParams.relevanceLanguage = lang;
         } else if (filters.country === 'WW') {
-            searchParams.relevanceLanguage = 'en';
+            // For global, we don't force English anymore as it might filter out local content too aggressively
+            // Or we can set it to 'en' but allow other languages. 
+            // Actually, if the user searches in Korean with WW, they expect Korean results globally.
+            // So we should only set relevanceLanguage if the query is detected as English? 
+            // For now, let's remove the forced 'en' for WW to let YouTube decide based on query language.
+            // searchParams.relevanceLanguage = 'en'; 
         }
 
         if (filters.videoFormat !== 'any') {

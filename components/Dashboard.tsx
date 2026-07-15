@@ -387,9 +387,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
         <div className="mb-6 animate-fade-in">
             <h2 className="text-xl font-bold mb-4">검색 결과 (Search Results)</h2>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-1 h-64"><ViewsDistributionChart data={data} /></div>
-                <div className="lg:col-span-1 h-64"><LengthChart data={data} /></div>
-                <div className="lg:col-span-1 h-64">
+                <div className="lg:col-span-1 h-80 lg:h-64"><ViewsDistributionChart data={data} /></div>
+                <div className="lg:col-span-1 h-80 lg:h-64"><LengthChart data={data} /></div>
+                <div className="lg:col-span-1 h-auto min-h-[16rem]">
                     <AdAnalysis videos={data} />
                 </div>
             </div>

@@ -90,7 +90,7 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onShowChannelDetail
             {/* Desktop Table View */}
             <div className="bg-gray-900/50 rounded-lg overflow-hidden border border-gray-700/50">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left text-gray-300 table-fixed">
+                    <table className="w-full min-w-[800px] text-sm text-left text-gray-300 table-fixed">
                         <colgroup>
                             <col style={{ width: '50%' }} />
                             <col style={{ width: '12.5%' }} />

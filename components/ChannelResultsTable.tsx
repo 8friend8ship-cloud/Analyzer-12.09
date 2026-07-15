@@ -78,7 +78,7 @@ const ChannelResultsTable: React.FC<ChannelResultsTableProps> = ({ channels, onS
     return (
         <div className="bg-gray-900/50 rounded-lg overflow-hidden border border-gray-700/50">
             <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left text-gray-300">
+                <table className="w-full min-w-[800px] text-sm text-left text-gray-300">
                     <thead className="text-xs text-gray-400 uppercase bg-gray-800/60">
                         <tr>
                             <th scope="col" className="px-4 py-3 font-semibold text-center w-12">#</th>

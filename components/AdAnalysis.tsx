@@ -77,7 +77,7 @@ const AdAnalysis: React.FC<AdAnalysisProps> = ({ videos }) => {
   return (
     <div className="bg-gray-900/50 p-4 rounded-lg h-full flex flex-col">
       <h4 className="font-semibold text-center mb-3 text-gray-300">Content OS 토픽 키워드 제안 (Topic Keywords)<br/><span className="text-xs font-normal text-gray-400">(상위 {videos.length}개 영상 기준) (Based on top {videos.length} videos)</span></h4>
-      <div className="flex-grow min-h-[50px] flex items-center justify-center">
+      <div className="flex-grow min-h-[50px] flex items-center justify-center py-2">
         {renderContent()}
       </div>
     </div>
