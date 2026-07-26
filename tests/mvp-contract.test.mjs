@@ -11,6 +11,10 @@ const service = read('services/contentOsDataService.ts');
 const gas = read('apps-script/ContentOsStoredDataApi.gs');
 
 assert.match(app, /MvpStoredDataDashboard/);
+assert.match(app, /homedesigntaedi@gmail\.com/);
+assert.match(app, /8friend8ship@hanmail\.net/);
+assert.match(app, /CANONICAL_LOGIN_ALIASES/);
+assert.match(app, /normalizeEmail/);
 assert.doesNotMatch(app, /VITE_YOUTUBE_API_KEY|VITE_GEMINI_API_KEY|setSystemGeminiApiKey/);
 
 for (const [name, source] of Object.entries({ app, dashboard, service })) {
