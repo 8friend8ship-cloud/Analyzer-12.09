@@ -8,6 +8,16 @@ import { clearCache } from './services/cacheService';
 import type { User, UserUsage } from './types';
 import Spinner from './components/common/Spinner';
 
+const CANONICAL_PRIMARY_EMAIL = 'homedesigntaedi@gmail.com';
+const CANONICAL_LOGIN_ALIASES = new Set([
+  CANONICAL_PRIMARY_EMAIL,
+  '8friend8ship@hanmail.net',
+]);
+
+const normalizeEmail = (value: string): string => value.trim().toLowerCase();
+const isCanonicalAdmin = (value: string): boolean =>
+  CANONICAL_LOGIN_ALIASES.has(normalizeEmail(value));
+
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<'landing' | 'login' | 'register' | 'dashboard' | 'account'>('landing');
@@ -26,7 +36,6 @@ function App() {
     password?: string;
   }) => {
     let userToSet: User | null = null;
-    const ADMIN_EMAIL = '8friend8ship@hanmail.net';
 
     const getUsageLimits = (_plan: 'Free' | 'Pro' | 'Biz', isAdmin: boolean): UserUsage => {
       const unlimitedLimit = { used: 0, limit: Infinity };
@@ -43,28 +52,30 @@ function App() {
 
     if (credentials.googleUser) {
       const { name, email } = credentials.googleUser;
-      const userId = 'gu_' + email.replace(/@.*/, '');
-      const isAdmin = email === ADMIN_EMAIL;
+      const normalizedEmail = normalizeEmail(email);
+      const userId = 'gu_' + normalizedEmail.replace(/@.*/, '');
+      const isAdmin = isCanonicalAdmin(normalizedEmail);
       const plan = isAdmin ? 'Biz' : 'Free';
 
       userToSet = {
         id: userId,
-        name,
-        email,
+        name: isAdmin ? 'home design. taedi' : name,
+        email: isAdmin ? CANONICAL_PRIMARY_EMAIL : normalizedEmail,
         isAdmin,
         plan,
         usage: getUsageLimits(plan, isAdmin),
         planExpirationDate: plan !== 'Free' ? '2099. 12. 31.' : undefined,
       };
     } else if (credentials.email && credentials.password) {
-      const { email, password } = credentials;
-      const isAdmin = email === ADMIN_EMAIL || email === 'admin' || email === 'master';
+      const { password } = credentials;
+      const normalizedEmail = normalizeEmail(credentials.email);
+      const isAdmin = isCanonicalAdmin(normalizedEmail) || normalizedEmail === 'admin' || normalizedEmail === 'master';
       const plan = isAdmin ? 'Biz' : 'Free';
 
       userToSet = {
-        id: 'form_' + (isAdmin ? 'admin' : email.replace(/@.*/, '')),
-        name: isAdmin ? 'Johnson' : 'home design. taedi',
-        email: isAdmin ? ADMIN_EMAIL : email,
+        id: 'form_' + (isAdmin ? 'admin' : normalizedEmail.replace(/@.*/, '')),
+        name: isAdmin ? 'home design. taedi' : 'home design. taedi',
+        email: isAdmin ? CANONICAL_PRIMARY_EMAIL : normalizedEmail,
         password,
         isAdmin,
         plan,
