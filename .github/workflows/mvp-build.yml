@@ -1,0 +1,36 @@
+name: MVP Stored Data Build
+
+on:
+  push:
+    branches:
+      - 'mvp/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: MVP contract tests
+        run: npm run test:mvp
+
+      - name: Type check
+        run: npm run lint
+
+      - name: Production build
+        env:
+          VITE_CONTENT_OS_DATA_URL: https://example.invalid/content-os-data
+        run: npm run build
