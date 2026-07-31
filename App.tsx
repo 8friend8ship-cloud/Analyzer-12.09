@@ -8,6 +8,7 @@ import { clearCache } from './services/cacheService';
 import type { User, AppSettings, UserUsage } from './types';
 import { setSystemGeminiApiKey } from './services/apiKeyService';
 import Spinner from './components/common/Spinner';
+import { isCanonicalGoogleAdmin, normalizeEmail } from './services/authPolicy';
 
 const initialAppSettings: AppSettings = {
     freePlanLimit: 30, // Updated from 10 to 30
@@ -46,8 +47,6 @@ function App() {
 
   const handleLogin = useCallback((credentials: { googleUser?: { name: string; email: string }; email?: string; password?: string }) => {
     let userToSet: User | null = null;
-    const ADMIN_EMAIL = '8friend8ship@hanmail.net';
-    
     const getUsageLimits = (plan: 'Free' | 'Pro' | 'Biz', isAdmin: boolean): UserUsage => {
       const unlimitedLimit = { used: 0, limit: Infinity };
       return {
@@ -62,9 +61,10 @@ function App() {
     };
 
     if (credentials.googleUser) {
-        const { name, email } = credentials.googleUser;
+        const { name } = credentials.googleUser;
+        const email = normalizeEmail(credentials.googleUser.email);
         const userId = 'gu_' + email.replace(/@.*/, '');
-        const isAdmin = email === ADMIN_EMAIL;
+        const isAdmin = isCanonicalGoogleAdmin(email);
         const plan = isAdmin ? 'Biz' : 'Free';
         
         userToSet = {
@@ -78,15 +78,16 @@ function App() {
         };
 
     } else if (credentials.email && credentials.password) {
-        const { email, password } = credentials;
-        const isAdmin = email === ADMIN_EMAIL || email === 'admin' || email === 'master';
-        const plan = isAdmin ? 'Biz' : 'Free';
+        const email = normalizeEmail(credentials.email);
+        // Password-only form login is never trusted for production administrator privileges.
+        // Admin access requires the canonical Google identity and must be verified upstream.
+        const isAdmin = false;
+        const plan = 'Free' as const;
 
         userToSet = {
-            id: 'form_' + (isAdmin ? 'admin' : email.replace(/@.*/, '')),
-            name: isAdmin ? "Johnson" : "home design. taedi",
-            email: isAdmin ? ADMIN_EMAIL : email,
-            password: password,
+            id: 'form_' + email.replace(/@.*/, ''),
+            name: email.replace(/@.*/, '') || 'User',
+            email,
             isAdmin: isAdmin,
             plan: plan,
             usage: getUsageLimits(plan, isAdmin),
