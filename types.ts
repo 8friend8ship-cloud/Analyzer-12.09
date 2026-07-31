@@ -8,6 +8,8 @@ export interface VideoData {
   publishedAt: string; // ISO 8061 string
   subscribers: number;
   viewCount: number;
+  /** Distinguishes a verified zero from a source that did not provide the metric. */
+  viewCountStatus?: 'verified' | 'unavailable';
   likeCount: number;
   commentCount: number;
   durationMinutes: number;
