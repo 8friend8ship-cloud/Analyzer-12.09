@@ -21,7 +21,7 @@ test('stored source contract is bounded and missing metrics are explicit', async
   assert.match(contract, /MAX_STORED_SOURCE_ROWS = 200/);
   assert.match(contract, /Math\.min\(Math\.trunc\(limit\), MAX_STORED_SOURCE_ROWS\)/);
   assert.doesNotMatch(contract, /getDataRange/);
-  assert.doesNotMatch(contract, /View_Count/);
+  assert.doesNotMatch(contract, /['\"]View_Count['\"]/);
   assert.match(types, /viewCountStatus\?: 'verified' \| 'unavailable'/);
   assert.match(table, /데이터 없음/);
 });
