@@ -20,8 +20,6 @@ import {
     getAIDeepDiveReport,
     getAIChannelDashboardInsights
 } from './geminiService';
-import { getGeminiApiKey } from './apiKeyService';
-import { GoogleGenAI } from "@google/genai";
 import { mockVideoData, mockChannelAnalysisData, mockRankingData, mockVideoDetailData, mockVideoComments, mockMyChannelAnalyticsData, mockSimilarChannels } from './mockData';
 import { getRawItem, set } from './cacheService';
 
@@ -606,49 +604,8 @@ export const analyzeChannelDeeply = async (channelData: ChannelAnalysisData, api
     return { deepDiveReport };
 };
 
-export const fetchSimilarChannels = async (channelId: string, apiKey: string): Promise<SimilarChannelData[]> => {
-    console.log("Fetching similar channels for:", channelId);
-    try {
-        const channelData = await fetchFromYouTube('channels', {
-            part: 'snippet,brandingSettings',
-            id: channelId
-        }, apiKey);
-
-        const keywords = channelData.items[0]?.brandingSettings?.channel?.keywords || channelData.items[0]?.snippet?.title;
-        
-        const searchData = await fetchFromYouTube('search', {
-            part: 'snippet',
-            q: keywords,
-            type: 'channel',
-            maxResults: '6'
-        }, apiKey);
-
-        const similarChannels = (searchData.items || [])
-            .filter((item: any) => item.id && item.id.channelId && item.id.channelId !== channelId)
-            .map((item: any) => item.id.channelId)
-            .join(',');
-
-        if (!similarChannels) return [];
-
-        const channelsData = await fetchFromYouTube('channels', {
-            part: 'snippet,statistics',
-            id: similarChannels
-        }, apiKey);
-
-        return (channelsData.items || []).map((item: any): SimilarChannelData => ({
-            id: item.id,
-            name: item.snippet.title,
-            handle: item.snippet.customUrl,
-            thumbnailUrl: item.snippet.thumbnails.default.url,
-            subscriberCount: parseInt(item.statistics.subscriberCount) || 0,
-            totalViews: parseInt(item.statistics.viewCount) || 0,
-            videoCount: parseInt(item.statistics.videoCount) || 0,
-            similarityScore: 80 + Math.floor(Math.random() * 20)
-        }));
-    } catch (error) {
-        console.error("Error fetching similar channels:", error);
-        return [];
-    }
+export const fetchSimilarChannels = async (_channelId: string, _apiKey: string): Promise<SimilarChannelData[]> => {
+    throw new Error('VERIFIED_SIMILARITY_UNAVAILABLE: audited source evidence is required; synthetic similarity scores are forbidden.');
 };
 
 export const fetchMyChannelAnalytics = async (
@@ -667,41 +624,9 @@ export const convertPublicDataToKPI = (_channelData: ChannelAnalysisData): MyCha
 };
 
 export const fetchBenchmarkComparison = async (
-    myChannelData: MyChannelAnalyticsData,
-    benchmarkKPI: MyChannelAnalyticsData['kpi'],
-    benchmarkChannelName: string
+    _myChannelData: MyChannelAnalyticsData,
+    _benchmarkKPI: MyChannelAnalyticsData['kpi'],
+    _benchmarkChannelName: string
 ): Promise<BenchmarkComparisonData> => {
-    console.log(`Fetching benchmark comparison: ${myChannelData.name} vs ${benchmarkChannelName}`);
-    
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const prompt = `Compare these two YouTube channels:
-    My Channel (${myChannelData.name}): ${myChannelData.kpi.viewsLast30d} views/mo, ${myChannelData.kpi.netSubscribersLast30d} subs/mo.
-    Benchmark Channel (${benchmarkChannelName}): ${benchmarkKPI.viewsLast30d} views/mo, ${benchmarkKPI.netSubscribersLast30d} subs/mo.
-    Provide a brief comparison summary and actionable advice.`;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: prompt
-        });
-
-        return {
-            myChannelName: myChannelData.name,
-            benchmarkChannelName: benchmarkChannelName,
-            comparison: [
-                { metric: 'Monthly Views', myValue: myChannelData.kpi.viewsLast30d.toLocaleString(), benchmarkValue: benchmarkKPI.viewsLast30d.toLocaleString() },
-                { metric: 'Monthly Sub Growth', myValue: myChannelData.kpi.netSubscribersLast30d.toLocaleString(), benchmarkValue: benchmarkKPI.netSubscribersLast30d.toLocaleString() },
-                { metric: 'CTR', myValue: `${myChannelData.kpi.ctrLast30d.toFixed(1)}%`, benchmarkValue: `${benchmarkKPI.ctrLast30d.toFixed(1)}%` },
-            ],
-            aiSummary: response.text
-        };
-    } catch (error) {
-        console.error("Error fetching benchmark comparison:", error);
-        return {
-            myChannelName: myChannelData.name,
-            benchmarkChannelName: benchmarkChannelName,
-            comparison: [],
-            aiSummary: "Comparison analysis failed."
-        };
-    }
+    throw new Error('VERIFIED_BENCHMARK_UNAVAILABLE: audited OAuth analytics and central Writer evidence are required.');
 };
