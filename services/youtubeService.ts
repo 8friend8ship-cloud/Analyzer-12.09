@@ -24,51 +24,15 @@ import { mockVideoData, mockChannelAnalysisData, mockRankingData, mockVideoDetai
 import { getRawItem, set } from './cacheService';
 
 
-import { handleYouTubeError } from './errorService';
-
-const BASE_URL = 'https://www.googleapis.com/youtube/v3';
-
-const countryToLangCode: Record<string, string> = {
-    'US': 'en', 'GB': 'en', 'CA': 'en', 'AU': 'en', 'SG': 'en', 'PH': 'en', 'NZ': 'en', 'PG': 'en',
-    'KR': 'ko',
-    'JP': 'ja',
-    'DE': 'de',
-    'FR': 'fr',
-    'CN': 'zh-Hans', 'HK': 'zh-Hant', 'TW': 'zh-Hant',
-    'RU': 'ru',
-    'VN': 'vi',
-    'ID': 'id',
-    'TH': 'th',
-    'MY': 'ms', 'BN': 'ms',
-    'MX': 'es', 'CL': 'es', 'PE': 'es',
-    'IN': 'hi',
-    'BR': 'pt'
+const fetchFromYouTube = async (
+    _endpoint: string,
+    _params: Record<string, string>,
+    _apiKey: string,
+): Promise<never> => {
+    throw new Error(
+        'BROWSER_YOUTUBE_DISABLED: direct provider requests and browser-supplied API keys are forbidden; use an audited stored-source or backend adapter.'
+    );
 };
-
-const fetchFromYouTube = async (endpoint: string, params: Record<string, string>, apiKey: string) => {
-    const activeKey = apiKey;
-    
-    if (!activeKey) {
-        throw new Error("YouTube API Key is missing. Please configure it in Admin Settings.");
-    }
-
-    const url = new URL(`${BASE_URL}/${endpoint}`);
-    Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
-    url.searchParams.append('key', activeKey);
-
-    try {
-        const response = await fetch(url.toString());
-        if (!response.ok) {
-            const error = await response.json();
-            throw handleYouTubeError(error.error || { message: `YouTube API error: ${response.status}`, status: response.status });
-        }
-        return response.json();
-    } catch (error: any) {
-        if (error.type) throw error; // Already handled
-        throw handleYouTubeError(error);
-    }
-};
-
 export const fetchChannelSearchData = async (query: string, filters: FilterState, apiKey: string): Promise<ChannelRankingData[]> => {
     console.log('Searching for channels with query:', { query, filters });
     
