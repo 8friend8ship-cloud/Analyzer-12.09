@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import LandingPage from './components/LandingPage';
-import Login from './components/Login';
-import Dashboard from './components/Dashboard';
-import Registration from './components/Registration';
-import AccountSettings from './components/AccountSettings';
+const LandingPage = React.lazy(() => import('./components/LandingPage'));
+const Login = React.lazy(() => import('./components/Login'));
+const Dashboard = React.lazy(() => import('./components/Dashboard'));
+const Registration = React.lazy(() => import('./components/Registration'));
+const AccountSettings = React.lazy(() => import('./components/AccountSettings'));
 import { clearCache } from './services/cacheService';
 import type { User, AppSettings, UserUsage } from './types';
 import Spinner from './components/common/Spinner';
@@ -172,7 +172,9 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 font-sans">
-      {renderContent()}
+      <React.Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Spinner message="Loading..." /></div>}>
+        {renderContent()}
+      </React.Suspense>
     </div>
   );
 }
