@@ -4,23 +4,23 @@ import FilterBar from './FilterBar';
 import ResultsTable from './ResultsTable';
 import ChannelResultsTable from './ChannelResultsTable'; // Import the new component
 import Spinner from './common/Spinner';
-import ChannelDetailView from './ChannelDetailView';
-import AdminDashboard from './AdminDashboard';
-import UpgradeModal from './UpgradeModal'; 
-import TopChartsView from './RankingView'; 
-import WorkflowView from './WorkflowView'; 
-import VideoDetailView from './VideoDetailView'; 
-import ThumbnailAnalysisView from './ThumbnailAnalysisView'; 
-import OutlierAnalysisView from './OutlierAnalysisView'; 
-import ABTestGameView from './ABTestGameView'; 
-import Chatbot from './Chatbot'; 
-import MyChannelAnalytics from './MyChannelAnalytics';
-import AccountSettings from './AccountSettings';
-import IdentityFinderView from './IdentityFinderView';
-import CollectionView from './CollectionView';
-import ComparisonView from './ComparisonView';
-import HelpModal from './HelpModal';
-import InfluencerMarketingView from './InfluencerMarketingView';
+const ChannelDetailView = React.lazy(() => import('./ChannelDetailView'));
+const AdminDashboard = React.lazy(() => import('./AdminDashboard'));
+const UpgradeModal = React.lazy(() => import('./UpgradeModal'));
+const TopChartsView = React.lazy(() => import('./RankingView'));
+const WorkflowView = React.lazy(() => import('./WorkflowView'));
+const VideoDetailView = React.lazy(() => import('./VideoDetailView'));
+const ThumbnailAnalysisView = React.lazy(() => import('./ThumbnailAnalysisView'));
+const OutlierAnalysisView = React.lazy(() => import('./OutlierAnalysisView'));
+const ABTestGameView = React.lazy(() => import('./ABTestGameView'));
+const Chatbot = React.lazy(() => import('./Chatbot'));
+const MyChannelAnalytics = React.lazy(() => import('./MyChannelAnalytics'));
+const AccountSettings = React.lazy(() => import('./AccountSettings'));
+const IdentityFinderView = React.lazy(() => import('./IdentityFinderView'));
+const CollectionView = React.lazy(() => import('./CollectionView'));
+const ComparisonView = React.lazy(() => import('./ComparisonView'));
+const HelpModal = React.lazy(() => import('./HelpModal'));
+const InfluencerMarketingView = React.lazy(() => import('./InfluencerMarketingView'));
 import { logQuery, getPopularQueries, pruneQueries } from '../services/queryAnalyticsService'; 
 import { fetchStoredSource, filterStoredVideos } from '../services/dataContractService';
 import type { VideoData, FilterState, User, AppSettings, PopularQuery, OutlierViewState, ThumbnailViewState, TopChartsViewState, ChannelRankingData, AnalysisMode } from '../types';
@@ -539,6 +539,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                 />
             </div>
             
+            <React.Suspense fallback={<div className="flex flex-1 items-center justify-center"><Spinner message="Loading view..." /></div>}>
             <main className="flex-1 flex flex-col">
                 {view === 'main' && (
                     <FilterBar
@@ -568,6 +569,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
             <Chatbot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} user={user} />
             {isUpgradeModalOpen && <UpgradeModal onClose={handleCloseUpgradeModal} />}
             {isHelpModalOpen && <HelpModal onClose={() => setIsHelpModalOpen(false)} />}
+            </React.Suspense>
 
             <footer className="flex-shrink-0 w-full text-center p-4 mt-auto text-xs text-gray-600 border-t border-gray-800">
                 <p>
