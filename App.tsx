@@ -6,7 +6,6 @@ import Registration from './components/Registration';
 import AccountSettings from './components/AccountSettings';
 import { clearCache } from './services/cacheService';
 import type { User, AppSettings, UserUsage } from './types';
-import { setSystemGeminiApiKey } from './services/apiKeyService';
 import Spinner from './components/common/Spinner';
 import { isCanonicalGoogleAdmin, normalizeEmail } from './services/authPolicy';
 
@@ -17,10 +16,12 @@ const initialAppSettings: AppSettings = {
         biz: { name: 'Biz', analyses: 200, price: 29000 },
     },
     apiKeys: {
-        youtube: (import.meta.env.VITE_YOUTUBE_API_KEY as string) || '',
-        analytics: (import.meta.env.VITE_YOUTUBE_ANALYTICS_API_KEY as string) || '',
-        reporting: (import.meta.env.VITE_YOUTUBE_REPORTING_API_KEY as string) || '',
-        gemini: (import.meta.env.VITE_GEMINI_API_KEY as string) || '',
+        // Browser-bundled service keys are intentionally disabled. Public configuration
+        // must come from a verified backend contract; secrets never belong in Vite state.
+        youtube: '',
+        analytics: '',
+        reporting: '',
+        gemini: '',
     },
     analyticsConnection: null,
 };
@@ -40,10 +41,6 @@ function App() {
     };
     initializeApp();
   }, []);
-
-  useEffect(() => {
-    setSystemGeminiApiKey(appSettings.apiKeys.gemini);
-  }, [appSettings.apiKeys.gemini]);
 
   const handleLogin = useCallback((credentials: { googleUser?: { name: string; email: string }; email?: string; password?: string }) => {
     let userToSet: User | null = null;
