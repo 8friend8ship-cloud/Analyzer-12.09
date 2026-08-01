@@ -30,3 +30,20 @@ test('browser AI secret exposure remains blocked by this gate until centralized'
   const app = await read('App.tsx');
   assert.doesNotMatch(app, /ADMIN_EMAIL\s*=\s*['"]8friend8ship@hanmail\.net/);
 });
+
+
+test('browser AI secrets and fabricated analytics are fail-closed', async () => {
+  const [app, keyService, youtubeService] = await Promise.all([
+    read('App.tsx'), read('services/apiKeyService.ts'), read('services/youtubeService.ts')
+  ]);
+  assert.doesNotMatch(app, /VITE_(GEMINI|YOUTUBE)/);
+  assert.doesNotMatch(keyService, /VITE_GEMINI_API_KEY/);
+  assert.match(keyService, /BROWSER_AI_DISABLED/);
+  const analyticsBlock = youtubeService.slice(
+    youtubeService.indexOf('export const fetchMyChannelAnalytics ='),
+    youtubeService.indexOf('export const fetchBenchmarkComparison =')
+  );
+  assert.doesNotMatch(analyticsBlock, /Math\\.random/);
+  assert.match(analyticsBlock, /VERIFIED_ANALYTICS_UNAVAILABLE/);
+  assert.match(analyticsBlock, /OAuth-backed YouTube Analytics data is required/);
+});
