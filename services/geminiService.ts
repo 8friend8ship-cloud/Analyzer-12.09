@@ -1,7 +1,10 @@
-import { GoogleGenAI, Type, Chat } from "@google/genai";
+import { BrowserAiDisabledError } from "./apiKeyService";
 import type { VideoData, AIInsights, AnalysisMode, ComparisonInsights, ChannelAnalysisData, AudienceProfile, AIThumbnailInsights, MyChannelAnalyticsData, CommentInsights, AI6StepReport, VideoDetailData, VideoComment } from '../types';
-import { getGeminiApiKey } from './apiKeyService';
 import { get, set } from './cacheService';
+
+const Type = { STRING: 'STRING', ARRAY: 'ARRAY', OBJECT: 'OBJECT', NUMBER: 'NUMBER', BOOLEAN: 'BOOLEAN' } as const;
+type Chat = { sendMessageStream(request: { message: string }): AsyncIterable<{ text?: string }> };
+const createBlockedBrowserAiClient = (): any => { throw new BrowserAiDisabledError(); };
 import { handleGeminiError } from './errorService';
 
 const countryToLanguageMap: { [key: string]: string } = {
@@ -45,7 +48,7 @@ export const translateKeyword = async (keyword: string, targetCountry: string): 
   console.log(`Translating "${keyword}" to ${targetLanguage} for country ${targetCountry}`);
 
     try {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    const ai = createBlockedBrowserAiClient();
     const translationPrompt = `Translate the following Korean keyword into ${targetLanguage}. Return only the translated keyword and nothing else.\nKorean keyword: "${keyword}"`;
     
     const response = await ai.models.generateContent({
@@ -65,7 +68,7 @@ export const translateKeyword = async (keyword: string, targetCountry: string): 
 };
 
 export const getAIChannelRecommendations = async (category: string, keyword: string): Promise<{ korea: { name: string; reason: string }[]; global: { name: string; reason: string }[] }> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    const ai = createBlockedBrowserAiClient();
     const prompt = `
     As "Content OS", based on the YouTube category "${category}" and keyword "${keyword}", recommend benchmark channels.
     - Recommend 2 fast-growing Korean channels.
@@ -101,7 +104,7 @@ export const getAIInsights = async (videoData: VideoData[], query: string, mode:
     }
     console.log(`[Cache] Gemini insights MISS for key: ${cacheKey}`);
     
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    const ai = createBlockedBrowserAiClient();
     const videoInfo = videoData.map(v => `Title: ${v.title}, Views: ${v.viewCount}`).join('\n');
     const prompt = `
     As "Content OS", analyze the following YouTube video data for the search query "${query}" (mode: ${mode}).
@@ -127,7 +130,7 @@ export const getAIInsights = async (videoData: VideoData[], query: string, mode:
 };
 
 export const getAIComparisonInsights = async (channelA: {query: string, videos: VideoData[]}, channelB: {query: string, videos: VideoData[]}): Promise<ComparisonInsights> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    const ai = createBlockedBrowserAiClient();
     const prompt = `As "Content OS", compare two YouTube channels based on their recent videos.
     Channel A (${channelA.query}): ${channelA.videos.length} videos.
     Channel B (${channelB.query}): ${channelB.videos.length} videos.
@@ -151,7 +154,7 @@ export const getAIComparisonInsights = async (channelA: {query: string, videos: 
 
 export const getRelatedKeywords = async (keyword: string): Promise<string[]> => {
     if (!keyword.trim()) return [];
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    const ai = createBlockedBrowserAiClient();
     const prompt = `Given the YouTube keyword "${keyword}", generate a list of 5 related or niche keywords for content ideas. Respond ONLY in a JSON array of strings: ["keyword1", "keyword2", ...]`;
     try {
         const response = await ai.models.generateContent({
@@ -169,7 +172,7 @@ export const getRelatedKeywords = async (keyword: string): Promise<string[]> => 
 };
 
 export const getAITopicKeywords = async (videoData: VideoData[]): Promise<string[]> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    const ai = createBlockedBrowserAiClient();
     const videoTitles = videoData.map(v => v.title).join(', ');
     const prompt = `As "Content OS", based on these YouTube video titles (${videoTitles}), generate 10 relevant topic keywords for content creation. Respond ONLY in a JSON array of strings.`;
     
@@ -196,7 +199,7 @@ export const getAIChannelComprehensiveAnalysis = async (
     overview: Omit<ChannelAnalysisData['overview'], 'uploadPattern'>;
     audienceProfile: AudienceProfile;
 }> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    const ai = createBlockedBrowserAiClient();
     const prompt = `As "Content OS", analyze the provided channel data.
     IMPORTANT: For the 'audienceProfile', this is a creative exercise. Create a *hypothetical marketing persona*. DO NOT present it as factual statistics. Infer interests and create a plausible, fictional demographic breakdown for this persona.
     Respond ONLY in JSON format: {"overview": {"channelFocus": {...}}, "audienceProfile": {"summary": "...", "interests": [...], "genderRatio": [{"label": "Male", "value": ...}], "ageGroups": [{"label": "18-24", "value": ...}], "topCountries": [{"label": "KR", "value": ...}]}}`;
@@ -221,7 +224,7 @@ export const getAIChannelDashboardInsights = async (
     stats: { subscribers: number; totalViews: number; videoCount: number },
     recentVideos: { title: string; views: number; publishedAt: string }[]
 ): Promise<Partial<MyChannelAnalyticsData>> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    const ai = createBlockedBrowserAiClient();
     // This prompt asks for strategic advice, not calculation.
     const prompt = `As "Content OS", generate strategic insights for the YouTube channel "${channelName}".
     - aiExecutiveSummary: A summary, 2 positive patterns, 2 growth areas.
@@ -256,7 +259,7 @@ export const getAICommentInsights = async (comments: VideoComment[]): Promise<Co
         };
     }
 
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    const ai = createBlockedBrowserAiClient();
     const commentTexts = comments.slice(0, 50).map(c => c.text).join('\n---\n');
     const prompt = `As "Content OS", based on the following YouTube comments, analyze the viewers' reactions.
     1.  Provide a concise one-sentence summary of the overall sentiment.
@@ -301,7 +304,7 @@ export const getAICommentInsights = async (comments: VideoComment[]): Promise<Co
 };
 
 export const getAIDeepDiveReport = async (videoData: VideoDetailData): Promise<AI6StepReport> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    const ai = createBlockedBrowserAiClient();
 
     const prompt = `
     Based on the provided YouTube video data, generate a deep-dive analysis report.
@@ -369,7 +372,7 @@ export const getAIThumbnailAnalysis = async (
   videoData: { id: string; title: string; thumbnailUrl: string }[],
   query: string
 ): Promise<AIThumbnailInsights> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    const ai = createBlockedBrowserAiClient();
     
     const videoListString = videoData.map((v, i) => `${i+1}. Title: "${v.title}", Thumbnail URL: ${v.thumbnailUrl}`).join('\n');
     
@@ -480,7 +483,7 @@ export const getAITrendingInsight = async (
   viralFactors: string[];
   topKeywords: string[];
 }> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    const ai = createBlockedBrowserAiClient();
     const prompt = `As "Content OS", analyze today's YouTube trends in ${countryCode}, excluding categories: [${excludedCategories.join(', ')}].
     Based on the top video titles and top channels provided, generate:
     1. A summary of the main trend.
@@ -507,7 +510,7 @@ export const getAIBenchmarkRecommendations = async (
     channelName: string,
     titlePatterns: string[]
 ): Promise<{ name: string; reason: string }[]> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    const ai = createBlockedBrowserAiClient();
     const prompt = `For a YouTube channel named "${channelName}" which often uses title patterns like "${titlePatterns.join(', ')}", recommend 3 other fast-growing YouTube channels to benchmark. Provide a one-sentence reason for each. Respond ONLY in JSON format: [{"name": "...", "reason": "..."}]`;
     try {
         const response = await ai.models.generateContent({
@@ -525,57 +528,11 @@ export const getAIBenchmarkRecommendations = async (
 };
 
 
-let chat: Chat | null = null;
-let chatApiKey: string | null = null;
+const disabledChat: Chat = {
+    async *sendMessageStream(_request: { message: string }) {
+        throw new BrowserAiDisabledError();
+    },
+};
 
-export const startChatSession = (): Chat => {
-    const currentApiKey = getGeminiApiKey();
-    if (chat && chatApiKey === currentApiKey) {
-        return chat;
-    }
-    
-    console.log("Initializing new chat session.");
-    chatApiKey = currentApiKey;
-    const ai = new GoogleGenAI({ apiKey: chatApiKey });
-    const systemInstruction = `You are 'Johnson', the AI guide for 'Content OS'.
-
-### **Johnson's Official Definition (Your Core Identity)**
-Your role is **not** an AI that knows the answers. You are a **tutor who asks good questions**. Your purpose is to guide the user to their own "aha!" moments.
-- You do NOT provide answers, predictions, or judgments.
-- You DO ask guiding questions, connect the dots for the user, and present the next logical viewpoint.
-- Your entire conversational principle is: "We don't know the answer, but let's look at this together."
-
-### **Workflow Stage Awareness (Your Judgment Target)**
-You do **not** judge the user. You only observe the **workflow stage** they are in (what they have seen vs. what they haven't seen yet).
-- **After Channel Analysis:** You assume "The user has seen the big picture."
-- **After Video Analysis:** You assume "The user has seen a specific example."
-- **After Channel Comparison:** You assume "The user is ready to see their relative position."
-This is **not** an evaluation of the user; it is a check of the learning step.
-
-### **Mandatory Conversational Flow & Language (Strict Rules)**
-
-**1. Guiding Language Principle (The One-Line Rule):**
-- **FORBIDDEN (❌):** "We analyzed...", "We understood...", "We judged..."
-- **ALLOWED (✅):** "Looking at this so far, we can see...", "If we look at this next part together, it becomes clearer...", "This is usually what people get curious about next."
-
-**2. Conversational Tone:**
-- **FORBIDDEN (❌ - Judgmental):** "You understand now.", "You are still lacking.", "You must compare now."
-- **ALLOWED (✅ - Reactive/Guiding):**
-    - After Channel Analysis: "이제 채널의 큰 흐름은 잡혔네요." (Now we've got the general flow of the channel.)
-    - After Video Analysis: "이제 왜 이런 흐름이 나왔는지 조금 보이기 시작해요." (Now it's starting to become a bit clearer why this flow occurred.)
-    - Guiding to Comparison: "이걸 다른 채널과 나란히 보면, 이게 '정말 잘 된 건지'가 더 또렷해져요." (If we look at this side-by-side with another channel, it becomes much clearer if this is 'truly good'.)
-
-**3. Word Choice Rules:**
-- **ABSOLUTELY FORBIDDEN WORDS:** "정답" (the answer), "분석했다" (we analyzed), "판단했다" (we judged), "성공" (success), "실패" (failure).
-- **MANDATORY WORDS (to create a journey):** "아직" (not yet), "하나" (one more thing), "조금 더" (a little more), "같이 보시죠" (let's see together).
-
-### **GOVERNANCE & POLICY**
-- You operate strictly within YouTube API guidelines. You have NOT watched any videos. You only have access to metadata, statistics, and text. You must disclose this limitation if a user assumes you have watched a video.
-- When asked about features, explain them in the context of this "tutoring" journey. For example, explain 'Outlier Analysis' as a way to "find the 'main character' in the story of their channel's data together."`;
-
-    chat = ai.chats.create({
-        model: 'gemini-3-flash-preview',
-        config: { systemInstruction },
-    });
-    return chat;
-}
+/** Browser chat is inert until the audited central Writer contract is connected. */
+export const startChatSession = (): Chat => disabledChat;
