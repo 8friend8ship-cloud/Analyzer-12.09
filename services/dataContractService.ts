@@ -173,3 +173,50 @@ export const fetchStoredSource = async ({
     clearTimeout(timeout);
   }
 };
+
+
+const withinPeriod = (publishedAt: string, period: string, nowMs: number): boolean => {
+  if (period === 'any') return true;
+  const publishedMs = Date.parse(publishedAt);
+  if (!Number.isFinite(publishedMs)) return false;
+  return nowMs - publishedMs <= Number(period) * 24 * 60 * 60 * 1000;
+};
+
+export const filterStoredVideos = (
+  rows: VideoData[],
+  query: string,
+  filters: import('../types').FilterState,
+  nowMs = Date.now(),
+): VideoData[] => {
+  const needle = query.trim().toLocaleLowerCase();
+  if (!needle) return [];
+  const lengthMatches = (minutes: number): boolean => {
+    if (filters.videoFormat === 'shorts') return minutes <= 1;
+    if (filters.videoFormat === 'longform') return minutes > 1;
+    if (filters.videoLength === 'short') return minutes <= 4;
+    if (filters.videoLength === 'medium') return minutes > 4 && minutes <= 20;
+    if (filters.videoLength === 'long') return minutes > 20;
+    return true;
+  };
+  const filtered = rows.filter((row) => {
+    const text = `${row.title} ${row.channelTitle}`.toLocaleLowerCase();
+    const countryMatches = filters.country === 'WW' || !filters.country
+      || row.channelCountry === filters.country;
+    const viewsMatch = filters.minViews <= 0
+      || (row.viewCountStatus === 'verified' && row.viewCount >= filters.minViews);
+    return text.includes(needle)
+      && countryMatches
+      && viewsMatch
+      && lengthMatches(row.durationMinutes)
+      && withinPeriod(row.publishedAt, filters.period, nowMs);
+  });
+  const sorted = [...filtered].sort((a, b) => {
+    if (filters.sortBy === 'publishedAt') {
+      return Date.parse(b.publishedAt) - Date.parse(a.publishedAt);
+    }
+    if (filters.sortBy === 'engagementRate') return b.engagementRate - a.engagementRate;
+    if (filters.sortBy === 'viewCount') return b.viewCount - a.viewCount;
+    return 0;
+  });
+  return sorted.slice(0, Math.min(filters.resultsLimit, MAX_STORED_SOURCE_ROWS));
+};
