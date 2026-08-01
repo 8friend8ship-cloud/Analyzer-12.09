@@ -38,6 +38,7 @@ test('browser AI secrets and fabricated analytics are fail-closed', async () => 
   ]);
   assert.doesNotMatch(app, /VITE_(GEMINI|YOUTUBE)/);
   assert.doesNotMatch(keyService, /VITE_GEMINI_API_KEY/);
+  assert.doesNotMatch(youtubeService, /VITE_YOUTUBE_API_KEY/);
   assert.match(keyService, /BROWSER_AI_DISABLED/);
   const analyticsBlock = youtubeService.slice(
     youtubeService.indexOf('export const fetchMyChannelAnalytics ='),
