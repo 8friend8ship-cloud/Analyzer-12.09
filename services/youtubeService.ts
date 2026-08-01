@@ -24,11 +24,18 @@ import { mockVideoData, mockChannelAnalysisData, mockRankingData, mockVideoDetai
 import { getRawItem, set } from './cacheService';
 
 
+const countryToLangCode: Record<string, string> = {
+    US: 'en', GB: 'en', CA: 'en', AU: 'en', SG: 'en', PH: 'en', NZ: 'en', PG: 'en',
+    KR: 'ko', JP: 'ja', DE: 'de', FR: 'fr', CN: 'zh-Hans', HK: 'zh-Hant', TW: 'zh-Hant',
+    RU: 'ru', VN: 'vi', ID: 'id', TH: 'th', MY: 'ms', BN: 'ms', MX: 'es', CL: 'es',
+    PE: 'es', IN: 'hi', BR: 'pt',
+};
+
 const fetchFromYouTube = async (
     _endpoint: string,
     _params: Record<string, string>,
     _apiKey: string,
-): Promise<never> => {
+): Promise<any> => {
     throw new Error(
         'BROWSER_YOUTUBE_DISABLED: direct provider requests and browser-supplied API keys are forbidden; use an audited stored-source or backend adapter.'
     );
