@@ -48,7 +48,7 @@ const countryToLangCode: Record<string, string> = {
 };
 
 const fetchFromYouTube = async (endpoint: string, params: Record<string, string>, apiKey: string) => {
-    const activeKey = apiKey || (import.meta.env.VITE_YOUTUBE_API_KEY as string);
+    const activeKey = apiKey;
     
     if (!activeKey) {
         throw new Error("YouTube API Key is missing. Please configure it in Admin Settings.");
