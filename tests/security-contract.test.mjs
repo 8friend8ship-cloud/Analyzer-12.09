@@ -48,3 +48,29 @@ test('browser AI secrets and fabricated analytics are fail-closed', async () => 
   assert.match(analyticsBlock, /VERIFIED_ANALYTICS_UNAVAILABLE/);
   assert.match(analyticsBlock, /OAuth-backed YouTube Analytics data is required/);
 });
+
+
+test('provider SDK and all synthetic customer metrics are absent from browser code', async () => {
+  const [pkg, geminiService, youtubeService, chatbot] = await Promise.all([
+    read('package.json'), read('services/geminiService.ts'), read('services/youtubeService.ts'), read('components/Chatbot.tsx')
+  ]);
+  for (const source of [pkg, geminiService, youtubeService, chatbot]) {
+    assert.doesNotMatch(source, /@google\/genai|GoogleGenAI/);
+  }
+  assert.doesNotMatch(youtubeService, /Math\.random/);
+  assert.match(youtubeService, /VERIFIED_SIMILARITY_UNAVAILABLE/);
+  assert.match(youtubeService, /VERIFIED_BENCHMARK_UNAVAILABLE/);
+  assert.match(geminiService, /BrowserAiDisabledError/);
+});
+
+test('stored-source network adapter is bounded, fresh, credential-free, and fail-closed', async () => {
+  const contract = await read('services/dataContractService.ts');
+  assert.match(contract, /MAX_STORED_SOURCE_BYTES = 512 \* 1024/);
+  assert.match(contract, /MAX_STORED_SOURCE_AGE_MS = 48/);
+  assert.match(contract, /STORED_SOURCE_TIMEOUT_MS = 8_000/);
+  assert.match(contract, /credentials: 'omit'/);
+  assert.match(contract, /cache: 'no-store'/);
+  assert.match(contract, /application\/json/);
+  assert.match(contract, /sourceId/);
+  assert.match(contract, /sourceUpdatedAt/);
+});
