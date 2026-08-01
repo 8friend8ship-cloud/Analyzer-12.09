@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { startChatSession } from '../services/geminiService';
 import { reportIssue } from '../services/systemService';
 import type { ChatMessage, User } from '../types';
-import { GenerateContentResponse } from '@google/genai';
+type GenerateContentResponse = { text?: string };
 
 interface ChatbotProps {
     isOpen: boolean;

@@ -3,8 +3,9 @@ import Button from './common/Button';
 import Spinner from './common/Spinner';
 import type { User, InfluencerChannelResult, InfluencerAnalysisDetail } from '../types';
 import { fetchYouTubeData, resolveChannelId, fetchChannelAnalysis } from '../services/youtubeService';
-import { getGeminiApiKey } from '../services/apiKeyService';
-import { GoogleGenAI, Type } from "@google/genai";
+import { BrowserAiDisabledError } from "../services/apiKeyService";
+const Type = { STRING: 'STRING', ARRAY: 'ARRAY', OBJECT: 'OBJECT', NUMBER: 'NUMBER' } as const;
+const createBlockedBrowserAiClient = (): any => { throw new BrowserAiDisabledError(); };
 
 interface InfluencerMarketingViewProps {
     user: User;
@@ -69,7 +70,7 @@ const InfluencerMarketingView: React.FC<InfluencerMarketingViewProps> = ({ user,
 
             setLoadingStep(4); // AI 채널 매칭
             console.log("Starting AI channel matching...");
-            const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+            const ai = createBlockedBrowserAiClient();
             const prompt = `As "Content OS", analyze these YouTube channels for product placement of "${keyword}".
             Channels: ${uniqueChannels.map(c => c.channelTitle).join(', ')}
             Provide a match rate (0-100) and a brief reason for each.`;
@@ -169,7 +170,7 @@ const InfluencerMarketingView: React.FC<InfluencerMarketingViewProps> = ({ user,
         setDetailReport(null);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+            const ai = createBlockedBrowserAiClient();
             const prompt = `As "Content OS", generate an influencer marketing strategy report for placing the product "${keyword}" on the YouTube channel "${channel.name}".`;
 
             const response = await ai.models.generateContent({

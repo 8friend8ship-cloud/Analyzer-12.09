@@ -1,34 +1,22 @@
-// This service provides a global way to set and get the Gemini API key.
-// It manages a system-wide key and a user-specific key, prioritizing the user's key.
+export class BrowserAiDisabledError extends Error {
+  readonly code = 'BROWSER_AI_DISABLED';
 
-let systemGeminiKey: string | null = null;
-
-/**
- * Sets the system-wide (admin) Gemini API key.
- * @param key The Gemini API key string. Can be null to clear.
- */
-export function setSystemGeminiApiKey(key: string | null) {
-    systemGeminiKey = key || null;
+  constructor() {
+    super('브라우저 AI 호출은 비활성화되어 있습니다. 검증된 중앙 Writer API가 필요합니다.');
+    this.name = 'BrowserAiDisabledError';
+  }
 }
 
-/**
- * This function is now a no-op to prevent user-specific keys from being set.
- * @param key The Gemini API key string. (Ignored)
- */
-export function setUserGeminiApiKey(key: string | null) {
-    // This function is intentionally left empty for compliance.
-}
+/** Kept as a compatibility no-op while callers migrate to the central Writer contract. */
+export function setSystemGeminiApiKey(_key: string | null): void {}
+
+/** User-supplied browser secrets are never accepted. */
+export function setUserGeminiApiKey(_key: string | null): void {}
 
 /**
- * Gets the currently active Gemini API key. It now only considers the system key or environment variables.
- * @returns The Gemini API key string.
- * @throws {Error} if no key is configured.
+ * Gemini calls from the browser are blocked by design. A future implementation must
+ * call the audited central Writer endpoint without returning provider secrets.
  */
-export function getGeminiApiKey(): string {
-    const key = systemGeminiKey || (import.meta.env.VITE_GEMINI_API_KEY as string); 
-    if (!key) {
-        console.error("Gemini API Key is not configured. Please set it in admin settings or environment variables.");
-        throw new Error("Gemini API Key is not configured.");
-    }
-    return key;
+export function getGeminiApiKey(): never {
+  throw new BrowserAiDisabledError();
 }
