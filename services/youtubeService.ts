@@ -651,95 +651,19 @@ export const fetchSimilarChannels = async (channelId: string, apiKey: string): P
     }
 };
 
-export const fetchMyChannelAnalytics = async (channelId: string, dataApiKey: string, analyticsApiKey: string): Promise<MyChannelAnalyticsData> => {
-    console.log("Fetching 'My Channel' analytics for:", channelId);
-    // Real YouTube Analytics API requires OAuth2, which is complex for this environment.
-    // However, we can fetch public data and use it to populate the dashboard.
-    
-    try {
-        const channelAnalysis = await fetchChannelAnalysis(channelId, dataApiKey);
-        const kpi = convertPublicDataToKPI(channelAnalysis);
-        
-        // Generate mock daily stats based on public data for visualization
-        const dailyStats = Array.from({ length: 30 }, (_, i) => {
-            const date = new Date();
-            date.setDate(date.getDate() - (29 - i));
-            return {
-                date: date.toISOString().split('T')[0],
-                views: Math.round(kpi.viewsLast30d / 30 * (0.8 + Math.random() * 0.4)),
-                subscribersGained: Math.round(kpi.netSubscribersLast30d / 30 * (0.8 + Math.random() * 0.4)),
-                subscribersLost: Math.round(kpi.netSubscribersLast30d / 30 * 0.1),
-            };
-        });
-
-        const dashboardInsights = await getAIChannelDashboardInsights(
-            channelAnalysis.name,
-            { subscribers: channelAnalysis.subscriberCount, totalViews: channelAnalysis.totalViews, videoCount: channelAnalysis.totalVideos },
-            channelAnalysis.videoList.slice(0, 5).map(v => ({ title: v.title, views: v.viewCount, publishedAt: v.publishedAt }))
-        );
-
-        return {
-            name: channelAnalysis.name,
-            thumbnailUrl: channelAnalysis.thumbnailUrl,
-            aiExecutiveSummary: dashboardInsights.aiExecutiveSummary || { summary: "Analysis complete.", positivePatterns: [], growthAreas: [] },
-            kpi,
-            dailyStats,
-            aiGrowthInsight: dashboardInsights.aiGrowthInsight || { summary: "", positivePatterns: [], growthAreas: [] },
-            funnelMetrics: {
-                impressions: kpi.impressionsLast30d,
-                ctr: kpi.ctrLast30d,
-                views: kpi.viewsLast30d,
-                avgViewDuration: kpi.avgViewDurationSeconds
-            },
-            aiFunnelInsight: dashboardInsights.aiFunnelInsight || { summary: "", positivePatterns: [], growthAreas: [] },
-            contentSuccessFormula: dashboardInsights.contentSuccessFormula || { titlePatterns: [], optimalLength: "", thumbnailStyle: "" },
-            contentIdeas: dashboardInsights.contentIdeas || [],
-            retentionData: {
-                average: Array.from({length: 101}, (_, i) => ({ time: i, retention: 100 * Math.exp(-0.04 * i) })),
-                topVideo: Array.from({length: 101}, (_, i) => ({ time: i, retention: 100 * Math.exp(-0.03 * i) })),
-            },
-            trafficSources: [
-                { name: "YouTube Search", percentage: 40, views: kpi.viewsLast30d * 0.4 },
-                { name: "Suggested Videos", percentage: 30, views: kpi.viewsLast30d * 0.3 },
-                { name: "Browse Features", percentage: 20, views: kpi.viewsLast30d * 0.2 },
-                { name: "Other", percentage: 10, views: kpi.viewsLast30d * 0.1 },
-            ],
-            videoAnalytics: channelAnalysis.videoList.slice(0, 10).map(v => ({
-                id: v.id,
-                thumbnailUrl: v.thumbnailUrl,
-                title: v.title,
-                publishedAt: v.publishedAt,
-                views: v.viewCount,
-                ctr: 5 + Math.random() * 5,
-                avgViewDurationSeconds: v.durationMinutes * 60 * 0.4
-            })),
-            viewerPersona: dashboardInsights.viewerPersona || { name: "Target Audience", description: "Based on channel content.", strategy: "Engage with relevant topics." },
-            viewershipData: {
-                bestUploadTime: "Wednesday 18:00",
-                heatmap: Array(7).fill(0).map(() => Array(24).fill(0).map(() => Math.random() * 100))
-            },
-            audienceProfile: channelAnalysis.audienceProfile
-        };
-    } catch (error) {
-        console.error("Error fetching my channel analytics:", error);
-        throw error;
-    }
+export const fetchMyChannelAnalytics = async (
+    channelId: string,
+    dataApiKey: string,
+    analyticsApiKey: string
+): Promise<MyChannelAnalyticsData> => {
+    void channelId;
+    void dataApiKey;
+    void analyticsApiKey;
+    throw new Error('VERIFIED_ANALYTICS_UNAVAILABLE: OAuth-backed YouTube Analytics data is required.');
 };
 
-export const convertPublicDataToKPI = (channelData: ChannelAnalysisData): MyChannelAnalyticsData['kpi'] => {
-    // Estimate 30-day views based on total views and channel age, but capped and randomized for realism
-    const channelAgeDays = Math.max(30, (new Date().getTime() - new Date(channelData.publishedAt).getTime()) / (1000 * 60 * 60 * 24));
-    const avgDailyViews = channelData.totalViews / channelAgeDays;
-    const viewsLast30d = Math.round(avgDailyViews * 30 * (0.9 + Math.random() * 0.2));
-    
-    return {
-        viewsLast30d,
-        netSubscribersLast30d: Math.round(channelData.subscriberCount * 0.01 * (0.5 + Math.random())),
-        watchTimeHoursLast30d: Math.round(viewsLast30d * 0.05),
-        ctrLast30d: 5.5 + Math.random() * 2,
-        avgViewDurationSeconds: 180 + Math.random() * 60,
-        impressionsLast30d: Math.round(viewsLast30d / 0.06),
-    };
+export const convertPublicDataToKPI = (_channelData: ChannelAnalysisData): MyChannelAnalyticsData['kpi'] => {
+    throw new Error('VERIFIED_ANALYTICS_UNAVAILABLE: public cumulative metrics cannot be converted into private monthly KPIs.');
 };
 
 export const fetchBenchmarkComparison = async (
