@@ -4,25 +4,25 @@ import FilterBar from './FilterBar';
 import ResultsTable from './ResultsTable';
 import ChannelResultsTable from './ChannelResultsTable'; // Import the new component
 import Spinner from './common/Spinner';
-import ChannelDetailView from './ChannelDetailView';
-import AdminDashboard from './AdminDashboard';
-import UpgradeModal from './UpgradeModal'; 
-import TopChartsView from './RankingView'; 
-import WorkflowView from './WorkflowView'; 
-import VideoDetailView from './VideoDetailView'; 
-import ThumbnailAnalysisView from './ThumbnailAnalysisView'; 
-import OutlierAnalysisView from './OutlierAnalysisView'; 
-import ABTestGameView from './ABTestGameView'; 
-import Chatbot from './Chatbot'; 
-import MyChannelAnalytics from './MyChannelAnalytics';
-import AccountSettings from './AccountSettings';
-import IdentityFinderView from './IdentityFinderView';
-import CollectionView from './CollectionView';
-import ComparisonView from './ComparisonView';
-import HelpModal from './HelpModal';
-import InfluencerMarketingView from './InfluencerMarketingView';
+const ChannelDetailView = React.lazy(() => import('./ChannelDetailView'));
+const AdminDashboard = React.lazy(() => import('./AdminDashboard'));
+const UpgradeModal = React.lazy(() => import('./UpgradeModal'));
+const TopChartsView = React.lazy(() => import('./RankingView'));
+const WorkflowView = React.lazy(() => import('./WorkflowView'));
+const VideoDetailView = React.lazy(() => import('./VideoDetailView'));
+const ThumbnailAnalysisView = React.lazy(() => import('./ThumbnailAnalysisView'));
+const OutlierAnalysisView = React.lazy(() => import('./OutlierAnalysisView'));
+const ABTestGameView = React.lazy(() => import('./ABTestGameView'));
+const Chatbot = React.lazy(() => import('./Chatbot'));
+const MyChannelAnalytics = React.lazy(() => import('./MyChannelAnalytics'));
+const AccountSettings = React.lazy(() => import('./AccountSettings'));
+const IdentityFinderView = React.lazy(() => import('./IdentityFinderView'));
+const CollectionView = React.lazy(() => import('./CollectionView'));
+const ComparisonView = React.lazy(() => import('./ComparisonView'));
+const HelpModal = React.lazy(() => import('./HelpModal'));
+const InfluencerMarketingView = React.lazy(() => import('./InfluencerMarketingView'));
 import { logQuery, getPopularQueries, pruneQueries } from '../services/queryAnalyticsService'; 
-import { fetchYouTubeData, fetchChannelSearchData } from '../services/youtubeService'; // Updated import
+import { fetchStoredSource, filterStoredVideos } from '../services/dataContractService';
 import type { VideoData, FilterState, User, AppSettings, PopularQuery, OutlierViewState, ThumbnailViewState, TopChartsViewState, ChannelRankingData, AnalysisMode } from '../types';
 import AdAnalysis from './AdAnalysis';
 import LengthChart from './charts/LengthChart';
@@ -119,8 +119,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
         navigateTo('comparison', { initialChannelIds: Object.keys(selectedChannels) });
     };
 
-    const hasApiKey = !!appSettings.apiKeys.youtube;
-
     useEffect(() => {
         pruneQueries(); 
         setPopularQueries(getPopularQueries(5));
@@ -194,13 +192,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
             return;
         }
 
-        if (!hasApiKey) {
-            setError("시스템 API 키가 설정되지 않았습니다. 관리자에게 문의해주세요. (System API key is not set.)");
-            return;
-        }
-        
-        const apiKey = appSettings.apiKeys.youtube;
-        
         onUpdateUser({ 
             usage: {
                 ...user.usage,
@@ -216,11 +207,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
 
         try {
             if (searchMode === 'channel') {
-                const channelData = await fetchChannelSearchData(searchQuery, filters, apiKey!);
-                setChannelResults(channelData);
-            } else { // video mode
-                const videoData = await fetchYouTubeData('keyword', searchQuery, filters, apiKey!);
-                setVideos(videoData);
+                throw new Error('STORED_CHANNEL_SOURCE_UNAVAILABLE: audited channel inventory is not connected.');
+            }
+            const stored = await fetchStoredSource({ limit: filters.resultsLimit });
+            const videoData = filterStoredVideos(stored.rows, searchQuery, filters);
+            setVideos(videoData);
+            if (videoData.length === 0) {
+                setError(`검증된 저장 자료에서 '${searchQuery}' 결과를 찾지 못했습니다. 출처 ${stored.sourceId}, 갱신 ${stored.sourceUpdatedAt}`);
             }
         } catch (err: any) {
             console.error("Analysis failed:", err);
@@ -230,7 +223,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
         } finally {
             setIsLoading(false);
         }
-    }, [user, onUpdateUser, appSettings, filters, hasApiKey]);
+    }, [user, onUpdateUser, filters]);
     
     const handlePopularQuerySelect = (selectedQuery: string, selectedMode: AnalysisMode) => {
         setQuery(selectedQuery);
@@ -352,27 +345,27 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                   <div className="mt-12 pt-6 border-t border-blue-500/30 text-left">
                         <div className="flex items-center gap-3 mb-3">
                             <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs font-bold rounded-md border border-blue-500/30 uppercase">
-                                Live API Connected
+                                Verified Stored Source
                             </span>
                         </div>
                         <p className="text-sm text-gray-300 mb-4">
-                            Content OS is now connected to the official YouTube Data API and Gemini AI.
-                            <br/><span className="text-xs text-gray-500">(Content OS가 YouTube 공식 API 및 Gemini AI에 연결되었습니다.)</span>
+                            Content OS reads bounded, freshness-checked research inventory. Live provider calls remain disabled until an audited backend is connected.
+                            <br/><span className="text-xs text-gray-500">(검증된 저장 자료만 사용하며 브라우저의 공급자 직접 호출은 차단됩니다.)</span>
                         </p>
                         
                         <ul className="space-y-3 text-gray-300 text-sm">
                             <li className="flex items-start gap-3 p-3 bg-gray-900/50 rounded-lg">
                                 <span className="text-blue-400 font-bold mt-0.5">1.</span>
                                 <div>
-                                    <b className="text-white">Real-time Data:</b> All analysis results are based on real-time data from YouTube.
-                                    <br/><span className="text-gray-500 text-xs">(모든 분석 결과는 YouTube의 실시간 데이터를 기반으로 합니다.)</span>
+                                    <b className="text-white">Evidence-bound data:</b> Results come from a source with an ID and verified update time.
+                                    <br/><span className="text-gray-500 text-xs">(모든 결과는 출처 ID와 검증된 갱신 시각을 가진 저장 자료를 기반으로 합니다.)</span>
                                 </div>
                             </li>
                             <li className="flex items-start gap-3 p-3 bg-gray-900/50 rounded-lg">
                                 <span className="text-blue-400 font-bold mt-0.5">2.</span>
                                 <div>
-                                    <b className="text-white">AI Insights:</b> Gemini AI provides deep strategic insights for your content.
-                                    <br/><span className="text-gray-500 text-xs">(Gemini AI가 콘텐츠에 대한 깊이 있는 전략적 인사이트를 제공합니다.)</span>
+                                    <b className="text-white">Safe operation:</b> Missing or stale sources stop with an explicit error.
+                                    <br/><span className="text-gray-500 text-xs">(자료가 없거나 오래되면 결과를 만들지 않고 명시적으로 중단합니다.)</span>
                                 </div>
                             </li>
                         </ul>
@@ -546,6 +539,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                 />
             </div>
             
+            <React.Suspense fallback={<div className="flex flex-1 items-center justify-center"><Spinner message="Loading view..." /></div>}>
             <main className="flex-1 flex flex-col">
                 {view === 'main' && (
                     <FilterBar
@@ -575,6 +569,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
             <Chatbot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} user={user} />
             {isUpgradeModalOpen && <UpgradeModal onClose={handleCloseUpgradeModal} />}
             {isHelpModalOpen && <HelpModal onClose={() => setIsHelpModalOpen(false)} />}
+            </React.Suspense>
 
             <footer className="flex-shrink-0 w-full text-center p-4 mt-auto text-xs text-gray-600 border-t border-gray-800">
                 <p>

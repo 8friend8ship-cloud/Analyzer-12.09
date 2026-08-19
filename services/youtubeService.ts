@@ -20,57 +20,26 @@ import {
     getAIDeepDiveReport,
     getAIChannelDashboardInsights
 } from './geminiService';
-import { getGeminiApiKey } from './apiKeyService';
-import { GoogleGenAI } from "@google/genai";
 import { mockVideoData, mockChannelAnalysisData, mockRankingData, mockVideoDetailData, mockVideoComments, mockMyChannelAnalyticsData, mockSimilarChannels } from './mockData';
 import { getRawItem, set } from './cacheService';
 
 
-import { handleYouTubeError } from './errorService';
-
-const BASE_URL = 'https://www.googleapis.com/youtube/v3';
-
 const countryToLangCode: Record<string, string> = {
-    'US': 'en', 'GB': 'en', 'CA': 'en', 'AU': 'en', 'SG': 'en', 'PH': 'en', 'NZ': 'en', 'PG': 'en',
-    'KR': 'ko',
-    'JP': 'ja',
-    'DE': 'de',
-    'FR': 'fr',
-    'CN': 'zh-Hans', 'HK': 'zh-Hant', 'TW': 'zh-Hant',
-    'RU': 'ru',
-    'VN': 'vi',
-    'ID': 'id',
-    'TH': 'th',
-    'MY': 'ms', 'BN': 'ms',
-    'MX': 'es', 'CL': 'es', 'PE': 'es',
-    'IN': 'hi',
-    'BR': 'pt'
+    US: 'en', GB: 'en', CA: 'en', AU: 'en', SG: 'en', PH: 'en', NZ: 'en', PG: 'en',
+    KR: 'ko', JP: 'ja', DE: 'de', FR: 'fr', CN: 'zh-Hans', HK: 'zh-Hant', TW: 'zh-Hant',
+    RU: 'ru', VN: 'vi', ID: 'id', TH: 'th', MY: 'ms', BN: 'ms', MX: 'es', CL: 'es',
+    PE: 'es', IN: 'hi', BR: 'pt',
 };
 
-const fetchFromYouTube = async (endpoint: string, params: Record<string, string>, apiKey: string) => {
-    const activeKey = apiKey || (import.meta.env.VITE_YOUTUBE_API_KEY as string);
-    
-    if (!activeKey) {
-        throw new Error("YouTube API Key is missing. Please configure it in Admin Settings.");
-    }
-
-    const url = new URL(`${BASE_URL}/${endpoint}`);
-    Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
-    url.searchParams.append('key', activeKey);
-
-    try {
-        const response = await fetch(url.toString());
-        if (!response.ok) {
-            const error = await response.json();
-            throw handleYouTubeError(error.error || { message: `YouTube API error: ${response.status}`, status: response.status });
-        }
-        return response.json();
-    } catch (error: any) {
-        if (error.type) throw error; // Already handled
-        throw handleYouTubeError(error);
-    }
+const fetchFromYouTube = async (
+    _endpoint: string,
+    _params: Record<string, string>,
+    _apiKey: string,
+): Promise<any> => {
+    throw new Error(
+        'BROWSER_YOUTUBE_DISABLED: direct provider requests and browser-supplied API keys are forbidden; use an audited stored-source or backend adapter.'
+    );
 };
-
 export const fetchChannelSearchData = async (query: string, filters: FilterState, apiKey: string): Promise<ChannelRankingData[]> => {
     console.log('Searching for channels with query:', { query, filters });
     
@@ -606,178 +575,29 @@ export const analyzeChannelDeeply = async (channelData: ChannelAnalysisData, api
     return { deepDiveReport };
 };
 
-export const fetchSimilarChannels = async (channelId: string, apiKey: string): Promise<SimilarChannelData[]> => {
-    console.log("Fetching similar channels for:", channelId);
-    try {
-        const channelData = await fetchFromYouTube('channels', {
-            part: 'snippet,brandingSettings',
-            id: channelId
-        }, apiKey);
-
-        const keywords = channelData.items[0]?.brandingSettings?.channel?.keywords || channelData.items[0]?.snippet?.title;
-        
-        const searchData = await fetchFromYouTube('search', {
-            part: 'snippet',
-            q: keywords,
-            type: 'channel',
-            maxResults: '6'
-        }, apiKey);
-
-        const similarChannels = (searchData.items || [])
-            .filter((item: any) => item.id && item.id.channelId && item.id.channelId !== channelId)
-            .map((item: any) => item.id.channelId)
-            .join(',');
-
-        if (!similarChannels) return [];
-
-        const channelsData = await fetchFromYouTube('channels', {
-            part: 'snippet,statistics',
-            id: similarChannels
-        }, apiKey);
-
-        return (channelsData.items || []).map((item: any): SimilarChannelData => ({
-            id: item.id,
-            name: item.snippet.title,
-            handle: item.snippet.customUrl,
-            thumbnailUrl: item.snippet.thumbnails.default.url,
-            subscriberCount: parseInt(item.statistics.subscriberCount) || 0,
-            totalViews: parseInt(item.statistics.viewCount) || 0,
-            videoCount: parseInt(item.statistics.videoCount) || 0,
-            similarityScore: 80 + Math.floor(Math.random() * 20)
-        }));
-    } catch (error) {
-        console.error("Error fetching similar channels:", error);
-        return [];
-    }
+export const fetchSimilarChannels = async (_channelId: string, _apiKey: string): Promise<SimilarChannelData[]> => {
+    throw new Error('VERIFIED_SIMILARITY_UNAVAILABLE: audited source evidence is required; synthetic similarity scores are forbidden.');
 };
 
-export const fetchMyChannelAnalytics = async (channelId: string, dataApiKey: string, analyticsApiKey: string): Promise<MyChannelAnalyticsData> => {
-    console.log("Fetching 'My Channel' analytics for:", channelId);
-    // Real YouTube Analytics API requires OAuth2, which is complex for this environment.
-    // However, we can fetch public data and use it to populate the dashboard.
-    
-    try {
-        const channelAnalysis = await fetchChannelAnalysis(channelId, dataApiKey);
-        const kpi = convertPublicDataToKPI(channelAnalysis);
-        
-        // Generate mock daily stats based on public data for visualization
-        const dailyStats = Array.from({ length: 30 }, (_, i) => {
-            const date = new Date();
-            date.setDate(date.getDate() - (29 - i));
-            return {
-                date: date.toISOString().split('T')[0],
-                views: Math.round(kpi.viewsLast30d / 30 * (0.8 + Math.random() * 0.4)),
-                subscribersGained: Math.round(kpi.netSubscribersLast30d / 30 * (0.8 + Math.random() * 0.4)),
-                subscribersLost: Math.round(kpi.netSubscribersLast30d / 30 * 0.1),
-            };
-        });
-
-        const dashboardInsights = await getAIChannelDashboardInsights(
-            channelAnalysis.name,
-            { subscribers: channelAnalysis.subscriberCount, totalViews: channelAnalysis.totalViews, videoCount: channelAnalysis.totalVideos },
-            channelAnalysis.videoList.slice(0, 5).map(v => ({ title: v.title, views: v.viewCount, publishedAt: v.publishedAt }))
-        );
-
-        return {
-            name: channelAnalysis.name,
-            thumbnailUrl: channelAnalysis.thumbnailUrl,
-            aiExecutiveSummary: dashboardInsights.aiExecutiveSummary || { summary: "Analysis complete.", positivePatterns: [], growthAreas: [] },
-            kpi,
-            dailyStats,
-            aiGrowthInsight: dashboardInsights.aiGrowthInsight || { summary: "", positivePatterns: [], growthAreas: [] },
-            funnelMetrics: {
-                impressions: kpi.impressionsLast30d,
-                ctr: kpi.ctrLast30d,
-                views: kpi.viewsLast30d,
-                avgViewDuration: kpi.avgViewDurationSeconds
-            },
-            aiFunnelInsight: dashboardInsights.aiFunnelInsight || { summary: "", positivePatterns: [], growthAreas: [] },
-            contentSuccessFormula: dashboardInsights.contentSuccessFormula || { titlePatterns: [], optimalLength: "", thumbnailStyle: "" },
-            contentIdeas: dashboardInsights.contentIdeas || [],
-            retentionData: {
-                average: Array.from({length: 101}, (_, i) => ({ time: i, retention: 100 * Math.exp(-0.04 * i) })),
-                topVideo: Array.from({length: 101}, (_, i) => ({ time: i, retention: 100 * Math.exp(-0.03 * i) })),
-            },
-            trafficSources: [
-                { name: "YouTube Search", percentage: 40, views: kpi.viewsLast30d * 0.4 },
-                { name: "Suggested Videos", percentage: 30, views: kpi.viewsLast30d * 0.3 },
-                { name: "Browse Features", percentage: 20, views: kpi.viewsLast30d * 0.2 },
-                { name: "Other", percentage: 10, views: kpi.viewsLast30d * 0.1 },
-            ],
-            videoAnalytics: channelAnalysis.videoList.slice(0, 10).map(v => ({
-                id: v.id,
-                thumbnailUrl: v.thumbnailUrl,
-                title: v.title,
-                publishedAt: v.publishedAt,
-                views: v.viewCount,
-                ctr: 5 + Math.random() * 5,
-                avgViewDurationSeconds: v.durationMinutes * 60 * 0.4
-            })),
-            viewerPersona: dashboardInsights.viewerPersona || { name: "Target Audience", description: "Based on channel content.", strategy: "Engage with relevant topics." },
-            viewershipData: {
-                bestUploadTime: "Wednesday 18:00",
-                heatmap: Array(7).fill(0).map(() => Array(24).fill(0).map(() => Math.random() * 100))
-            },
-            audienceProfile: channelAnalysis.audienceProfile
-        };
-    } catch (error) {
-        console.error("Error fetching my channel analytics:", error);
-        throw error;
-    }
+export const fetchMyChannelAnalytics = async (
+    channelId: string,
+    dataApiKey: string,
+    analyticsApiKey: string
+): Promise<MyChannelAnalyticsData> => {
+    void channelId;
+    void dataApiKey;
+    void analyticsApiKey;
+    throw new Error('VERIFIED_ANALYTICS_UNAVAILABLE: OAuth-backed YouTube Analytics data is required.');
 };
 
-export const convertPublicDataToKPI = (channelData: ChannelAnalysisData): MyChannelAnalyticsData['kpi'] => {
-    // Estimate 30-day views based on total views and channel age, but capped and randomized for realism
-    const channelAgeDays = Math.max(30, (new Date().getTime() - new Date(channelData.publishedAt).getTime()) / (1000 * 60 * 60 * 24));
-    const avgDailyViews = channelData.totalViews / channelAgeDays;
-    const viewsLast30d = Math.round(avgDailyViews * 30 * (0.9 + Math.random() * 0.2));
-    
-    return {
-        viewsLast30d,
-        netSubscribersLast30d: Math.round(channelData.subscriberCount * 0.01 * (0.5 + Math.random())),
-        watchTimeHoursLast30d: Math.round(viewsLast30d * 0.05),
-        ctrLast30d: 5.5 + Math.random() * 2,
-        avgViewDurationSeconds: 180 + Math.random() * 60,
-        impressionsLast30d: Math.round(viewsLast30d / 0.06),
-    };
+export const convertPublicDataToKPI = (_channelData: ChannelAnalysisData): MyChannelAnalyticsData['kpi'] => {
+    throw new Error('VERIFIED_ANALYTICS_UNAVAILABLE: public cumulative metrics cannot be converted into private monthly KPIs.');
 };
 
 export const fetchBenchmarkComparison = async (
-    myChannelData: MyChannelAnalyticsData,
-    benchmarkKPI: MyChannelAnalyticsData['kpi'],
-    benchmarkChannelName: string
+    _myChannelData: MyChannelAnalyticsData,
+    _benchmarkKPI: MyChannelAnalyticsData['kpi'],
+    _benchmarkChannelName: string
 ): Promise<BenchmarkComparisonData> => {
-    console.log(`Fetching benchmark comparison: ${myChannelData.name} vs ${benchmarkChannelName}`);
-    
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const prompt = `Compare these two YouTube channels:
-    My Channel (${myChannelData.name}): ${myChannelData.kpi.viewsLast30d} views/mo, ${myChannelData.kpi.netSubscribersLast30d} subs/mo.
-    Benchmark Channel (${benchmarkChannelName}): ${benchmarkKPI.viewsLast30d} views/mo, ${benchmarkKPI.netSubscribersLast30d} subs/mo.
-    Provide a brief comparison summary and actionable advice.`;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: prompt
-        });
-
-        return {
-            myChannelName: myChannelData.name,
-            benchmarkChannelName: benchmarkChannelName,
-            comparison: [
-                { metric: 'Monthly Views', myValue: myChannelData.kpi.viewsLast30d.toLocaleString(), benchmarkValue: benchmarkKPI.viewsLast30d.toLocaleString() },
-                { metric: 'Monthly Sub Growth', myValue: myChannelData.kpi.netSubscribersLast30d.toLocaleString(), benchmarkValue: benchmarkKPI.netSubscribersLast30d.toLocaleString() },
-                { metric: 'CTR', myValue: `${myChannelData.kpi.ctrLast30d.toFixed(1)}%`, benchmarkValue: `${benchmarkKPI.ctrLast30d.toFixed(1)}%` },
-            ],
-            aiSummary: response.text
-        };
-    } catch (error) {
-        console.error("Error fetching benchmark comparison:", error);
-        return {
-            myChannelName: myChannelData.name,
-            benchmarkChannelName: benchmarkChannelName,
-            comparison: [],
-            aiSummary: "Comparison analysis failed."
-        };
-    }
+    throw new Error('VERIFIED_BENCHMARK_UNAVAILABLE: audited OAuth analytics and central Writer evidence are required.');
 };

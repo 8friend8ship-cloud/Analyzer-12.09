@@ -1,13 +1,13 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import LandingPage from './components/LandingPage';
-import Login from './components/Login';
-import Dashboard from './components/Dashboard';
-import Registration from './components/Registration';
-import AccountSettings from './components/AccountSettings';
+const LandingPage = React.lazy(() => import('./components/LandingPage'));
+const Login = React.lazy(() => import('./components/Login'));
+const Dashboard = React.lazy(() => import('./components/Dashboard'));
+const Registration = React.lazy(() => import('./components/Registration'));
+const AccountSettings = React.lazy(() => import('./components/AccountSettings'));
 import { clearCache } from './services/cacheService';
 import type { User, AppSettings, UserUsage } from './types';
-import { setSystemGeminiApiKey } from './services/apiKeyService';
 import Spinner from './components/common/Spinner';
+import { isCanonicalGoogleAdmin, normalizeEmail } from './services/authPolicy';
 
 const initialAppSettings: AppSettings = {
     freePlanLimit: 30, // Updated from 10 to 30
@@ -16,10 +16,12 @@ const initialAppSettings: AppSettings = {
         biz: { name: 'Biz', analyses: 200, price: 29000 },
     },
     apiKeys: {
-        youtube: (import.meta.env.VITE_YOUTUBE_API_KEY as string) || '',
-        analytics: (import.meta.env.VITE_YOUTUBE_ANALYTICS_API_KEY as string) || '',
-        reporting: (import.meta.env.VITE_YOUTUBE_REPORTING_API_KEY as string) || '',
-        gemini: (import.meta.env.VITE_GEMINI_API_KEY as string) || '',
+        // Browser-bundled service keys are intentionally disabled. Public configuration
+        // must come from a verified backend contract; secrets never belong in Vite state.
+        youtube: '',
+        analytics: '',
+        reporting: '',
+        gemini: '',
     },
     analyticsConnection: null,
 };
@@ -40,14 +42,8 @@ function App() {
     initializeApp();
   }, []);
 
-  useEffect(() => {
-    setSystemGeminiApiKey(appSettings.apiKeys.gemini);
-  }, [appSettings.apiKeys.gemini]);
-
   const handleLogin = useCallback((credentials: { googleUser?: { name: string; email: string }; email?: string; password?: string }) => {
     let userToSet: User | null = null;
-    const ADMIN_EMAIL = '8friend8ship@hanmail.net';
-    
     const getUsageLimits = (plan: 'Free' | 'Pro' | 'Biz', isAdmin: boolean): UserUsage => {
       const unlimitedLimit = { used: 0, limit: Infinity };
       return {
@@ -62,9 +58,10 @@ function App() {
     };
 
     if (credentials.googleUser) {
-        const { name, email } = credentials.googleUser;
+        const { name } = credentials.googleUser;
+        const email = normalizeEmail(credentials.googleUser.email);
         const userId = 'gu_' + email.replace(/@.*/, '');
-        const isAdmin = email === ADMIN_EMAIL;
+        const isAdmin = isCanonicalGoogleAdmin(email);
         const plan = isAdmin ? 'Biz' : 'Free';
         
         userToSet = {
@@ -78,15 +75,16 @@ function App() {
         };
 
     } else if (credentials.email && credentials.password) {
-        const { email, password } = credentials;
-        const isAdmin = email === ADMIN_EMAIL || email === 'admin' || email === 'master';
-        const plan = isAdmin ? 'Biz' : 'Free';
+        const email = normalizeEmail(credentials.email);
+        // Password-only form login is never trusted for production administrator privileges.
+        // Admin access requires the canonical Google identity and must be verified upstream.
+        const isAdmin = false;
+        const plan = 'Free' as const;
 
         userToSet = {
-            id: 'form_' + (isAdmin ? 'admin' : email.replace(/@.*/, '')),
-            name: isAdmin ? "Johnson" : "home design. taedi",
-            email: isAdmin ? ADMIN_EMAIL : email,
-            password: password,
+            id: 'form_' + email.replace(/@.*/, ''),
+            name: email.replace(/@.*/, '') || 'User',
+            email,
             isAdmin: isAdmin,
             plan: plan,
             usage: getUsageLimits(plan, isAdmin),
@@ -174,7 +172,9 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 font-sans">
-      {renderContent()}
+      <React.Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Spinner message="Loading..." /></div>}>
+        {renderContent()}
+      </React.Suspense>
     </div>
   );
 }

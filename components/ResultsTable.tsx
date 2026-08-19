@@ -12,8 +12,8 @@ interface ResultsTableProps {
   onChannelSelect: (channel: { id: string, name: string }, isSelected: boolean) => void;
 }
 
-const formatNumber = (num: number): string => {
-  if (num === null || num === undefined) return '0';
+export const formatMetric = (num: number | null | undefined, status: 'verified' | 'unavailable' = 'verified'): string => {
+  if (status === 'unavailable' || num === null || num === undefined) return '데이터 없음';
   return num.toLocaleString();
 };
 
@@ -63,11 +63,11 @@ const ResultsTable: React.FC<ResultsTableProps> = ({ videos, onShowChannelDetail
                     </div>
                 </td>
                 <td className="px-4 py-3 align-middle text-center">
-                    <p className="font-mono text-white text-base">{formatNumber(video.viewCount)}</p>
+                    <p className="font-mono text-white text-base">{formatMetric(video.viewCount, video.viewCountStatus)}</p>
                     <p className="text-xs text-gray-500">조회수</p>
                 </td>
                 <td className="px-4 py-3 align-middle text-center">
-                    <p className="font-mono text-white text-base">{formatNumber(video.likeCount)}</p>
+                    <p className="font-mono text-white text-base">{formatMetric(video.likeCount)}</p>
                     <p className="text-xs text-gray-500">좋아요</p>
                 </td>
                  <td className="px-4 py-3 align-middle text-center">
