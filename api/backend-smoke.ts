@@ -11,6 +11,7 @@ export default async function handler(_req: any, res: any) {
   const stamp = new Date().toISOString();
   const enqueuePayload = {
     action: 'enqueue',
+    asset_type: 'TEXT',
     source_type: 'WEBAPP_RUNTIME',
     platform: 'CONTENT_OS',
     category: 'BACKEND_SMOKE',
@@ -33,7 +34,7 @@ export default async function handler(_req: any, res: any) {
     const search = await fetch(BACKEND_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'search', query: 'Content OS backend runtime smoke', limit: 5 }),
+      body: JSON.stringify({ action: 'search', asset_type: 'TEXT', query: 'Content OS backend runtime smoke', limit: 5 }),
       redirect: 'follow',
     });
     const searchResult = await asJson(search);
