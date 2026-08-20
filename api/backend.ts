@@ -1,5 +1,5 @@
 const BACKEND_URL = process.env.CONTENT_OS_BACKEND_URL || 'https://script.google.com/macros/s/AKfycbx5WTegTKUnyvFZC_qOaGBPlmKANLwXyNue19jLkFhdFwHnnp1E6_trZeVGdIg7B3GA/exec';
-const ALLOWED_METHODS = new Set(['GET', 'POST']);
+const ALLOWED_METHODS = new Set(['GET', 'POST', 'OPTIONS']);
 
 type SearchPlanItem = {
   query: string;
@@ -202,8 +202,16 @@ async function searchStoredBackdata(payload: any, headers: Record<string, string
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
   if (!ALLOWED_METHODS.has(req.method || '')) {
-    res.setHeader('Allow', 'GET, POST');
+    res.setHeader('Allow', 'GET, POST, OPTIONS');
     return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
   }
 
