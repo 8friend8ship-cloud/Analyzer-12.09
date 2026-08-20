@@ -1,0 +1,4 @@
+Trigger Vercel production deployment after Git repository connection.
+Timestamp: 2026-08-20 14:58 KST
+Canonical project: content-os
+Canonical domain: https://contents-os.com
