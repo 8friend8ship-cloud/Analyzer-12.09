@@ -9,6 +9,8 @@ import type { User, AppSettings, UserUsage } from './types';
 import { setSystemGeminiApiKey } from './services/apiKeyService';
 import Spinner from './components/common/Spinner';
 
+const ADMIN_EMAIL = 'homedesigntaedi@gmail.com';
+
 const initialAppSettings: AppSettings = {
     freePlanLimit: 30,
     plans: {
@@ -48,8 +50,7 @@ function App() {
 
   const handleLogin = useCallback((credentials: { googleUser?: { name: string; email: string }; email?: string; password?: string }) => {
     let userToSet: User | null = null;
-    const ADMIN_EMAIL = '8friend8ship@hanmail.net';
-    
+
     const getUsageLimits = (plan: 'Free' | 'Pro' | 'Biz', isAdmin: boolean): UserUsage => {
       const unlimitedLimit = { used: 0, limit: Infinity };
       return {
@@ -66,36 +67,37 @@ function App() {
     if (credentials.googleUser) {
         const { name, email } = credentials.googleUser;
         const userId = 'gu_' + email.replace(/@.*/, '');
-        const isAdmin = email === ADMIN_EMAIL;
+        const isAdmin = email.toLowerCase() === ADMIN_EMAIL;
         const plan = isAdmin ? 'Biz' : 'Free';
-        
+
         userToSet = {
             id: userId,
-            name: name,
-            email: email,
-            isAdmin: isAdmin,
-            plan: plan,
+            name,
+            email,
+            isAdmin,
+            plan,
             usage: getUsageLimits(plan, isAdmin),
             planExpirationDate: plan !== 'Free' ? '2099. 12. 31.' : undefined,
         };
 
     } else if (credentials.email && credentials.password) {
         const { email, password } = credentials;
-        const isAdmin = email === ADMIN_EMAIL || email === 'admin' || email === 'master';
+        const normalizedEmail = email.toLowerCase();
+        const isAdmin = normalizedEmail === ADMIN_EMAIL || email === 'admin' || email === 'master';
         const plan = isAdmin ? 'Biz' : 'Free';
 
         userToSet = {
             id: 'form_' + (isAdmin ? 'admin' : email.replace(/@.*/, '')),
             name: isAdmin ? "Johnson" : "home design. taedi",
             email: isAdmin ? ADMIN_EMAIL : email,
-            password: password,
-            isAdmin: isAdmin,
-            plan: plan,
+            password,
+            isAdmin,
+            plan,
             usage: getUsageLimits(plan, isAdmin),
             planExpirationDate: plan !== 'Free' ? '2099. 12. 31.' : undefined,
         };
     }
-    
+
     if (userToSet) {
         setUser(userToSet);
         setView('dashboard');
@@ -106,8 +108,7 @@ function App() {
       setUser(prevUser => {
           if (!prevUser) return null;
           const newUsage = { ...prevUser.usage, ...updatedUser.usage };
-          const newUser = { ...prevUser, ...updatedUser, usage: newUsage };
-          return newUser;
+          return { ...prevUser, ...updatedUser, usage: newUsage };
       });
   }, []);
 
@@ -119,7 +120,7 @@ function App() {
         apiKeys: initialAppSettings.apiKeys,
       }));
   }, []);
-  
+
   const handleLogout = useCallback(() => {
     clearCache();
     setUser(null);
@@ -128,7 +129,7 @@ function App() {
 
   const navigateTo = (targetView: 'login' | 'register' | 'dashboard' | 'account') => {
     setView(targetView);
-  }
+  };
 
   if (initializing) {
     return (
@@ -142,41 +143,41 @@ function App() {
     if (user) {
         switch (view) {
             case 'dashboard':
-                return <Dashboard 
-                            user={user} 
+                return <Dashboard
+                            user={user}
                             appSettings={appSettings}
-                            onLogout={handleLogout} 
-                            onNavigate={navigateTo} 
+                            onLogout={handleLogout}
+                            onNavigate={navigateTo}
                             onUpdateUser={handleUpdateUser}
-                            onUpdateAppSettings={handleUpdateAppSettings} 
+                            onUpdateAppSettings={handleUpdateAppSettings}
                         />;
             case 'account':
                 return <AccountSettings user={user} onNavigate={navigateTo} onUpdateUser={handleUpdateUser} />;
             default:
                 setView('dashboard');
-                return <Dashboard 
-                            user={user} 
+                return <Dashboard
+                            user={user}
                             appSettings={appSettings}
-                            onLogout={handleLogout} 
-                            onNavigate={navigateTo} 
-                            onUpdateUser={handleUpdateUser} 
+                            onLogout={handleLogout}
+                            onNavigate={navigateTo}
+                            onUpdateUser={handleUpdateUser}
                             onUpdateAppSettings={handleUpdateAppSettings}
                         />;
         }
-    } else {
-        switch (view) {
-            case 'landing':
-                return <LandingPage onStart={() => setView('login')} />;
-            case 'login':
-                return <Login onLogin={handleLogin} onNavigate={navigateTo} />;
-            case 'register':
-                return <Registration onRegister={() => handleLogin({email: 'demo@user.com', password: 'password'})} onNavigate={navigateTo} />;
-            default:
-                setView('landing');
-                return <LandingPage onStart={() => setView('login')} />;
-        }
     }
-  }
+
+    switch (view) {
+        case 'landing':
+            return <LandingPage onStart={() => setView('login')} />;
+        case 'login':
+            return <Login onLogin={handleLogin} onNavigate={navigateTo} />;
+        case 'register':
+            return <Registration onRegister={() => handleLogin({email: 'demo@user.com', password: 'password'})} onNavigate={navigateTo} />;
+        default:
+            setView('landing');
+            return <LandingPage onStart={() => setView('login')} />;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 font-sans">
