@@ -56,7 +56,7 @@ function runContentOsPipeline_(taskId, appId, query, limit) {
 function searchVideoIndexBounded_(sheet, query, limit) {
   const lastRow = sheet.getLastRow();
   const chunk = 5000;
-  const maxScan = Math.min(lastRow, 100000); // quota-safe bounded scan
+  const maxScan = Math.min(lastRow, 100000); // quota-safe bounded scan; never full 326k getDataRange
   const terms = String(query).toLowerCase().split(/\s+/).filter(Boolean);
   const out = [];
   for (let start=2; start<=maxScan && out.length<limit; start+=chunk) {
@@ -142,11 +142,18 @@ function enqueueContentOsQuery(appId, query, limit) {
   return { ok:true, taskId:taskId };
 }
 
+// Canonical trigger policy: do NOT create another physical 15-minute trigger.
+// Existing central/factory scheduler must invoke contentOsPipelineTick().
 function installContentOsPipelineTrigger() {
-  const handler = 'contentOsPipelineTick';
-  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === handler).forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger(handler).timeBased().everyMinutes(15).create();
-  return { ok:true, handler:handler, cadence:'15m', version:PIPELINE_VERSION };
+  const existing = ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'contentOsPipelineTick');
+  return {
+    ok:true,
+    installed:false,
+    duplicateTriggerCount:existing.length,
+    handler:'contentOsPipelineTick',
+    policy:'REUSE_EXISTING_CENTRAL_FACTORY_TRIGGER',
+    version:PIPELINE_VERSION
+  };
 }
 
 function testContentOsPipeline() {
