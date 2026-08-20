@@ -9,16 +9,17 @@ async function asJson(response: Response) {
 export default async function handler(_req: any, res: any) {
   res.setHeader('Cache-Control', 'no-store');
   const stamp = new Date().toISOString();
+  const url = `https://contents-os.com/?backend_smoke=${encodeURIComponent(stamp)}`;
   const enqueuePayload = {
     action: 'enqueue',
     asset_type: 'TEXT',
+    url,
     source_type: 'WEBAPP_RUNTIME',
     platform: 'CONTENT_OS',
     category: 'BACKEND_SMOKE',
     title: 'Content OS backend runtime smoke',
     summary: `Content OS Vercel to Apps Script collector runtime verification ${stamp}`,
     keywords: 'content-os,backend,vercel,apps-script,smoke',
-    source_url: `https://contents-os.com/?backend_smoke=${encodeURIComponent(stamp)}`,
     target_apps: 'APP_CONTENT_OS',
     use_case: 'RUNTIME_STORAGE_SMOKE',
   };
@@ -38,7 +39,7 @@ export default async function handler(_req: any, res: any) {
       redirect: 'follow',
     });
     const searchResult = await asJson(search);
-    return res.status(200).json({ ok: true, stamp, enqueue: enqueueResult, search: searchResult });
+    return res.status(200).json({ ok: true, stamp, url, enqueue: enqueueResult, search: searchResult });
   } catch (error: any) {
     return res.status(502).json({ ok: false, error: 'BACKEND_SMOKE_FAILED', message: String(error?.message || error) });
   }
