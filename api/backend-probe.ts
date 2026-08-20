@@ -1,4 +1,4 @@
-const FALLBACK_BACKEND = 'https://script.google.com/macros/s/AKfycbyHerL97oP_cAdGFGjCCFSsx10P88yoByAik6Fsn778qYM_x58nz71IT3fBDvZWpnk/exec';
+const FALLBACK_BACKEND = 'https://script.google.com/macros/s/AKfycbx5WTegTKUnyvFZC_qOaGBPlmKANLwXyNue19jLkFhdFwHnnp1E6_trZeVGdIg7B3GA/exec';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Cache-Control', 'no-store');
