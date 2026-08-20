@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Content OS</title>
+    <title>Content OS · MVP Test</title>
     <script src="https://cdn.tailwindcss.com"></script>
-  <script type="importmap">
+    <script type="importmap">
 {
   "imports": {
     "react": "https://aistudiocdn.com/react@^19.2.0",
@@ -15,32 +15,20 @@
     "recharts": "https://aistudiocdn.com/recharts@^3.3.0"
   }
 }
-</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-<style>
-      @keyframes progress-bar {
-        from { width: 0%; }
-        to { width: 100%; }
-      }
-      .animate-progress {
-        animation: progress-bar 3s linear forwards;
-      }
-      @keyframes fade-in {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-      .animate-fade-in {
-        animation: fade-in 0.8s ease-out forwards;
-      }
-      .footer-link {
-        @apply text-gray-400 hover:text-white transition-colors text-sm;
-      }
-</style>
-<link rel="stylesheet" href="/index.css">
-</head>
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+      @keyframes progress-bar { from { width: 0%; } to { width: 100%; } }
+      .animate-progress { animation: progress-bar 3s linear forwards; }
+      @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      .animate-fade-in { animation: fade-in 0.8s ease-out forwards; }
+      .footer-link { @apply text-gray-400 hover:text-white transition-colors text-sm; }
+    </style>
+    <link rel="stylesheet" href="/index.css">
+  </head>
   <body class="bg-[#0F1117] text-white">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+    <script src="/mvp-backdata.js" data-app-id="APP_CONTENT_OS"></script>
   </body>
 </html>
