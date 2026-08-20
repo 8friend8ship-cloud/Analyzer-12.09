@@ -10,16 +10,16 @@ import { setSystemGeminiApiKey } from './services/apiKeyService';
 import Spinner from './components/common/Spinner';
 
 const initialAppSettings: AppSettings = {
-    freePlanLimit: 30, // Updated from 10 to 30
+    freePlanLimit: 30,
     plans: {
         pro: { name: 'Pro', analyses: 100, price: 19000 },
         biz: { name: 'Biz', analyses: 200, price: 29000 },
     },
     apiKeys: {
-        youtube: (import.meta.env.VITE_YOUTUBE_API_KEY as string) || '',
-        analytics: (import.meta.env.VITE_YOUTUBE_ANALYTICS_API_KEY as string) || '',
-        reporting: (import.meta.env.VITE_YOUTUBE_REPORTING_API_KEY as string) || '',
-        gemini: (import.meta.env.VITE_GEMINI_API_KEY as string) || '',
+        youtube: 'CENTRAL_BACKDATA_ONLY',
+        analytics: '',
+        reporting: '',
+        gemini: '',
     },
     analyticsConnection: null,
 };
@@ -41,8 +41,10 @@ function App() {
   }, []);
 
   useEffect(() => {
-    setSystemGeminiApiKey(appSettings.apiKeys.gemini);
-  }, [appSettings.apiKeys.gemini]);
+    // Content OS canonical mode is API-free. Gemini is reserved for external/final-cooking workflows,
+    // never for browser search or Content OS runtime analysis.
+    setSystemGeminiApiKey(null);
+  }, []);
 
   const handleLogin = useCallback((credentials: { googleUser?: { name: string; email: string }; email?: string; password?: string }) => {
     let userToSet: User | null = null;
@@ -103,7 +105,6 @@ function App() {
   const handleUpdateUser = useCallback((updatedUser: Partial<User>) => {
       setUser(prevUser => {
           if (!prevUser) return null;
-          // Deep merge for usage object
           const newUsage = { ...prevUser.usage, ...updatedUser.usage };
           const newUser = { ...prevUser, ...updatedUser, usage: newUsage };
           return newUser;
@@ -111,7 +112,12 @@ function App() {
   }, []);
 
   const handleUpdateAppSettings = useCallback((updatedSettings: Partial<AppSettings>) => {
-      setAppSettings(prev => ({...prev, ...updatedSettings}));
+      // Keep UI settings, but never accept runtime API keys in free Content OS.
+      setAppSettings(prev => ({
+        ...prev,
+        ...updatedSettings,
+        apiKeys: initialAppSettings.apiKeys,
+      }));
   }, []);
   
   const handleLogout = useCallback(() => {
