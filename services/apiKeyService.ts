@@ -1,34 +1,16 @@
-// This service provides a global way to set and get the Gemini API key.
-// It manages a system-wide key and a user-specific key, prioritizing the user's key.
+// Content OS canonical free-mode policy:
+// - No browser Gemini API key.
+// - No user-provided API key.
+// - AI final-cooking belongs to the central ChatGPT/workflow layer, outside Content OS runtime search.
 
-let systemGeminiKey: string | null = null;
-
-/**
- * Sets the system-wide (admin) Gemini API key.
- * @param key The Gemini API key string. Can be null to clear.
- */
-export function setSystemGeminiApiKey(key: string | null) {
-    systemGeminiKey = key || null;
+export function setSystemGeminiApiKey(_key: string | null) {
+    // Intentionally ignored. Content OS runtime is API-free.
 }
 
-/**
- * This function is now a no-op to prevent user-specific keys from being set.
- * @param key The Gemini API key string. (Ignored)
- */
-export function setUserGeminiApiKey(key: string | null) {
-    // This function is intentionally left empty for compliance.
+export function setUserGeminiApiKey(_key: string | null) {
+    // Intentionally ignored. User-side API keys are forbidden in Content OS.
 }
 
-/**
- * Gets the currently active Gemini API key. It now only considers the system key or environment variables.
- * @returns The Gemini API key string.
- * @throws {Error} if no key is configured.
- */
 export function getGeminiApiKey(): string {
-    const key = systemGeminiKey || (import.meta.env.VITE_GEMINI_API_KEY as string); 
-    if (!key) {
-        console.error("Gemini API Key is not configured. Please set it in admin settings or environment variables.");
-        throw new Error("Gemini API Key is not configured.");
-    }
-    return key;
+    throw new Error('CONTENT_OS_FREE_MODE: Gemini API is disabled. Use central Seed/T1/T2/ChatGPT final-cooking workflow instead.');
 }
