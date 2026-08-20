@@ -2,7 +2,9 @@ export type ContentOsBackendHealth = {
   ok: boolean;
   service?: string;
   backendConfigured?: boolean;
+  backendService?: string;
   storageMode?: string;
+  readMode?: string;
   at?: string;
 };
 
@@ -34,4 +36,8 @@ export async function readBackend(params: Record<string, string>): Promise<unkno
   if (!response.ok) throw new Error(`Content OS backend read failed: ${response.status}`);
   const contentType = response.headers.get('content-type') || '';
   return contentType.includes('application/json') ? response.json() : response.text();
+}
+
+export async function searchCentralLibrary(query: string, assetType: 'TEXT' | 'IMAGE' = 'TEXT', limit = 20): Promise<unknown> {
+  return readBackend({ query, asset_type: assetType, limit: String(limit) });
 }
