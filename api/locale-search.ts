@@ -39,6 +39,12 @@ function detectLocale(text: string): Locale {
   return 'other';
 }
 
+function requestedLocale(value: any, query: string): Locale {
+  const requested = normalize(String(value || ''));
+  if (requested === 'ko' || requested === 'en' || requested === 'ja' || requested === 'zh' || requested === 'es') return requested;
+  return detectLocale(query);
+}
+
 function canonicalize(query: string) {
   const n = normalize(query);
   for (const entry of Object.values(MAP)) {
@@ -110,7 +116,7 @@ export default async function handler(req:any,res:any) {
   const query = String(req.query?.query || '').trim();
   const limit = Math.max(1,Math.min(Number(req.query?.limit || 20),50));
   if (!query) return res.status(400).json({ ok:false,error:'QUERY_REQUIRED' });
-  const locale = detectLocale(query);
+  const locale = requestedLocale(req.query?.lang, query);
   const canonical = canonicalize(query);
   const plans = Array.from(new Set([canonical.canonical, query])).filter(Boolean);
   const merged:Row[] = [];
