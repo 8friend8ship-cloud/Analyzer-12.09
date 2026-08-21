@@ -1,4 +1,4 @@
-var CENTRAL_INTELLIGENCE_VERSION = 'CENTRAL_INTELLIGENCE_BUS_V1_20260821';
+var CENTRAL_INTELLIGENCE_VERSION = 'CENTRAL_INTELLIGENCE_BUS_V2_20260821';
 var CENTRAL_MASTER_REGISTRY_ID = '1C_CznU1Uo7dk-gKay3-oH8wFxutsGMlz27RSrbdVQwI';
 var CI_SHEETS = {
   BUS: '59_DATA_INTELLIGENCE_BUS',
@@ -29,7 +29,7 @@ function centralPublishDataEvent(payload) {
   if (!sheet) throw new Error('BUS_SHEET_NOT_FOUND');
   var eventId = payload.event_id || ('EVT_' + Utilities.getUuid());
   var now = new Date().toISOString();
-  var row = [
+  sheet.appendRow([
     eventId, now, payload.producer_app_id || 'UNKNOWN', payload.data_stage || 'QUEENS',
     payload.entity_type || 'CONTENT', payload.entity_id || '', payload.keyword || '', payload.locale || 'ko',
     payload.summary || '', stringifyCompact_(payload.keywords), stringifyCompact_(payload.tags),
@@ -37,8 +37,7 @@ function centralPublishDataEvent(payload) {
     stringifyCompact_(payload.lineage_ids), payload.confidence == null ? '' : payload.confidence,
     payload.status || 'READY', payload.version || '1', stringifyCompact_(payload.consumer_scope || ['ALL_APPS']),
     payload.change_type || 'UPSERT', payload.readback_status || 'PENDING', payload.last_checked_at || now, payload.memo || ''
-  ];
-  sheet.appendRow(row);
+  ]);
   return { ok: true, event_id: eventId, published_at: now };
 }
 
@@ -106,18 +105,37 @@ function centralProposeEvolutionChange(payload) {
   return { ok: true, change_id: id };
 }
 
+function runCentralIntelligenceSync() {
+  var ss = SpreadsheetApp.openById(CENTRAL_MASTER_REGISTRY_ID);
+  var sub = ss.getSheetByName(CI_SHEETS.SUB);
+  var trend = ss.getSheetByName(CI_SHEETS.TREND);
+  var change = ss.getSheetByName(CI_SHEETS.CHANGE);
+  if (!sub || !trend || !change) throw new Error('INTELLIGENCE_SHEETS_NOT_READY');
+  var summary = {
+    subscriptions: Math.max(0, sub.getLastRow() - 1),
+    trend_records: Math.max(0, trend.getLastRow() - 1),
+    pending_changes: countStatus_(change, 22, ['PROPOSED','PENDING','ACTIVE']),
+    checked_at: new Date().toISOString()
+  };
+  centralPublishDataEvent({
+    producer_app_id: 'APP_AGENT_CORE', data_stage: 'SYNC', entity_type: 'INTELLIGENCE_HEARTBEAT',
+    entity_id: 'SYNC_' + Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyyMMdd_HHmm'), keyword: 'CENTRAL_SYNC',
+    summary: JSON.stringify(summary), tags: ['SYNC','ALL_APPS'], consumer_scope: ['ALL_APPS'], status: 'READY',
+    readback_status: 'PASS'
+  });
+  return { ok: true, version: CENTRAL_INTELLIGENCE_VERSION, summary: summary };
+}
+
 function runDailyTrendIntelligence() {
   var ss = SpreadsheetApp.openById(CENTRAL_MASTER_REGISTRY_ID);
   var trend = ss.getSheetByName(CI_SHEETS.TREND);
   var sub = ss.getSheetByName(CI_SHEETS.SUB);
   if (!trend || !sub) throw new Error('INTELLIGENCE_SHEETS_NOT_READY');
-  var trendRows = trend.getDataRange().getValues();
-  var subRows = sub.getDataRange().getValues();
   var report = {
     ok: true,
     version: CENTRAL_INTELLIGENCE_VERSION,
-    trend_records: Math.max(0, trendRows.length - 1),
-    app_subscriptions: Math.max(0, subRows.length - 1),
+    trend_records: Math.max(0, trend.getLastRow() - 1),
+    app_subscriptions: Math.max(0, sub.getLastRow() - 1),
     generated_at: new Date().toISOString(),
     next_actions: ['VALIDATE_METRICS','CLUSTER_AUDIENCE_NEEDS','SCORE_TRENDS','BUILD_APP_IMPACT','CREATE_EVOLUTION_TASKS']
   };
@@ -129,12 +147,35 @@ function runDailyTrendIntelligence() {
   return report;
 }
 
+function installCentralIntelligenceTriggers() {
+  var handlers = ['runCentralIntelligenceSync', 'runDailyTrendIntelligence'];
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (handlers.indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('runCentralIntelligenceSync').timeBased().everyMinutes(10).create();
+  ScriptApp.newTrigger('runDailyTrendIntelligence').timeBased().everyDays(1).atHour(9).create();
+  return { ok: true, installed: handlers, version: CENTRAL_INTELLIGENCE_VERSION, at: new Date().toISOString() };
+}
+
+function testCentralIntelligenceBus() {
+  var health = centralIntelligenceHealth();
+  if (!health.ok) throw new Error('HEALTH_FAILED:' + JSON.stringify(health));
+  var event = centralPublishDataEvent({
+    producer_app_id: 'APP_AGENT_CORE', data_stage: 'TEST', entity_type: 'SELF_TEST', entity_id: 'SELFTEST_' + Date.now(),
+    keyword: 'central-intelligence', summary: 'Central Intelligence Bus self test', consumer_scope: ['ALL_APPS'],
+    status: 'TEST_READY', readback_status: 'PASS'
+  });
+  var readback = centralConsumeDataEvents('APP_AGENT_CORE', new Date(Date.now() - 60000).toISOString(), 20);
+  return { ok: !!event.ok && readback.count > 0, health: health, event: event, readback_count: readback.count };
+}
+
 function centralIntelligenceHandleGet(e) {
   var p = (e && e.parameter) || {};
   var action = p.action || 'health';
   if (action === 'health') return centralIntelligenceHealth();
   if (action === 'events') return centralConsumeDataEvents(p.app_id || '', p.since || '', p.limit || 100);
   if (action === 'daily') return runDailyTrendIntelligence();
+  if (action === 'sync') return runCentralIntelligenceSync();
   return { ok: false, error: 'UNKNOWN_ACTION', action: action };
 }
 
@@ -145,7 +186,14 @@ function centralIntelligenceHandlePost(body) {
   if (action === 'trend.record') return centralRecordTrendResearch(body.payload || body);
   if (action === 'evolution.propose') return centralProposeEvolutionChange(body.payload || body);
   if (action === 'daily.run') return runDailyTrendIntelligence();
+  if (action === 'sync.run') return runCentralIntelligenceSync();
   return { ok: false, error: 'UNKNOWN_ACTION', action: action };
+}
+
+function countStatus_(sheet, zeroBasedColumnIndex, statuses) {
+  if (sheet.getLastRow() <= 1) return 0;
+  var values = sheet.getRange(2, zeroBasedColumnIndex + 1, sheet.getLastRow() - 1, 1).getValues();
+  return values.filter(function(r) { return statuses.indexOf(String(r[0])) >= 0; }).length;
 }
 
 function stringifyCompact_(value) {
