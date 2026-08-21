@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { installFreeOperationPolicy } from './services/freeOperationPolicy';
+import FrontLanguageBotBridge from './FrontLanguageBotBridge';
 
 installFreeOperationPolicy();
 
@@ -16,6 +17,7 @@ root.render(
   <React.StrictMode>
     <ErrorBoundary>
       <App />
+      <FrontLanguageBotBridge appId="APP_ANALYZER" />
     </ErrorBoundary>
   </React.StrictMode>
 );
