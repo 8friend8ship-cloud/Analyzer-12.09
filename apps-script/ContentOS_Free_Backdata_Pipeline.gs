@@ -1,6 +1,6 @@
 const CONTENTOS_SOURCE_SHEET_ID = '1o6Me_qcdrSEVNvufjD_EQWVGvxvGKR_9ZYWSSYMclgQ';
 const CONTENTOS_PIPELINE_SHEET_ID = '1vEPZ67A5TgxRZP_SiWOSgqvJ8zXBoWvtT2bZrs8RYLE';
-const PIPELINE_VERSION = 'CONTENT_OS_FREE_PIPELINE_V1_20260820';
+const PIPELINE_VERSION = 'CONTENT_OS_FREE_PIPELINE_V2_20260821';
 
 function contentOsPipelineTick() {
   const lock = LockService.getScriptLock();
@@ -39,6 +39,7 @@ function runContentOsPipeline_(taskId, appId, query, limit) {
   if (!source) throw new Error('Video_Index missing');
   const req = getAppRequirement_(pipelineSs, appId);
   const candidates = searchVideoIndexBounded_(source, query, limit);
+  const refresh = candidates.length ? null : queueKeywordRefresh_(sourceSs, appId, query);
   const now = new Date();
   const stamp = Utilities.formatDate(now, 'Asia/Seoul', 'yyyyMMdd_HHmmss');
   const runId = 'RUN_' + appId + '_' + stamp;
@@ -48,21 +49,62 @@ function runContentOsPipeline_(taskId, appId, query, limit) {
   const t2 = writeT2_(pipelineSs, appId, t1, req, now);
   pipelineSs.getSheetByName('Pipeline_Log').appendRow([
     runId, appId, query, queens.length, seed ? 1 : 0, t1 ? 1 : 0, t2 ? 1 : 0,
-    candidates.length ? 'PASS' : 'PASS_NO_MATCH', '', now, taskId, PIPELINE_VERSION
+    candidates.length ? 'PASS' : 'QUEENS_REFRESH_QUEUED', refresh ? refresh.queryId : '', now, taskId, PIPELINE_VERSION
   ]);
-  return { runId:runId, queens:queens.length, seed:!!seed, t1:!!t1, t2:!!t2 };
+  return { runId:runId, queens:queens.length, seed:!!seed, t1:!!t1, t2:!!t2, refresh:refresh };
+}
+
+function normalizeContentOsQuery_(value) {
+  return String(value || '').toLowerCase().replace(/\s+/g, '').replace(/[^0-9a-z가-힣]/g, '');
+}
+
+function searchKeywordVideoMap_(sheet, query, limit) {
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const target = normalizeContentOsQuery_(query);
+  const last = sheet.getLastRow();
+  const start = Math.max(2, last - 19999);
+  const values = sheet.getRange(start, 1, last - start + 1, 18).getDisplayValues();
+  const out = [];
+  const seen = {};
+  for (let i = values.length - 1; i >= 0 && out.length < limit; i--) {
+    const r = values[i];
+    const key = normalizeContentOsQuery_(r[0]);
+    const hay = normalizeContentOsQuery_([r[0], r[3], r[4], r[14], r[15]].join(' '));
+    if (key !== target && hay.indexOf(target) === -1) continue;
+    const videoId = String(r[1] || '');
+    if (!videoId || seen[videoId]) continue;
+    seen[videoId] = true;
+    out.push({
+      videoId:videoId,
+      title:r[3],
+      channel:r[4],
+      primaryCode:'FINA',
+      subKey:r[0] || query,
+      nodeTag:r[14] || '',
+      country:(String(r[14] || '').indexOf('|KR') !== -1 ? 'KR' : 'GLOBAL'),
+      viewCount:r[6],
+      publishedAt:r[5],
+      lastSync:r[16],
+      url:r[2] || ('https://www.youtube.com/watch?v=' + videoId)
+    });
+  }
+  return out;
 }
 
 function searchVideoIndexBounded_(sheet, query, limit) {
+  const mapped = searchKeywordVideoMap_(sheet.getParent().getSheetByName('Keyword_Video_Map'), query, limit);
+  if (mapped.length) return mapped;
+
   const lastRow = sheet.getLastRow();
   const chunk = 5000;
-  const maxScan = Math.min(lastRow, 100000); // quota-safe bounded scan; never full 326k getDataRange
+  const firstRow = Math.max(2, lastRow - 99999);
   const terms = String(query).toLowerCase().split(/\s+/).filter(Boolean);
   const out = [];
-  for (let start=2; start<=maxScan && out.length<limit; start+=chunk) {
-    const count = Math.min(chunk, maxScan-start+1);
+  for (let end=lastRow; end>=firstRow && out.length<limit; end-=chunk) {
+    const start = Math.max(firstRow, end-chunk+1);
+    const count = end-start+1;
     const values = sheet.getRange(start,1,count,10).getDisplayValues();
-    for (let i=0;i<values.length && out.length<limit;i++) {
+    for (let i=values.length-1;i>=0 && out.length<limit;i--) {
       const r = values[i];
       const hay = (r[1]+' '+r[2]+' '+r[3]+' '+r[4]+' '+r[5]+' '+r[6]).toLowerCase();
       if (!terms.every(t => hay.indexOf(t) !== -1)) continue;
@@ -74,6 +116,41 @@ function searchVideoIndexBounded_(sheet, query, limit) {
     }
   }
   return out;
+}
+
+function queueKeywordRefresh_(sourceSs, appId, query) {
+  const sh = sourceSs.getSheetByName('Keyword_Query_Log');
+  if (!sh) return { queued:false, reason:'Keyword_Query_Log missing' };
+  const now = new Date();
+  const target = normalizeContentOsQuery_(query);
+  const last = sh.getLastRow();
+  if (last >= 2) {
+    const start = Math.max(2, last - 4999);
+    const values = sh.getRange(start,1,last-start+1,12).getDisplayValues();
+    for (let i=values.length-1;i>=0;i--) {
+      if (normalizeContentOsQuery_(values[i][1]) !== target) continue;
+      const row = start + i;
+      sh.getRange(row,3,1,10).setValues([[
+        appId || values[i][2] || 'APP_CONTENT_OS',
+        'NEW_KEYWORD_DISCOVERY',
+        Number(values[i][4]) || 0,
+        values[i][5] || '',
+        values[i][6] || query,
+        values[i][7] || '',
+        now,
+        'N',
+        'Y',
+        'AUTO_REQUEUED: ContentOS cache miss; Queens latest collection required'
+      ]]);
+      return { queued:true, queryId:values[i][0], existing:true };
+    }
+  }
+  const queryId = 'QRY_' + Utilities.formatDate(now,'Asia/Seoul','yyyyMMdd_HHmmss');
+  sh.appendRow([
+    queryId, query, appId || 'APP_CONTENT_OS', 'NEW_KEYWORD_DISCOVERY', 0, '', query, '', now,
+    'N', 'Y', 'AUTO_QUEUED: ContentOS cache miss; Queens latest collection required'
+  ]);
+  return { queued:true, queryId:queryId, existing:false };
 }
 
 function writeQueens_(ss, appId, query, candidates, now) {
@@ -142,8 +219,6 @@ function enqueueContentOsQuery(appId, query, limit) {
   return { ok:true, taskId:taskId };
 }
 
-// Canonical trigger policy: do NOT create another physical 15-minute trigger.
-// Existing central/factory scheduler must invoke contentOsPipelineTick().
 function installContentOsPipelineTrigger() {
   const existing = ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'contentOsPipelineTick');
   return {
@@ -159,7 +234,7 @@ function installContentOsPipelineTrigger() {
 function testContentOsPipeline() {
   const ss = SpreadsheetApp.openById(CONTENTOS_PIPELINE_SHEET_ID);
   const before = ss.getSheetByName('Pipeline_Log').getLastRow();
-  const task = enqueueContentOsQuery('APP_TRAVEL','일본 여행',20);
+  const task = enqueueContentOsQuery('APP_CONTENT_OS','AI주식',20);
   const result1 = contentOsPipelineTick();
   const result2 = contentOsPipelineTick();
   const after = ss.getSheetByName('Pipeline_Log').getLastRow();
