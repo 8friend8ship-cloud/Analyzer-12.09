@@ -1,0 +1,115 @@
+name: Patch Content OS stored backdata fallback
+
+on:
+  push:
+    branches:
+      - fix/contentos-latest-keyword-index-20260821
+    paths:
+      - .github/workflows/patch-contentos-stored-fallback.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/contentos-latest-keyword-index-20260821
+          fetch-depth: 0
+      - name: Add safe stored-backdata fallback
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('api/content-search.ts')
+          s = p.read_text(encoding='utf-8')
+          anchor = "const BACKEND_URL = process.env.CONTENT_OS_BACKEND_URL || process.env.CENTRAL_INTELLIGENCE_BACKEND_URL || '';\n"
+          if anchor not in s:
+              raise SystemExit('BACKEND_URL anchor missing')
+          s = s.replace(anchor, anchor + "const STORED_FALLBACK_URL = process.env.CONTENT_OS_STORED_BACKDATA_URL || 'https://contents-os.com/api/backend';\n", 1)
+
+          anchor2 = '''async function callUpstream(query:URLSearchParams){\n  if(!BACKEND_URL) return null;\n  const url=`${BACKEND_URL}${BACKEND_URL.includes('?')?'&':'?'}${query.toString()}`;\n  const r=await fetch(url,{redirect:'follow',headers:{Accept:'application/json'}});\n  const text=await r.text();\n  let body:any=null; try{ body=JSON.parse(text); }catch{}\n  if(!r.ok || !body) return null;\n  return body;\n}\n'''
+          if anchor2 not in s:
+              raise SystemExit('callUpstream block missing')
+          insert = anchor2 + r'''
+function extractYouTubeId(value:any){
+  const raw=String(value||'');
+  const m=raw.match(/(?:v=|youtu\.be\/|shorts\/)([A-Za-z0-9_-]{11})/);
+  if(m) return m[1];
+  const sid=raw.match(/^YT_([A-Za-z0-9_-]{11})$/);
+  return sid?sid[1]:'';
+}
+
+async function validateStoredYouTubeRow(row:any){
+  const id=extractYouTubeId(row.ARTICLE_URL || row.url || row.SOURCE_ID || row.source_id);
+  if(!id) return null;
+  try{
+    const watchUrl=`https://www.youtube.com/watch?v=${id}`;
+    const r=await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(watchUrl)}&format=json`,{
+      headers:{Accept:'application/json'},
+      signal:AbortSignal.timeout(2500),
+    });
+    if(!r.ok) return null;
+    const meta:any=await r.json();
+    return {
+      id,
+      channelId:'',
+      title:stringParam(meta?.title || row.TITLE || row.title),
+      thumbnailUrl:stringParam(meta?.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
+      channelTitle:stringParam(meta?.author_name || row.AUTHOR_SOURCE || row.channelTitle),
+      publishedAt:stringParam(row.PUBLISHED_AT || row.publishedAt),
+      subscribers:0,
+      viewCount:0,
+      likeCount:0,
+      commentCount:0,
+      durationMinutes:0,
+      engagementRate:0,
+      channelCountry:stringParam(row.COUNTRY || row.channelCountry),
+      sourceStatus:'STORED_BACKDATA_FALLBACK',
+    };
+  }catch{
+    return null;
+  }
+}
+
+async function callStoredFallback(q:string, limit:number){
+  const url=`${STORED_FALLBACK_URL}?query=${encodeURIComponent(q)}&asset_type=TEXT&limit=${Math.max(1,Math.min(limit,50))}`;
+  const r=await fetch(url,{redirect:'follow',headers:{Accept:'application/json'}});
+  if(!r.ok) return null;
+  let body:any=null; try{ body=await r.json(); }catch{}
+  const rows=Array.isArray(body?.results)?body.results:[];
+  if(!rows.length) return null;
+  const youtubeRows=rows.filter((row:any)=>String(row?.PLATFORM||row?.platform||'').toUpperCase()==='YOUTUBE').slice(0,Math.min(limit,12));
+  const checked=await Promise.all(youtubeRows.map(validateStoredYouTubeRow));
+  const videos=checked.filter(Boolean);
+  if(!videos.length) return null;
+  return {
+    status:'READY',
+    normalizedQuery:q,
+    videos,
+    channels:[],
+    lineage:['QUERY','STORED_BACKDATA_FALLBACK','YOUTUBE_OEMBED_VERIFIED'],
+    message:'Stored central backdata fallback is serving verified YouTube references while Queens/Seed/T1/T2 runtime sync completes.',
+  };
+}
+'''
+          s = s.replace(anchor2, insert, 1)
+
+          old = '''    const upstream=await callUpstream(params);\n    if(!upstream){\n      return res.status(202).json(pendingBody(q,normalized,'Central Queens/Seed/T1/T2 backend is not available yet. Refresh has been requested; unrelated fallback is disabled.'));\n    }\n'''
+          new = '''    let upstream=await callUpstream(params);\n    if(!upstream && stringParam(req.query?.mode,'video')==='video'){\n      upstream=await callStoredFallback(normalized,numberParam(req.query?.resultsLimit,25));\n    }\n    if(!upstream){\n      return res.status(202).json(pendingBody(q,normalized,'Central Queens/Seed/T1/T2 runtime is not available yet. No verified stored fallback matched this query.'));\n    }\n'''
+          if old not in s:
+              raise SystemExit('upstream fallback block missing')
+          s = s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
+      - name: Verify TypeScript anchors
+        run: |
+          grep -q "callStoredFallback" api/content-search.ts
+          grep -q "YOUTUBE_OEMBED_VERIFIED" api/content-search.ts
+      - name: Commit patch
+        run: |
+          git config user.name "content-os-bot"
+          git config user.email "homedesigntaedi@gmail.com"
+          git add api/content-search.ts
+          git commit -m "fix(content-os): serve verified stored backdata while Queens runtime syncs"
+          git push origin HEAD:fix/contentos-latest-keyword-index-20260821
