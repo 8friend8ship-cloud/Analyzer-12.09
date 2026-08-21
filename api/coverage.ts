@@ -1,3 +1,5 @@
+import { discoverYouTubePublicSearch, type YouTubeDiscoveryCandidate } from '../lib/youtube-public-discovery';
+
 const BACKEND_URL = process.env.CONTENT_OS_BACKEND_URL || 'https://script.google.com/macros/s/AKfycbx5WTegTKUnyvFZC_qOaGBPlmKANLwXyNue19jLkFhdFwHnnp1E6_trZeVGdIg7B3GA/exec';
 
 type Candidate = {
@@ -87,23 +89,53 @@ async function enqueueGap(query: string, candidate: Candidate) {
   return { status: response.status, ok: response.ok, response: json || text };
 }
 
+function toCandidate(row: YouTubeDiscoveryCandidate): Candidate {
+  return {
+    rank: row.rank,
+    url: row.url,
+    title: row.title,
+    channel: row.channel,
+    published_at: row.published_at,
+    source: row.source,
+  };
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('X-Content-OS-Data-Mode', 'QUEENS_COVERAGE_CROSSCHECK_API_FREE');
+  res.setHeader('X-Content-OS-Data-Mode', 'QUEENS_COVERAGE_AUTO_GAP_FILL_API_FREE');
 
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'POST_REQUIRED' });
 
   const query = String(req.body?.query || '').trim();
-  const candidates: Candidate[] = Array.isArray(req.body?.candidates) ? req.body.candidates : [];
-  const limit = Math.max(1, Math.min(Number(req.body?.limit || 50), 100));
+  let candidates: Candidate[] = Array.isArray(req.body?.candidates) ? req.body.candidates : [];
+  const limit = Math.max(1, Math.min(Number(req.body?.limit || 20), 50));
   const dryRun = req.body?.dry_run !== false;
+  const autoDiscover = req.body?.auto_discover !== false;
+  const locale = String(req.body?.locale || req.body?.lang || 'ko-KR');
 
   if (!query) return res.status(400).json({ ok: false, error: 'QUERY_REQUIRED' });
-  if (!candidates.length) return res.status(400).json({ ok: false, error: 'CANDIDATES_REQUIRED' });
+
+  let discovery: any = null;
+  if (!candidates.length && autoDiscover) {
+    discovery = await discoverYouTubePublicSearch(query, limit, locale);
+    if (discovery.ok) candidates = discovery.candidates.map(toCandidate);
+  }
+
+  if (!candidates.length) {
+    return res.status(502).json({
+      ok: false,
+      error: 'DISCOVERY_CANDIDATES_UNAVAILABLE',
+      query,
+      discovery,
+      fallback_next: 'BROWSER_BRIDGE_OR_LOCAL_YTDLP',
+      youtube_data_api_key_required: false,
+      gemini_required: false,
+    });
+  }
 
   const ranked = candidates
     .filter(x => x && x.url)
@@ -133,8 +165,9 @@ export default async function handler(req: any, res: any) {
 
   return res.status(200).json({
     ok: true,
-    mode: 'API_FREE_QUEENS_COVERAGE_CROSSCHECK',
+    mode: 'API_FREE_QUEENS_COVERAGE_AUTO_GAP_FILL',
     query,
+    discovery_source: discovery?.ok ? 'YOUTUBE_PUBLIC_SEARCH_HTML' : (candidates[0]?.source || 'SUPPLIED_CANDIDATES'),
     external_ranked_count: ranked.length,
     stored_queens_count: stored.rows.length,
     scanned_rows: stored.scanned_rows,
@@ -145,10 +178,16 @@ export default async function handler(req: any, res: any) {
     present,
     collection_requested: !dryRun,
     collection_log,
+    fallback_policy: {
+      tier_1: 'STORED_QUEENS',
+      tier_2: 'YOUTUBE_PUBLIC_SEARCH_HTML_LOW_FREQUENCY',
+      tier_3: 'BROWSER_BRIDGE',
+      tier_4: 'LOCAL_YTDLP_YTSEARCH',
+    },
     audit: {
-      rule: 'GENERAL_YOUTUBE_SEARCH_RANK_VS_STORED_QUEENS',
+      rule: 'AUTO_DISCOVER_YOUTUBE_RANK_VS_STORED_QUEENS',
       missing_reason: 'MISSING_FROM_STORED_QUEENS',
-      seed_learning_next: 'COLLECT_MISSING_QUEENS_THEN_REBUILD_SEED_T1_T2',
+      seed_learning_next: 'COLLECT_MISSING_QUEENS_THEN_REBUILD_SEED_T1_T2_AND_REINDEX_LIBRARY',
       youtube_api_key_required: false,
       gemini_required: false,
       checked_at: new Date().toISOString(),
