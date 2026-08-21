@@ -22,7 +22,7 @@ import ComparisonView from './ComparisonView';
 import HelpModal from './HelpModal';
 import InfluencerMarketingView from './InfluencerMarketingView';
 import { logQuery, getPopularQueries, pruneQueries } from '../services/queryAnalyticsService'; 
-import { fetchYouTubeData, fetchChannelSearchData } from '../services/youtubeService'; // Updated import
+import { fetchCentralBackdata } from '../services/centralBackdataService';
 import type { VideoData, FilterState, User, AppSettings, PopularQuery, OutlierViewState, ThumbnailViewState, TopChartsViewState, ChannelRankingData, AnalysisMode } from '../types';
 import AdAnalysis from './AdAnalysis';
 import LengthChart from './charts/LengthChart';
@@ -119,8 +119,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
         navigateTo('comparison', { initialChannelIds: Object.keys(selectedChannels) });
     };
 
-    const hasApiKey = !!appSettings.apiKeys.youtube;
-
     useEffect(() => {
         pruneQueries(); 
         setPopularQueries(getPopularQueries(5));
@@ -194,13 +192,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
             return;
         }
 
-        if (!hasApiKey) {
-            setError("시스템 API 키가 설정되지 않았습니다. 관리자에게 문의해주세요. (System API key is not set.)");
-            return;
-        }
-        
-        const apiKey = appSettings.apiKeys.youtube;
-        
         onUpdateUser({ 
             usage: {
                 ...user.usage,
@@ -215,12 +206,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
         setLoadingMessage(`'${searchQuery}'에 대한 데이터를 조회 중입니다...`);
 
         try {
+            const central = await fetchCentralBackdata(searchQuery, filters, searchMode);
             if (searchMode === 'channel') {
-                const channelData = await fetchChannelSearchData(searchQuery, filters, apiKey!);
-                setChannelResults(channelData);
-            } else { // video mode
-                const videoData = await fetchYouTubeData('keyword', searchQuery, filters, apiKey!);
-                setVideos(videoData);
+                setChannelResults(central.channels || []);
+            } else {
+                setVideos(central.videos || []);
+            }
+            if ((central.status === 'COLLECTING' || central.status === 'REFRESH_REQUIRED') && !central.videos?.length && !(central.channels || []).length) {
+                console.info('[Content OS] central backdata refresh pending:', central.message || central.status);
             }
         } catch (err: any) {
             console.error("Analysis failed:", err);
@@ -230,7 +223,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
         } finally {
             setIsLoading(false);
         }
-    }, [user, onUpdateUser, appSettings, filters, hasApiKey]);
+    }, [user, onUpdateUser, filters]);
     
     const handlePopularQuerySelect = (selectedQuery: string, selectedMode: AnalysisMode) => {
         setQuery(selectedQuery);
@@ -352,27 +345,27 @@ const Dashboard: React.FC<DashboardProps> = ({ user, appSettings, onLogout, onNa
                   <div className="mt-12 pt-6 border-t border-blue-500/30 text-left">
                         <div className="flex items-center gap-3 mb-3">
                             <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs font-bold rounded-md border border-blue-500/30 uppercase">
-                                Live API Connected
+                                Central Backdata Connected
                             </span>
                         </div>
                         <p className="text-sm text-gray-300 mb-4">
-                            Content OS is now connected to the official YouTube Data API and Gemini AI.
-                            <br/><span className="text-xs text-gray-500">(Content OS가 YouTube 공식 API 및 Gemini AI에 연결되었습니다.)</span>
+                            Content OS searches the central Queens → Seed → T1 → T2 backdata path without a browser API key.
+                            <br/><span className="text-xs text-gray-500">(Content OS는 브라우저 API 키 없이 중앙 Queens → Seed → T1 → T2 백데이터를 조회합니다.)</span>
                         </p>
                         
                         <ul className="space-y-3 text-gray-300 text-sm">
                             <li className="flex items-start gap-3 p-3 bg-gray-900/50 rounded-lg">
                                 <span className="text-blue-400 font-bold mt-0.5">1.</span>
                                 <div>
-                                    <b className="text-white">Real-time Data:</b> All analysis results are based on real-time data from YouTube.
-                                    <br/><span className="text-gray-500 text-xs">(모든 분석 결과는 YouTube의 실시간 데이터를 기반으로 합니다.)</span>
+                                    <b className="text-white">Backdata Search:</b> Results are served from central stored data and missing coverage is sent back to Queens for refresh.
+                                    <br/><span className="text-gray-500 text-xs">(중앙 저장 데이터에서 조회하고 부족한 검색어는 Queens 재수집 대상으로 보냅니다.)</span>
                                 </div>
                             </li>
                             <li className="flex items-start gap-3 p-3 bg-gray-900/50 rounded-lg">
                                 <span className="text-blue-400 font-bold mt-0.5">2.</span>
                                 <div>
-                                    <b className="text-white">AI Insights:</b> Gemini AI provides deep strategic insights for your content.
-                                    <br/><span className="text-gray-500 text-xs">(Gemini AI가 콘텐츠에 대한 깊이 있는 전략적 인사이트를 제공합니다.)</span>
+                                    <b className="text-white">Seed/T1/T2:</b> Qualified Seed and templates feed downstream analysis features.
+                                    <br/><span className="text-gray-500 text-xs">(검증 Seed와 1·2차 템플릿이 후속 분석 기능에 공급됩니다.)</span>
                                 </div>
                             </li>
                         </ul>
