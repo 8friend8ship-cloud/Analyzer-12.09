@@ -27,19 +27,13 @@ function firstText(value: any): string {
 }
 
 function extractInitialData(html: string): any | null {
-  const markers = [
-    'var ytInitialData = ',
-    'window["ytInitialData"] = ',
-    'ytInitialData = ',
-  ];
-
+  const markers = ['var ytInitialData = ', 'window["ytInitialData"] = ', 'ytInitialData = '];
   for (const marker of markers) {
     const start = html.indexOf(marker);
     if (start < 0) continue;
     let i = start + marker.length;
     while (i < html.length && /\s/.test(html[i])) i += 1;
     if (html[i] !== '{') continue;
-
     let depth = 0;
     let inString = false;
     let escaped = false;
@@ -51,10 +45,7 @@ function extractInitialData(html: string): any | null {
         else if (ch === '"') inString = false;
         continue;
       }
-      if (ch === '"') {
-        inString = true;
-        continue;
-      }
+      if (ch === '"') { inString = true; continue; }
       if (ch === '{') depth += 1;
       else if (ch === '}') {
         depth -= 1;
@@ -70,18 +61,14 @@ function extractInitialData(html: string): any | null {
 function candidateFromRenderer(renderer: any, rank: number): YouTubeDiscoveryCandidate | null {
   const videoId = String(renderer?.videoId || renderer?.navigationEndpoint?.watchEndpoint?.videoId || '').trim();
   if (!videoId) return null;
-  const title = firstText(renderer?.title || renderer?.headline) || `YouTube video ${videoId}`;
-  const channel = firstText(renderer?.ownerText || renderer?.shortBylineText || renderer?.longBylineText);
-  const published = firstText(renderer?.publishedTimeText);
-  const views = firstText(renderer?.viewCountText || renderer?.shortViewCountText);
   return {
     rank,
     url: `https://www.youtube.com/watch?v=${videoId}`,
     video_id: videoId,
-    title,
-    channel,
-    published_at: published,
-    views_text: views,
+    title: firstText(renderer?.title || renderer?.headline) || `YouTube video ${videoId}`,
+    channel: firstText(renderer?.ownerText || renderer?.shortBylineText || renderer?.longBylineText),
+    published_at: firstText(renderer?.publishedTimeText),
+    views_text: firstText(renderer?.viewCountText || renderer?.shortViewCountText),
     source: 'YOUTUBE_PUBLIC_SEARCH_HTML',
   };
 }
@@ -89,30 +76,37 @@ function candidateFromRenderer(renderer: any, rank: number): YouTubeDiscoveryCan
 function walkRenderers(root: any, limit: number): YouTubeDiscoveryCandidate[] {
   const out: YouTubeDiscoveryCandidate[] = [];
   const seen = new Set<string>();
-  const queue: any[] = [root];
+  const stack: any[] = [root];
   const rendererKeys = ['videoRenderer', 'gridVideoRenderer', 'compactVideoRenderer', 'reelItemRenderer'];
+  let visited = 0;
+  const maxVisited = 30000;
 
-  while (queue.length && out.length < limit) {
-    const node = queue.shift();
+  while (stack.length && out.length < limit && visited < maxVisited) {
+    const node = stack.pop();
+    visited += 1;
     if (!node || typeof node !== 'object') continue;
 
     for (const key of rendererKeys) {
-      if (node[key]) {
-        const item = candidateFromRenderer(node[key], out.length + 1);
-        if (item && !seen.has(item.video_id)) {
-          seen.add(item.video_id);
-          out.push(item);
-          if (out.length >= limit) break;
-        }
+      if (!node[key]) continue;
+      const item = candidateFromRenderer(node[key], out.length + 1);
+      if (item && !seen.has(item.video_id)) {
+        seen.add(item.video_id);
+        out.push(item);
+        if (out.length >= limit) break;
       }
     }
     if (out.length >= limit) break;
 
     if (Array.isArray(node)) {
-      for (const child of node) queue.push(child);
+      for (let i = node.length - 1; i >= 0; i -= 1) {
+        const child = node[i];
+        if (child && typeof child === 'object') stack.push(child);
+      }
     } else {
-      for (const child of Object.values(node)) {
-        if (child && typeof child === 'object') queue.push(child);
+      const values = Object.values(node);
+      for (let i = values.length - 1; i >= 0; i -= 1) {
+        const child = values[i];
+        if (child && typeof child === 'object') stack.push(child);
       }
     }
   }
@@ -120,36 +114,32 @@ function walkRenderers(root: any, limit: number): YouTubeDiscoveryCandidate[] {
 }
 
 export async function discoverYouTubePublicSearch(query: string, limit = 20, locale = 'ko-KR'): Promise<DiscoveryResult> {
-  const safeLimit = Math.max(1, Math.min(Number(limit || 20), 50));
+  const safeLimit = Math.max(1, Math.min(Number(limit || 20), 30));
   const language = String(locale || 'ko-KR').split('-')[0] || 'ko';
   const region = String(locale || 'ko-KR').split('-')[1] || 'KR';
   const sourceUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&hl=${encodeURIComponent(language)}&gl=${encodeURIComponent(region)}`;
 
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
     const response = await fetch(sourceUrl, {
       method: 'GET',
       redirect: 'follow',
+      signal: controller.signal,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36',
         'Accept-Language': `${language},en;q=0.8`,
         'Accept': 'text/html,application/xhtml+xml',
       },
     });
+    clearTimeout(timer);
     const html = await response.text();
-    if (!response.ok) {
-      return { ok: false, query, candidates: [], source_url: sourceUrl, error: `YOUTUBE_HTTP_${response.status}` };
-    }
+    if (!response.ok) return { ok: false, query, candidates: [], source_url: sourceUrl, error: `YOUTUBE_HTTP_${response.status}` };
+    if (html.length > 8_000_000) return { ok: false, query, candidates: [], source_url: sourceUrl, error: 'YOUTUBE_HTML_TOO_LARGE' };
 
     const initialData = extractInitialData(html);
     if (!initialData) {
-      return {
-        ok: false,
-        query,
-        candidates: [],
-        source_url: sourceUrl,
-        error: 'YT_INITIAL_DATA_NOT_FOUND',
-        warning: 'Public YouTube HTML is an unofficial fallback and can change without notice.',
-      };
+      return { ok: false, query, candidates: [], source_url: sourceUrl, error: 'YT_INITIAL_DATA_NOT_FOUND', warning: 'Public YouTube HTML can change or be consent-blocked.' };
     }
 
     const candidates = walkRenderers(initialData, safeLimit);
@@ -158,16 +148,10 @@ export async function discoverYouTubePublicSearch(query: string, limit = 20, loc
       query,
       candidates,
       source_url: sourceUrl,
-      warning: 'Public YouTube HTML is an unofficial fallback. Keep request frequency low and fall back to browser-assisted collection when blocked.',
+      warning: 'Unofficial low-frequency fallback. Use browser-assisted collection when blocked and do not treat this as an official YouTube API.',
       ...(candidates.length ? {} : { error: 'NO_VIDEO_RENDERERS_FOUND' }),
     };
   } catch (error: any) {
-    return {
-      ok: false,
-      query,
-      candidates: [],
-      source_url: sourceUrl,
-      error: String(error?.message || error || 'YOUTUBE_DISCOVERY_FAILED'),
-    };
+    return { ok: false, query, candidates: [], source_url: sourceUrl, error: String(error?.name === 'AbortError' ? 'YOUTUBE_DISCOVERY_TIMEOUT' : error?.message || error || 'YOUTUBE_DISCOVERY_FAILED') };
   }
 }
