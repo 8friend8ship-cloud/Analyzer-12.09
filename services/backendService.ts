@@ -30,6 +30,17 @@ export async function sendBackendEvent(action: string, payload: unknown): Promis
   return contentType.includes('application/json') ? response.json() : response.text();
 }
 
+export async function sendIntelligenceEvent(payload: Record<string, unknown>): Promise<unknown> {
+  const response = await fetch('/api/intelligence', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const text = await response.text().catch(() => '');
+  if (!response.ok) throw new Error(`Content OS intelligence write failed: ${response.status} ${text}`.trim());
+  try { return JSON.parse(text); } catch { return text; }
+}
+
 export async function readBackend(params: Record<string, string>): Promise<unknown> {
   const query = new URLSearchParams(params);
   const response = await fetch(`/api/backend?${query.toString()}`, { cache: 'no-store' });

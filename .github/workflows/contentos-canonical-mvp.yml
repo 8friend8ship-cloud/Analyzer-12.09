@@ -1,0 +1,46 @@
+name: ContentOS Canonical MVP
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm install
+      - name: Typecheck
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Canonical feature regression gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'contents-os:local-session:v2' App.tsx
+          grep -q 'saveLocalGeminiApiKey' App.tsx
+          grep -q 'LEGACY_STRENGTH_LIVE_YOUTUBE_SEARCH' services/centralBackdataService.ts
+          grep -q 'GEMINI_LEARNING_ANALYSIS' services/centralBackdataService.ts
+          grep -q 'runGeminiLearningAnalysis' services/geminiLearningService.ts
+          grep -q 'sendIntelligenceEvent' services/learningArchiveService.ts
+          grep -q 'CENTRAL_INTELLIGENCE_HUB' api/intelligence.ts
+          grep -q '@google/genai' package.json
+          if grep -q "genaiDisabled.ts" vite.config.ts; then
+            echo 'Gemini disable alias regression detected'
+            exit 1
+          fi
+      - name: Reject literal Google API secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -nE 'AIza[0-9A-Za-z_-]{30,}' -- ':!*.md' ':!*.txt'; then
+            echo 'Literal Google API key-like value found in tracked source'
+            exit 1
+          fi

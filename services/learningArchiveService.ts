@@ -1,4 +1,4 @@
-import { sendBackendEvent } from './backendService';
+import { sendIntelligenceEvent } from './backendService';
 
 const ARCHIVE_PREFIX = 'contents-os:learning-archive:v2:';
 const MAX_LOCAL_SESSIONS = 200;
@@ -30,9 +30,7 @@ const sanitize = (value: unknown): unknown => {
   if (!value || typeof value !== 'object') return value;
   return Object.entries(value as Record<string, unknown>).reduce((acc, [key, item]) => {
     const lower = key.toLowerCase();
-    if (lower.includes('apikey') || lower === 'key' || lower.includes('credential') || lower.includes('token')) {
-      return acc;
-    }
+    if (lower.includes('apikey') || lower === 'key' || lower.includes('credential') || lower.includes('token')) return acc;
     acc[key] = sanitize(item);
     return acc;
   }, {} as Record<string, unknown>);
@@ -55,9 +53,7 @@ export const getLearningArchive = (userId: string): LearningArchiveSession[] => 
     if (!raw) return [];
     const parsed: LearningArchiveSession[] = JSON.parse(raw);
     const pruned = parsed.map(item => pruneRawApiPayload(item));
-    if (JSON.stringify(pruned) !== JSON.stringify(parsed)) {
-      window.localStorage.setItem(storageKey(userId), JSON.stringify(pruned));
-    }
+    if (JSON.stringify(pruned) !== JSON.stringify(parsed)) window.localStorage.setItem(storageKey(userId), JSON.stringify(pruned));
     return pruned;
   } catch (error) {
     console.warn('[LearningArchive] failed to load:', error);
@@ -74,15 +70,26 @@ export const saveLearningArchiveSession = (session: LearningArchiveSession) => {
     const updated = [safeSession, ...deduped].slice(0, MAX_LOCAL_SESSIONS);
     window.localStorage.setItem(storageKey(session.userId), JSON.stringify(updated));
 
-    // Central learning keeps durable derived signals. Raw API payloads remain local/short-lived.
     const { youtube: _youtube, storedBaseline: _storedBaseline, ...durableLearning } = safeSession;
-    void sendBackendEvent('learning.archive.upsert', {
-      schema: 'CONTENT_OS_LEARNING_ARCHIVE_V2',
-      rawRetentionDays: 28,
-      session: durableLearning,
-    }).catch(error => {
-      console.warn('[LearningArchive] central mirror pending:', error);
-    });
+    void sendIntelligenceEvent({
+      event_id: `EVT_CONTENTOS_LEARNING_${safeSession.sessionId}`,
+      event_at: safeSession.createdAt,
+      producer_app_id: 'APP_CONTENT_OS',
+      data_stage: safeSession.seedCandidate ? 'SEED_CANDIDATE' : 'LEARNING',
+      entity_type: 'CONTENT_OS_LEARNING_ARCHIVE',
+      entity_id: safeSession.sessionId,
+      keyword: safeSession.query,
+      locale: 'ko-KR',
+      summary: `Content OS live/stored A-B learning session for ${safeSession.query}`,
+      keywords: Array.isArray((safeSession.gemini as any)?.keywordFamilies) ? (safeSession.gemini as any).keywordFamilies : [safeSession.query],
+      tags: ['CONTENT_OS','YOUTUBE','GEMINI','LEARNING_ARCHIVE','QUEENS_SEED_WRITEBACK'],
+      metrics: { qualityDelta: safeSession.qualityDelta, apiUsage: safeSession.apiUsage },
+      lineage_ids: safeSession.lineage,
+      confidence: 0.8,
+      status: 'LEARNING_READY',
+      consumer_scope: 'APP_CONTENT_OS|APP_ANALYZER|QUEENS|SEED|T1|T2',
+      memo: JSON.stringify({ schema: 'CONTENT_OS_LEARNING_ARCHIVE_V2', rawRetentionDays: 28, session: durableLearning }),
+    }).catch(error => console.warn('[LearningArchive] intelligence mirror pending:', error));
   } catch (error) {
     console.error('[LearningArchive] save failed:', error);
   }
