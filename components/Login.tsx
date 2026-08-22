@@ -41,6 +41,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
   const [isTermsOpen, setIsTermsOpen] = useState(false);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const isDevEnvironment = window.location.hostname === 'localhost';
+  const isPreviewE2E =
+    window.location.hostname === 'content-os-git-fix-contentos-la-b5d098-taedis-projects-5d092fa4.vercel.app'
+    && new URLSearchParams(window.location.search).get('e2e') === '1';
 
   const handleGoogleLogin = useCallback((response: any) => {
     try {
@@ -139,8 +142,17 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
                 </div>
             </form>
           ) : (
-            <div>
+            <div className="space-y-3">
                 <div id="google-signin-button" className="w-full flex justify-center"></div>
+                {isPreviewE2E && (
+                  <button
+                    type="button"
+                    onClick={() => onLogin({ email: 'preview-e2e@content-os.test', password: 'preview-only' })}
+                    className="w-full flex justify-center py-2.5 px-4 border border-blue-500 rounded-md text-sm font-medium text-blue-200 bg-blue-950 hover:bg-blue-900"
+                  >
+                    Preview E2E 테스트로 계속하기
+                  </button>
+                )}
             </div>
           )}
           
