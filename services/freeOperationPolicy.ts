@@ -11,14 +11,11 @@ const toJsonResponse = (body: unknown, status = 200) => new Response(JSON.string
 });
 
 /**
- * Free-operation policy.
- *
- * YouTube Data API v3 is never replaced with synthetic or unrelated backdata.
- * Before an official YouTube request leaves the browser we reserve its documented
- * quota cost in browser-local accounting (search.list=100 units; ordinary list calls=1).
- * Content OS checks browser + Drive/Sheets cache before reaching this path.
- *
- * Paid generative-language traffic remains blocked in free mode.
+ * Canonical Content OS transport policy.
+ * - Browser Gemini/generative-language calls are blocked.
+ * - Browser YouTube Data API calls never carry a user/browser key upstream.
+ * - YouTube requests are rewritten to the same-origin server-only proxy.
+ * - The server proxy calls the official API only when an approved server key exists.
  */
 export function installFreeOperationPolicy() {
   if ((globalThis as any).__CONTENT_OS_FREE_POLICY__) return;
@@ -41,7 +38,18 @@ export function installFreeOperationPolicy() {
     if (url.hostname === 'www.googleapis.com' && url.pathname.startsWith('/youtube/v3/')) {
       const endpoint = url.pathname.split('/').filter(Boolean).pop() || '';
       reserveYoutubeQuota(endpoint);
-      return nativeFetch(input as any, init);
+
+      const proxy = new URL('/api/youtube-proxy', globalThis.location?.origin || 'https://contents-os.com');
+      proxy.searchParams.set('endpoint', endpoint);
+      url.searchParams.forEach((value, key) => {
+        if (key !== 'key') proxy.searchParams.append(key, value);
+      });
+
+      return nativeFetch(proxy.toString(), {
+        ...init,
+        method: 'GET',
+        credentials: 'same-origin',
+      });
     }
 
     if (url.hostname.includes('generativelanguage.googleapis.com')) {
