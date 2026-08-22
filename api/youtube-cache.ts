@@ -2,6 +2,7 @@ const CACHE_BACKEND_URL = process.env.CONTENT_OS_CACHE_BACKEND_URL || 'https://s
 const COLLECTOR_BACKEND_URL = process.env.CONTENT_OS_BACKEND_URL || 'https://script.google.com/macros/s/AKfycbx5WTegTKUnyvFZC_qOaGBPlmKANLwXyNue19jLkFhdFwHnnp1E6_trZeVGdIg7B3GA/exec';
 const CLIENT_CACHE_VERSION = 'CONTENTOS_YOUTUBE_DRIVE_CACHE_V2_20260822';
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'OPTIONS']);
+const CACHE_TTL_MS = 28 * 24 * 60 * 60 * 1000;
 
 const parseJson = (text: string) => {
   try { return JSON.parse(text); } catch { return null; }
@@ -12,9 +13,7 @@ const parseFilters = (value: unknown) => {
   try {
     const parsed = JSON.parse(value);
     return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
+  } catch { return {}; }
 };
 
 const safeCachePayload = (body: any) => ({
@@ -41,10 +40,8 @@ const backendHeaders = () => {
 
 async function postToDriveBackend(action: string, payload: any) {
   const response = await fetch(CACHE_BACKEND_URL, {
-    method: 'POST',
-    headers: backendHeaders(),
-    body: JSON.stringify({ action, payload, source: 'content-os-vercel-cache' }),
-    redirect: 'follow',
+    method: 'POST', headers: backendHeaders(),
+    body: JSON.stringify({ action, payload, source: 'content-os-vercel-cache' }), redirect: 'follow',
   });
   const text = await response.text();
   return { response, json: parseJson(text), text };
@@ -52,17 +49,11 @@ async function postToDriveBackend(action: string, payload: any) {
 
 async function searchCentralCollector(query: string, limit: number) {
   const response = await fetch(COLLECTOR_BACKEND_URL, {
-    method: 'POST',
-    headers: backendHeaders(),
+    method: 'POST', headers: backendHeaders(),
     body: JSON.stringify({
-      action: 'search',
-      asset_type: 'VIDEO',
-      query,
-      limit: Math.max(1, Math.min(limit || 50, 50)),
-      target_apps: 'APP_CONTENT_OS',
-      use_case: 'FRONT_SEARCH_PUBLIC_METADATA',
-    }),
-    redirect: 'follow',
+      action: 'search', asset_type: 'VIDEO', query,
+      limit: Math.max(1, Math.min(limit || 50, 50)), target_apps: 'APP_CONTENT_OS',
+    }), redirect: 'follow',
   });
   const text = await response.text();
   return { response, json: parseJson(text) };
@@ -76,6 +67,27 @@ const parseCollectorNotes = (row: any) => {
   if (raw && typeof raw === 'object') return raw;
   if (typeof raw !== 'string' || !raw.trim()) return null;
   return parseJson(raw);
+};
+
+const videoIdFromRow = (row: any, meta: any) => {
+  const fromMeta = String(meta?.video_id || '').trim();
+  if (fromMeta) return fromMeta;
+  const rawUrl = String(row?.ARTICLE_URL ?? row?.url ?? '').trim();
+  try {
+    const url = new URL(rawUrl);
+    if (url.hostname.includes('youtu.be')) return url.pathname.replace(/^\//, '').split('/')[0] || '';
+    if (url.hostname.includes('youtube.com')) return url.searchParams.get('v') || '';
+  } catch { /* ignore */ }
+  return '';
+};
+
+const isReusableQueensRow = (row: any) => {
+  const primaryCode = String(row?.PRIMARY_CODE ?? row?.primary_code ?? '');
+  const useCase = String(row?.USE_CASE ?? row?.use_case ?? '');
+  return (
+    (primaryCode === 'CONTENT_OS_YOUTUBE_SEARCH' && useCase === 'FRONT_SEARCH_PUBLIC_METADATA') ||
+    (primaryCode === 'CONTENT_OS_COVERAGE_GAP' && useCase === 'QUEENS_CROSSCHECK_GAP_FILL')
+  );
 };
 
 async function lookupCentralCollectorFallback(
@@ -95,24 +107,21 @@ async function lookupCentralCollectorFallback(
     const now = Date.now();
     const videos: any[] = [];
     const seen = new Set<string>();
-    let expiresAt = 0;
+    let expiresAt = now + CACHE_TTL_MS;
+    let sourceKind = 'CENTRAL_DRIVE_COLLECTOR';
 
     for (const row of json.results) {
-      const primaryCode = String(row?.PRIMARY_CODE ?? row?.primary_code ?? '');
-      const useCase = String(row?.USE_CASE ?? row?.use_case ?? '');
-      if (primaryCode !== 'CONTENT_OS_YOUTUBE_SEARCH' || useCase !== 'FRONT_SEARCH_PUBLIC_METADATA') continue;
+      if (!isReusableQueensRow(row)) continue;
+      const meta = parseCollectorNotes(row) || {};
+      const rowQuery = normalize(meta.normalized_query || meta.query || row?._MATCH_QUERY || query);
+      if (rowQuery !== normalize(query)) continue;
 
-      const meta = parseCollectorNotes(row);
-      if (!meta || String(meta.cache_key || '') !== cacheKey) continue;
-      if (normalize(meta.normalized_query || meta.query) !== normalize(query)) continue;
-
-      const expiry = new Date(String(meta.expires_at || '')).getTime();
-      if (!Number.isFinite(expiry) || expiry <= now) continue;
-
-      const videoId = String(meta.video_id || '').trim();
+      const videoId = videoIdFromRow(row, meta);
       if (!videoId || seen.has(videoId)) continue;
       seen.add(videoId);
-      expiresAt = expiresAt ? Math.min(expiresAt, expiry) : expiry;
+
+      const explicitExpiry = new Date(String(meta.expires_at || '')).getTime();
+      if (Number.isFinite(explicitExpiry) && explicitExpiry > now) expiresAt = Math.min(expiresAt, explicitExpiry);
 
       const views = num(meta.view_count);
       const likes = num(meta.like_count);
@@ -122,43 +131,33 @@ async function lookupCentralCollectorFallback(
         channelId: String(meta.channel_id || ''),
         title: String(row?.TITLE ?? row?.title ?? ''),
         thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-        channelTitle: String(meta.channel_title || ''),
-        publishedAt: String(meta.published_at || ''),
+        channelTitle: String(meta.channel_title || row?.AUTHOR_SOURCE || ''),
+        publishedAt: String(meta.published_at || row?.PUBLISHED_AT || ''),
         subscribers: 0,
         viewCount: views,
         likeCount: likes,
         commentCount: comments,
         durationMinutes: num(meta.duration_minutes),
         engagementRate: views > 0 ? ((likes + comments) / views) * 100 : 0,
-        channelCountry: String(meta.country || ''),
+        channelCountry: String(meta.country || row?.COUNTRY || ''),
       });
 
+      if (String(row?.PRIMARY_CODE || '') === 'CONTENT_OS_COVERAGE_GAP') sourceKind = 'QUEENS_COVERAGE_GAP_REUSE';
       if (videos.length >= wanted) break;
     }
 
     if (!videos.length) return null;
 
     return {
-      ok: true,
-      hit: true,
-      source: 'CENTRAL_DRIVE_COLLECTOR',
-      backend: 'EXACT_CACHE_V3_PENDING_COLLECTOR_REUSE',
+      ok: true, hit: true, source: sourceKind,
+      backend: 'CENTRAL_STORED_BACKDATA_REUSE',
       payload: {
-        version: CLIENT_CACHE_VERSION,
-        cacheKey,
-        signature,
-        query,
-        normalizedQuery: normalize(query),
-        mode: 'video',
-        filters,
-        videos,
-        channels: [],
-        storedAt: new Date(now).toISOString(),
-        expiresAt: new Date(expiresAt).toISOString(),
+        version: CLIENT_CACHE_VERSION, cacheKey, signature, query,
+        normalizedQuery: normalize(query), mode: 'video', filters, videos, channels: [],
+        storedAt: new Date(now).toISOString(), expiresAt: new Date(expiresAt).toISOString(),
         dataPolicy: 'YOUTUBE_PUBLIC_METADATA_REFRESH_28D',
       },
-      result_count: videos.length,
-      api_calls: 0,
+      result_count: videos.length, api_calls: 0,
     };
   } catch (error) {
     console.warn('[ContentOS YouTube cache] central collector fallback unavailable:', error);
@@ -187,11 +186,7 @@ export default async function handler(req: any, res: any) {
       let driveResult: any = null;
       try {
         driveResult = await postToDriveBackend('contentos.youtube.cache.lookup.v3', {
-          cache_key: cacheKey,
-          signature,
-          query,
-          mode,
-          filters,
+          cache_key: cacheKey, signature, query, mode, filters,
         });
       } catch (error) {
         console.warn('[ContentOS YouTube cache] exact Drive cache backend pending:', error);
@@ -201,9 +196,6 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json(driveResult.json);
       }
 
-      // Temporary but real Drive reuse path: first-search public metadata is already mirrored
-      // into the live central collector. Match the exact cache_key so a repeat search can be
-      // served without another YouTube API request even before the V3 Apps Script dispatcher lands.
       const collectorHit = await lookupCentralCollectorFallback(cacheKey, signature, query, mode, filters);
       if (collectorHit) return res.status(200).json(collectorHit);
 
