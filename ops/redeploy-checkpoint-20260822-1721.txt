@@ -1,0 +1,3 @@
+Content OS approved server-side YouTube key redeploy checkpoint.
+Gemini API already disabled in contents-os-gcp.
+Trigger production redeploy so new Vercel Production environment variable is loaded.
