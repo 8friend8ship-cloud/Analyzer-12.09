@@ -208,9 +208,44 @@ export async function fetchCentralBackdata(
   filters: FilterState,
   mode: 'video' | 'channel' = 'video'
 ): Promise<CentralSearchResponse> {
+  const params = new URLSearchParams({
+    q: query,
+    mode,
+    minViews: String(filters.minViews || 0),
+    videoLength: filters.videoLength || 'any',
+    videoFormat: filters.videoFormat || 'any',
+    period: filters.period || 'any',
+    sortBy: filters.sortBy || 'viewCount',
+    resultsLimit: String(filters.resultsLimit || 50),
+    country: filters.country || 'KR',
+    category: filters.category || 'all',
+  });
+
+  try {
+    const response = await fetch(`/api/content-search?${params.toString()}`, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
+    const body = await response.json();
+    if ((response.ok || response.status === 202) && body?.ok && body?.status) {
+      return body as CentralSearchResponse;
+    }
+  } catch (error) {
+    console.warn('[Content OS] central backdata unavailable; checking optional local key fallback.', error);
+  }
+
   const apiKey = getActiveYouTubeApiKey();
   if (!apiKey) {
-    throw new Error('YouTube API 키가 없습니다. 화면 왼쪽 아래의 “YouTube API 키 등록”을 눌러 이 로그인 계정의 개인 키를 저장해주세요.');
+    return {
+      ok: true,
+      status: 'COLLECTING',
+      query,
+      normalizedQuery: query.trim(),
+      videos: [],
+      channels: [],
+      lineage: ['QUERY', 'QUEENS_REFRESH_REQUIRED'],
+      message: '중앙 Queens→Seed→T1→T2 백데이터 연결을 기다리는 중입니다. 개인 YouTube API 키는 선택 사항입니다.',
+    };
   }
 
   if (mode === 'channel') {
@@ -223,7 +258,7 @@ export async function fetchCentralBackdata(
       videos: [],
       channels,
       lineage: ['LOGIN_LOCAL_API_KEY', 'YOUTUBE_DATA_API_V3', 'CHANNEL_SEARCH'],
-      message: `개인 YouTube API 키로 채널 ${channels.length}건을 조회했습니다.`,
+      message: `개인 YouTube API 키 보조 경로로 채널 ${channels.length}건을 조회했습니다.`,
     };
   }
 
@@ -236,6 +271,6 @@ export async function fetchCentralBackdata(
     videos,
     channels: [],
     lineage: ['LOGIN_LOCAL_API_KEY', 'YOUTUBE_DATA_API_V3', 'VIDEO_SEARCH'],
-    message: `개인 YouTube API 키로 영상 ${videos.length}건을 조회했습니다.`,
+    message: `개인 YouTube API 키 보조 경로로 영상 ${videos.length}건을 조회했습니다.`,
   };
 }
