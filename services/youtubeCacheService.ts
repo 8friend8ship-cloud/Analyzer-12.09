@@ -3,6 +3,7 @@ import type { ChannelRankingData, FilterState, VideoData } from '../types';
 const LOCAL_CACHE_PREFIX = 'contents-os:youtube-query-cache:v2:';
 export const YOUTUBE_CACHE_VERSION = 'CONTENTOS_YOUTUBE_DRIVE_CACHE_V2_20260822';
 const CACHE_TTL_MS = 28 * 24 * 60 * 60 * 1000;
+const CENTRAL_MIRROR_LIMIT = 30;
 
 export type YoutubeCacheMode = 'video' | 'channel';
 
@@ -119,6 +120,59 @@ const fetchDriveCache = async (
   }
 };
 
+/**
+ * While the exact-query V3 Apps Script cache is being synchronized, every successful
+ * first search also feeds public YouTube metadata into the already-live central Drive
+ * collector. This is accumulation only; it is not trusted as an exact cache hit until
+ * the V3 dispatcher validates query/filter signature. No login id, API key, token or
+ * private collection membership is sent.
+ */
+const mirrorPublicSearchToCentralCollector = async (payload: YoutubeCachePayload) => {
+  if (payload.mode !== 'video' || !payload.videos.length) return;
+  const videos = payload.videos.slice(0, CENTRAL_MIRROR_LIMIT);
+  for (let i = 0; i < videos.length; i += 5) {
+    const group = videos.slice(i, i + 5);
+    await Promise.allSettled(group.map(video => {
+      const url = `https://www.youtube.com/watch?v=${encodeURIComponent(video.id)}`;
+      const metadata = {
+        cache_version: payload.version,
+        cache_key: payload.cacheKey,
+        query: payload.query,
+        normalized_query: payload.normalizedQuery,
+        video_id: video.id,
+        channel_id: video.channelId,
+        channel_title: video.channelTitle,
+        published_at: video.publishedAt,
+        view_count: video.viewCount,
+        like_count: video.likeCount,
+        comment_count: video.commentCount,
+        duration_minutes: video.durationMinutes,
+        country: video.channelCountry,
+        expires_at: payload.expiresAt,
+      };
+      return fetch('/api/backend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'enqueue',
+          asset_type: 'VIDEO',
+          url,
+          source_page_url: url,
+          platform: 'YOUTUBE',
+          title: video.title,
+          primary_code: 'CONTENT_OS_YOUTUBE_SEARCH',
+          keywords: [payload.normalizedQuery, video.channelTitle, 'content-os', 'youtube-search-cache'].filter(Boolean).join(','),
+          target_apps: 'APP_CONTENT_OS',
+          use_case: 'FRONT_SEARCH_PUBLIC_METADATA',
+          country: video.channelCountry || String(payload.filters.country || ''),
+          language: '',
+          notes: JSON.stringify(metadata).slice(0, 3500),
+        }),
+      });
+    }));
+  }
+};
+
 export async function readYoutubeCache(
   query: string,
   filters: FilterState,
@@ -172,12 +226,21 @@ export function createYoutubeCachePayload(
 
 export function storeYoutubeCache(payload: YoutubeCachePayload) {
   saveLocal(payload);
+
+  // Preferred exact-cache mirror. It becomes authoritative after the existing
+  // WEBAPP_TEMPLATE_05 Apps Script V3 dispatcher is live.
   void fetch('/api/youtube-cache', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   }).catch((error) => {
-    console.warn('[YouTubeCache] Drive mirror pending:', error);
+    console.warn('[YouTubeCache] exact Drive mirror pending:', error);
+  });
+
+  // Existing live collector keeps public metadata accumulating immediately even while
+  // the exact-cache Apps Script source sync is pending.
+  void mirrorPublicSearchToCentralCollector(payload).catch((error) => {
+    console.warn('[YouTubeCache] central public metadata mirror pending:', error);
   });
 }
 
