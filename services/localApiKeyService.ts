@@ -1,27 +1,21 @@
 import type { AppSettings } from '../types';
 
-const PREFIX = 'contents-os:local-api-keys:v1:';
+const PREFIX = 'contents-os:local-api-keys:v2:';
 const ACTIVE_USER_KEY = 'contents-os:active-local-api-user:v1';
 export const LOCAL_API_KEY_CHANGED_EVENT = 'contents-os:local-api-key-changed';
-
-// Compatibility sentinel: legacy UI paths that only check for a non-empty YouTube
-// key can continue into the transport layer, where requests are rewritten to the
-// same-origin server-only proxy. This is not an API credential.
-const CENTRAL_YOUTUBE_PROXY_SENTINEL = 'CONTENT_OS_CENTRAL_YOUTUBE_PROXY';
 
 const storageKey = (userId: string) => `${PREFIX}${userId}`;
 
 export const emptyLocalApiKeys = (): AppSettings['apiKeys'] => ({
-  youtube: CENTRAL_YOUTUBE_PROXY_SENTINEL,
+  youtube: '',
   analytics: '',
   reporting: '',
   gemini: '',
 });
 
 export const setActiveLocalApiUser = (userId: string) => {
+  if (!userId) return;
   window.localStorage.setItem(ACTIVE_USER_KEY, userId);
-  // Purge any legacy per-browser API credential once this runtime becomes active.
-  if (userId) window.localStorage.removeItem(storageKey(userId));
 };
 
 export const clearActiveLocalApiUser = () => {
@@ -31,17 +25,52 @@ export const clearActiveLocalApiUser = () => {
 export const getActiveLocalApiUser = () => window.localStorage.getItem(ACTIVE_USER_KEY) || '';
 
 export const loadLocalApiKeys = (userId: string): AppSettings['apiKeys'] => {
-  if (userId) {
-    try { window.localStorage.removeItem(storageKey(userId)); } catch (_) {}
+  if (!userId) return emptyLocalApiKeys();
+  try {
+    const raw = window.localStorage.getItem(storageKey(userId));
+    if (!raw) return emptyLocalApiKeys();
+    const parsed = JSON.parse(raw || '{}');
+    return {
+      ...emptyLocalApiKeys(),
+      youtube: String(parsed.youtube || ''),
+      gemini: String(parsed.gemini || ''),
+      analytics: String(parsed.analytics || ''),
+      reporting: String(parsed.reporting || ''),
+    };
+  } catch (error) {
+    console.warn('[LocalApiKey] failed to load local key pack:', error);
+    return emptyLocalApiKeys();
   }
-  return emptyLocalApiKeys();
 };
 
-export const saveLocalYouTubeApiKey = (userId: string, _youtube: string) => {
+export const saveLocalApiKeys = (userId: string, keys: Partial<AppSettings['apiKeys']>) => {
   if (!userId) return;
-  // Browser API key storage is retired. Remove any legacy value instead.
-  try { window.localStorage.removeItem(storageKey(userId)); } catch (_) {}
+  const current = loadLocalApiKeys(userId);
+  const next = { ...current, ...keys };
+  window.localStorage.setItem(storageKey(userId), JSON.stringify(next));
   window.dispatchEvent(new CustomEvent(LOCAL_API_KEY_CHANGED_EVENT, { detail: { userId } }));
 };
 
-export const getActiveYouTubeApiKey = () => CENTRAL_YOUTUBE_PROXY_SENTINEL;
+export const saveLocalYouTubeApiKey = (userId: string, youtube: string) => {
+  saveLocalApiKeys(userId, { youtube: String(youtube || '').trim() });
+};
+
+export const saveLocalGeminiApiKey = (userId: string, gemini: string) => {
+  saveLocalApiKeys(userId, { gemini: String(gemini || '').trim() });
+};
+
+export const clearLocalApiKeys = (userId: string) => {
+  if (!userId) return;
+  window.localStorage.removeItem(storageKey(userId));
+  window.dispatchEvent(new CustomEvent(LOCAL_API_KEY_CHANGED_EVENT, { detail: { userId } }));
+};
+
+export const getActiveYouTubeApiKey = () => {
+  const userId = getActiveLocalApiUser();
+  return userId ? loadLocalApiKeys(userId).youtube : '';
+};
+
+export const getActiveGeminiApiKey = () => {
+  const userId = getActiveLocalApiUser();
+  return userId ? loadLocalApiKeys(userId).gemini : '';
+};
