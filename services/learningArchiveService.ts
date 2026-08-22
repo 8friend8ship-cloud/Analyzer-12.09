@@ -1,7 +1,8 @@
 import { sendBackendEvent } from './backendService';
 
-const ARCHIVE_PREFIX = 'contents-os:learning-archive:v1:';
+const ARCHIVE_PREFIX = 'contents-os:learning-archive:v2:';
 const MAX_LOCAL_SESSIONS = 200;
+const RAW_API_RETENTION_MS = 28 * 24 * 60 * 60 * 1000;
 
 export interface LearningArchiveSession {
   sessionId: string;
@@ -37,11 +38,27 @@ const sanitize = (value: unknown): unknown => {
   }, {} as Record<string, unknown>);
 };
 
+const pruneRawApiPayload = (session: LearningArchiveSession, now = Date.now()): LearningArchiveSession => {
+  const created = Date.parse(session.createdAt || '');
+  if (!Number.isFinite(created) || now - created <= RAW_API_RETENTION_MS) return session;
+  const { youtube: _youtube, storedBaseline: _storedBaseline, ...durable } = session;
+  return {
+    ...durable,
+    lineage: Array.from(new Set([...(session.lineage || []), 'RAW_API_PAYLOAD_PRUNED_DERIVED_LEARNING_RETAINED'])),
+  };
+};
+
 export const getLearningArchive = (userId: string): LearningArchiveSession[] => {
   if (!userId) return [];
   try {
     const raw = window.localStorage.getItem(storageKey(userId));
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const parsed: LearningArchiveSession[] = JSON.parse(raw);
+    const pruned = parsed.map(item => pruneRawApiPayload(item));
+    if (JSON.stringify(pruned) !== JSON.stringify(parsed)) {
+      window.localStorage.setItem(storageKey(userId), JSON.stringify(pruned));
+    }
+    return pruned;
   } catch (error) {
     console.warn('[LearningArchive] failed to load:', error);
     return [];
@@ -57,9 +74,12 @@ export const saveLearningArchiveSession = (session: LearningArchiveSession) => {
     const updated = [safeSession, ...deduped].slice(0, MAX_LOCAL_SESSIONS);
     window.localStorage.setItem(storageKey(session.userId), JSON.stringify(updated));
 
+    // Central learning keeps durable derived signals. Raw API payloads remain local/short-lived.
+    const { youtube: _youtube, storedBaseline: _storedBaseline, ...durableLearning } = safeSession;
     void sendBackendEvent('learning.archive.upsert', {
-      schema: 'CONTENT_OS_LEARNING_ARCHIVE_V1',
-      session: safeSession,
+      schema: 'CONTENT_OS_LEARNING_ARCHIVE_V2',
+      rawRetentionDays: 28,
+      session: durableLearning,
     }).catch(error => {
       console.warn('[LearningArchive] central mirror pending:', error);
     });
@@ -69,8 +89,9 @@ export const saveLearningArchiveSession = (session: LearningArchiveSession) => {
 };
 
 export const exportLearningArchiveJson = (userId: string) => JSON.stringify({
-  schema: 'CONTENT_OS_LEARNING_ARCHIVE_EXPORT_V1',
+  schema: 'CONTENT_OS_LEARNING_ARCHIVE_EXPORT_V2',
   exportedAt: new Date().toISOString(),
+  rawRetentionDays: 28,
   userId,
   sessions: getLearningArchive(userId),
 }, null, 2);
