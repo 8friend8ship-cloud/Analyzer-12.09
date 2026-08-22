@@ -1,581 +1,308 @@
-import { GoogleGenAI, Type, Chat } from "@google/genai";
-import type { VideoData, AIInsights, AnalysisMode, ComparisonInsights, ChannelAnalysisData, AudienceProfile, AIThumbnailInsights, MyChannelAnalyticsData, CommentInsights, AI6StepReport, VideoDetailData, VideoComment } from '../types';
-import { getGeminiApiKey } from './apiKeyService';
-import { get, set } from './cacheService';
-import { handleGeminiError } from './errorService';
+import type {
+  VideoData,
+  AnalysisMode,
+  VideoDetailData,
+  VideoComment,
+} from '../types';
 
-const countryToLanguageMap: { [key: string]: string } = {
-    'US': 'English',
-    'JP': 'Japanese',
-    'GB': 'English',
-    'DE': 'German',
-    'FR': 'French',
-    'CN': 'Chinese (Simplified)',
-    'RU': 'Russian',
-    'CA': 'English',
-    'AU': 'English',
-    'VN': 'Vietnamese',
-    'ID': 'Indonesian',
-    'TH': 'Thai',
-    'MY': 'Malay',
-    'SG': 'English',
-    'PH': 'English',
-    'MX': 'Spanish',
-    'CL': 'Spanish',
-    'PE': 'Spanish',
-    'NZ': 'English',
-    'HK': 'Chinese (Traditional)',
-    'TW': 'Chinese (Traditional)',
-    'IN': 'Hindi',
-    'BN': 'Malay',
-    'PG': 'English',
-    'KR': 'Korean',
-    'BR': 'Portuguese',
+/**
+ * Content OS canonical runtime: deterministic metadata/backdata analytics only.
+ * No Gemini SDK, no browser AI credential, no generative-language network call.
+ */
+
+const STOPWORDS = new Set([
+  'the','a','an','and','or','to','of','in','on','for','with','is','are','this','that','from','how','why',
+  '영상','유튜브','youtube','shorts','쇼츠','official','video','feat','ft','2026','2025'
+]);
+
+const normalizeWords = (text: string) =>
+  String(text || '')
+    .toLowerCase()
+    .replace(/[^0-9a-zA-Z가-힣ぁ-んァ-ヶ一-龥\s]/g, ' ')
+    .split(/\s+/)
+    .map(v => v.trim())
+    .filter(v => v.length >= 2 && !STOPWORDS.has(v));
+
+const topTerms = (texts: string[], limit = 10): string[] => {
+  const counts = new Map<string, number>();
+  texts.flatMap(normalizeWords).forEach(term => counts.set(term, (counts.get(term) || 0) + 1));
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([term]) => term);
 };
 
-
-// Uses the Gemini API to translate a keyword.
-export const translateKeyword = async (keyword: string, targetCountry: string): Promise<string> => {
-  const targetLanguage = countryToLanguageMap[targetCountry];
-  if (!targetLanguage) {
-    console.log(`No language mapping for country ${targetCountry}, returning original keyword.`);
-    return keyword;
-  }
-
-  console.log(`Translating "${keyword}" to ${targetLanguage} for country ${targetCountry}`);
-
-    try {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const translationPrompt = `Translate the following Korean keyword into ${targetLanguage}. Return only the translated keyword and nothing else.\nKorean keyword: "${keyword}"`;
-    
-    const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: translationPrompt
-    });
-
-    const translatedText = response.text.trim().replace(/"/g, ''); // Clean up quotes
-    console.log(`Translation successful: ${translatedText}`);
-    return translatedText;
-
-  } catch (error) {
-    console.error("Error calling Gemini API for translation:", error);
-    // For translation, we might want to just return the original keyword instead of throwing
-    return `${keyword} (${targetCountry} translation)`;
-  }
+const average = (values: number[]) => values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+const median = (values: number[]) => {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const m = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[m] : (sorted[m - 1] + sorted[m]) / 2;
 };
+const number = (value: unknown) => Number(value || 0) || 0;
+const engagement = (v: any) => number(v.engagementRate) || ((number(v.likeCount) + number(v.commentCount)) / Math.max(1, number(v.viewCount))) * 100;
 
-export const getAIChannelRecommendations = async (category: string, keyword: string): Promise<{ korea: { name: string; reason: string }[]; global: { name: string; reason: string }[] }> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const prompt = `
-    As "Content OS", based on the YouTube category "${category}" and keyword "${keyword}", recommend benchmark channels.
-    - Recommend 2 fast-growing Korean channels.
-    - Recommend 2 globally recognized channels.
-    Provide a brief, one-sentence reason for each recommendation.
-    Respond ONLY in JSON format like this: {"korea": [{"name": "channel_name", "reason": "reason_text"}], "global": [{"name": "channel_name", "reason": "reason_text"}]}`;
-    
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: prompt,
-            config: { responseMimeType: "application/json" }
-        });
-        const text = response.text;
-        if (!text) throw new Error("Empty response from AI");
-        return JSON.parse(text);
-    } catch (error) {
-        console.error("Error getting AI channel recommendations:", error);
-        // We don't throw here to avoid breaking the UI, but we could
-        return { korea: [], global: [] };
-    }
-};
-
-
-// Uses the Gemini API to generate insights from video data.
-export const getAIInsights = async (videoData: VideoData[], query: string, mode: AnalysisMode): Promise<AIInsights> => {
-    const cacheKey = `gemini-insights-${mode}-${query.toLowerCase().replace(/\s+/g, '-')}`;
-    const cached = get<AIInsights>(cacheKey, 86400000); // 24-hour cache
-
-    if (cached) {
-        console.log(`[Cache] Gemini insights HIT for key: ${cacheKey}`);
-        return cached;
-    }
-    console.log(`[Cache] Gemini insights MISS for key: ${cacheKey}`);
-    
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const videoInfo = videoData.map(v => `Title: ${v.title}, Views: ${v.viewCount}`).join('\n');
-    const prompt = `
-    As "Content OS", analyze the following YouTube video data for the search query "${query}" (mode: ${mode}).
-    Provide a concise summary, identify up to 3 common patterns, and suggest up to 3 actionable recommendations for a creator.
-    Respond ONLY in JSON format: {"summary": "...", "patterns": ["...", "..."], "recommendations": ["...", "..."]}.
-    Video data:\n${videoInfo}`;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: prompt,
-            config: { responseMimeType: "application/json" }
-        });
-        const text = response.text;
-        if (!text) throw new Error("Empty AI response");
-        const result = JSON.parse(text);
-        set(cacheKey, result); // Set result in cache
-        return result;
-    } catch (error) {
-        console.error("Error getting AI insights:", error);
-        throw handleGeminiError(error);
-    }
-};
-
-export const getAIComparisonInsights = async (channelA: {query: string, videos: VideoData[]}, channelB: {query: string, videos: VideoData[]}): Promise<ComparisonInsights> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const prompt = `As "Content OS", compare two YouTube channels based on their recent videos.
-    Channel A (${channelA.query}): ${channelA.videos.length} videos.
-    Channel B (${channelB.query}): ${channelB.videos.length} videos.
-    Analyze and compare their strategies. Provide a summary, observed characteristics for each, and a final recommendation.
-    Respond ONLY in JSON format: {"summary": "...", "channelA_summary": {"name": "${channelA.query}", "observedCharacteristics": [...]}, "channelB_summary": {"name": "${channelB.query}", "observedCharacteristics": [...]}, "recommendation": "..."}`;
-    
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-3.1-pro-preview',
-            contents: prompt,
-            config: { responseMimeType: "application/json" }
-        });
-        const text = response.text;
-        if (!text) throw new Error("Empty AI response");
-        return JSON.parse(text);
-    } catch (error) {
-        console.error("Error in getAIComparisonInsights:", error);
-        throw handleGeminiError(error);
-    }
+export const translateKeyword = async (keyword: string, _targetCountry: string): Promise<string> => {
+  // Translation must come from prepared language packs. Never invent a translation here.
+  return String(keyword || '').trim();
 };
 
 export const getRelatedKeywords = async (keyword: string): Promise<string[]> => {
-    if (!keyword.trim()) return [];
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const prompt = `Given the YouTube keyword "${keyword}", generate a list of 5 related or niche keywords for content ideas. Respond ONLY in a JSON array of strings: ["keyword1", "keyword2", ...]`;
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: prompt,
-            config: { responseMimeType: "application/json" }
-        });
-        const text = response.text;
-        if (!text) return [];
-        return JSON.parse(text);
-    } catch (error) {
-        console.error("Error getting related keywords:", error);
-        return [];
-    }
+  const base = String(keyword || '').trim();
+  if (!base) return [];
+  return [
+    `${base} 후기`,
+    `${base} 추천`,
+    `${base} 비교`,
+    `${base} 쇼츠`,
+    `${base} 최신`,
+  ];
 };
 
-export const getAITopicKeywords = async (videoData: VideoData[]): Promise<string[]> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const videoTitles = videoData.map(v => v.title).join(', ');
-    const prompt = `As "Content OS", based on these YouTube video titles (${videoTitles}), generate 10 relevant topic keywords for content creation. Respond ONLY in a JSON array of strings.`;
-    
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: prompt,
-            config: { responseMimeType: "application/json" }
-        });
-        const text = response.text;
-        if (!text) return [];
-        return JSON.parse(text);
-    } catch (error) {
-        console.error("Error getting topic keywords:", error);
-        return [];
-    }
+export const getAITopicKeywords = async (videoData: VideoData[]): Promise<string[]> =>
+  topTerms((videoData || []).map(v => v.title || ''), 10);
+
+export const getAIInsights = async (
+  videoData: VideoData[],
+  query: string,
+  mode: AnalysisMode
+): Promise<any> => {
+  const videos = videoData || [];
+  if (!videos.length) {
+    return {
+      summary: `저장된 ${query || '검색'} 데이터가 없습니다.`,
+      patterns: [],
+      suggestions: ['Queens/Seed 저장 범위를 먼저 확인하세요.'],
+    };
+  }
+
+  const views = videos.map(v => number(v.viewCount));
+  const avgViews = Math.round(average(views));
+  const medViews = Math.round(median(views));
+  const avgEng = average(videos.map(engagement));
+  const terms = topTerms(videos.map(v => v.title || ''), 5);
+  const newest = [...videos].sort((a: any, b: any) => new Date(b.publishedAt || 0).getTime() - new Date(a.publishedAt || 0).getTime())[0];
+
+  return {
+    summary: `${query || '현재 조건'} ${mode} 저장 데이터 ${videos.length}건 기준 평균 조회수 ${avgViews.toLocaleString()}, 중앙값 ${medViews.toLocaleString()}, 평균 참여율 약 ${avgEng.toFixed(2)}%입니다.`,
+    patterns: [
+      terms.length ? `제목 반복 키워드: ${terms.join(', ')}` : '반복 제목 키워드가 뚜렷하지 않습니다.',
+      avgViews > medViews * 1.5 ? '소수 상위 영상이 평균 조회수를 크게 끌어올리는 분포입니다.' : '조회수가 일부 영상에 과도하게 집중되지는 않았습니다.',
+      newest?.title ? `최근 저장 영상 예시: ${newest.title}` : '최근 영상 메타가 없습니다.',
+    ],
+    suggestions: [
+      '상위 조회 영상의 제목 구조와 길이를 먼저 비교하세요.',
+      '같은 키워드의 최신 영상이 Seed에 들어왔는지 확인하세요.',
+      '새 외부 사실이 필요한 경우에만 중앙 YouTube 수집기를 호출하세요.',
+    ],
+  };
 };
 
-export const getAIChannelComprehensiveAnalysis = async (
-    channelStats: { name: string; publishedAt: string; subscriberCount: number; totalViews: number; totalVideos: number; description: string },
-    videoSnippets: { title: string; tags: string[] }[],
-    knownFirstVideoDate: string | null
-): Promise<{
-    overview: Omit<ChannelAnalysisData['overview'], 'uploadPattern'>;
-    audienceProfile: AudienceProfile;
-}> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const prompt = `As "Content OS", analyze the provided channel data.
-    IMPORTANT: For the 'audienceProfile', this is a creative exercise. Create a *hypothetical marketing persona*. DO NOT present it as factual statistics. Infer interests and create a plausible, fictional demographic breakdown for this persona.
-    Respond ONLY in JSON format: {"overview": {"channelFocus": {...}}, "audienceProfile": {"summary": "...", "interests": [...], "genderRatio": [{"label": "Male", "value": ...}], "ageGroups": [{"label": "18-24", "value": ...}], "topCountries": [{"label": "KR", "value": ...}]}}`;
+export const getAIComparisonInsights = async (
+  channelA: { query: string; videos: VideoData[] },
+  channelB: { query: string; videos: VideoData[] }
+): Promise<any> => {
+  const stats = (videos: VideoData[]) => ({
+    count: videos.length,
+    views: Math.round(average(videos.map(v => number(v.viewCount)))),
+    engagement: average(videos.map(engagement)),
+    terms: topTerms(videos.map(v => v.title || ''), 4),
+  });
+  const a = stats(channelA.videos || []);
+  const b = stats(channelB.videos || []);
+  const viewLead = a.views === b.views ? '평균 조회수는 비슷합니다.' : a.views > b.views ? `${channelA.query}의 평균 조회수가 더 높습니다.` : `${channelB.query}의 평균 조회수가 더 높습니다.`;
 
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-3.1-pro-preview',
-            contents: prompt,
-            config: { responseMimeType: "application/json" }
-        });
-        const text = response.text;
-        if (!text) throw new Error("Empty AI response");
-        return JSON.parse(text);
-    } catch(e) {
-        console.error("Error in getAIChannelComprehensiveAnalysis", e);
-        throw handleGeminiError(e);
-    }
+  return {
+    summary: `${channelA.query} ${a.count}건과 ${channelB.query} ${b.count}건의 저장 메타데이터를 비교했습니다. ${viewLead}`,
+    suggestion: '같은 기간·같은 영상 수 조건으로 다시 맞춘 뒤 제목 패턴과 참여율을 나란히 보세요.',
+    channelA_summary: {
+      name: channelA.query,
+      observedCharacteristics: [
+        `평균 조회수 ${a.views.toLocaleString()}`,
+        `평균 참여율 약 ${a.engagement.toFixed(2)}%`,
+        a.terms.length ? `반복 제목어: ${a.terms.join(', ')}` : '반복 제목어 부족',
+      ],
+    },
+    channelB_summary: {
+      name: channelB.query,
+      observedCharacteristics: [
+        `평균 조회수 ${b.views.toLocaleString()}`,
+        `평균 참여율 약 ${b.engagement.toFixed(2)}%`,
+        b.terms.length ? `반복 제목어: ${b.terms.join(', ')}` : '반복 제목어 부족',
+      ],
+    },
+  };
 };
 
-export const getAIChannelDashboardInsights = async (
-    channelName: string,
-    stats: { subscribers: number; totalViews: number; videoCount: number },
-    recentVideos: { title: string; views: number; publishedAt: string }[]
-): Promise<Partial<MyChannelAnalyticsData>> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    // This prompt asks for strategic advice, not calculation.
-    const prompt = `As "Content OS", generate strategic insights for the YouTube channel "${channelName}".
-    - aiExecutiveSummary: A summary, 2 positive patterns, 2 growth areas.
-    - aiGrowthInsight: A summary of growth potential, 2 positive patterns, 2 growth areas.
-    - aiFunnelInsight: A summary of the user journey, 2 positive patterns, 2 growth areas.
-    - contentPopularityPatterns: Infer title patterns, optimal length, and thumbnail style.
-    - contentIdeas: Suggest 2 new video ideas with titles and reasons.
-    - viewerPersona: Create a *hypothetical* viewer persona with a name, description, and strategy.
-    Respond ONLY in the specified JSON structure.`;
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-3.1-pro-preview',
-            contents: prompt,
-            config: { responseMimeType: "application/json" }
-        });
-        const text = response.text;
-        if (!text) throw new Error("Empty AI response");
-        return JSON.parse(text);
-    } catch(e) {
-        console.error("Error in getAIChannelDashboardInsights", e);
-        throw handleGeminiError(e);
-    }
+export const getAIChannelRecommendations = async (
+  _category: string,
+  _keyword: string
+): Promise<{ korea: { name: string; reason: string }[]; global: { name: string; reason: string }[] }> => ({
+  korea: [],
+  global: [],
+});
+
+export const getAICommentInsights = async (comments: VideoComment[]): Promise<any> => {
+  const rows = (comments || []).map(c => String((c as any).text || '')).filter(Boolean);
+  if (!rows.length) return { summary: '분석할 저장 댓글이 없습니다.', positivePoints: [], negativePoints: [] };
+  const terms = topTerms(rows, 8);
+  return {
+    summary: `저장 댓글 ${rows.length}건의 반복 표현을 요약했습니다. 감정이나 의도는 추정하지 않습니다.`,
+    positivePoints: terms.slice(0, 3).map(t => `반복 언급: ${t}`),
+    negativePoints: terms.slice(3, 6).map(t => `추가 확인할 반복 언급: ${t}`),
+  };
 };
 
-// Re-enabled AI Comment Insights
-export const getAICommentInsights = async (comments: VideoComment[]): Promise<CommentInsights> => {
-    if (comments.length === 0) {
-        return {
-            summary: "분석할 댓글이 없습니다.",
-            positivePoints: [],
-            negativePoints: [],
-        };
-    }
-
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const commentTexts = comments.slice(0, 50).map(c => c.text).join('\n---\n');
-    const prompt = `As "Content OS", based on the following YouTube comments, analyze the viewers' reactions.
-    1.  Provide a concise one-sentence summary of the overall sentiment.
-    2.  Extract up to 3 key positive points or compliments.
-    3.  Extract up to 3 key negative points or suggestions for improvement.
-    
-    Return the response ONLY in JSON format, following this schema. Do not add any extra text or markdown.
-    
-    Comments:
-    ${commentTexts}`;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        summary: { type: Type.STRING },
-                        positivePoints: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        negativePoints: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    },
-                },
-            },
-        });
-        const text = response.text;
-        if (!text) {
-            throw new Error("Received empty response from Gemini API.");
-        }
-        const jsonResponse = JSON.parse(text);
-        return jsonResponse;
-    } catch (error) {
-        console.error("Error in getAICommentInsights:", error);
-        return {
-            summary: "Content OS 댓글 분석 중 오류가 발생했습니다.",
-            positivePoints: [],
-            negativePoints: [],
-        };
-    }
-};
-
-export const getAIDeepDiveReport = async (videoData: VideoDetailData): Promise<AI6StepReport> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-
-    const prompt = `
-    Based on the provided YouTube video data, generate a deep-dive analysis report.
-    Video Title: "${videoData.title}"
-    Channel: "${videoData.channelTitle}"
-    Metrics: ${videoData.viewCount.toLocaleString()} views, ${videoData.likeCount.toLocaleString()} likes, ${videoData.commentCount.toLocaleString()} comments.
-    Published: ${videoData.publishedAt}
-    Duration: ${videoData.durationMinutes} minutes
-    Description: "${videoData.description}"
-    Top Comments:
-    ${videoData.comments.slice(0, 5).map(c => `- ${c.text}`).join('\n')}
-    `;
-
-    const systemInstruction = `You are 'Johnson', an expert YouTube analyst for 'Content OS'. Your role is to be a GUIDE, not a definitive ANSWER. You MUST follow these rules:
-1.  **Policy First:** Comply strictly with YouTube API policies. You have NOT watched the video; your analysis is based only on provided metadata (title, comments, stats).
-2.  **No Definitive Statements:** Use phrases of possibility like "it seems", "it's likely", "this pattern suggests". NEVER claim to know the algorithm or viewer intent.
-3.  **Handle Missing Data:** If comments are missing, explicitly state "Comment data is unavailable, so this interpretation is based on metrics and metadata alone."
-4.  **Strict JSON Output:** Your entire response must be ONLY the JSON object defined in the schema.`;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-3.1-pro-preview",
-            contents: prompt,
-            config: {
-                systemInstruction: systemInstruction,
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        currentStage: { type: Type.STRING },
-                        viewerValue: { type: Type.STRING },
-                        dataFacts: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        interpretation: { type: Type.STRING },
-                        engagementLevers: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    type: { type: Type.STRING, enum: ['comment', 'like', 'subscribe'] },
-                                    recommendation: { type: Type.STRING },
-                                },
-                                required: ["type", "recommendation"]
-                            },
-                        },
-                        nextAction: { type: Type.STRING },
-                    },
-                    required: ["currentStage", "viewerValue", "dataFacts", "interpretation", "engagementLevers", "nextAction"]
-                },
-            },
-        });
-        
-        const text = response.text;
-        if (!text) {
-            throw new Error("Received empty response from Gemini API.");
-        }
-        const jsonResponse = JSON.parse(text);
-        return jsonResponse as AI6StepReport;
-    } catch (error) {
-        console.error("Error in getAIDeepDiveReport:", error);
-        throw new Error("AI 분석 리포트를 생성하는 중 오류가 발생했습니다.");
-    }
+export const getAIDeepDiveReport = async (videoData: VideoDetailData): Promise<any> => {
+  const views = number((videoData as any).viewCount);
+  const likes = number((videoData as any).likeCount);
+  const comments = number((videoData as any).commentCount);
+  const er = ((likes + comments) / Math.max(1, views)) * 100;
+  return {
+    currentStage: '저장 메타데이터 관찰 단계',
+    viewerValue: '영상 원본을 시청하지 않았으므로 제목·통계·저장 댓글에서 확인 가능한 범위만 제시합니다.',
+    dataFacts: [
+      `조회수 ${views.toLocaleString()}`,
+      `좋아요 ${likes.toLocaleString()}`,
+      `댓글 ${comments.toLocaleString()}`,
+      `단순 참여율 약 ${er.toFixed(2)}%`,
+    ],
+    interpretation: '이 수치는 비교 기준을 만드는 참고값입니다. 알고리즘이나 시청자 의도를 단정하지 않습니다.',
+    engagementLevers: [
+      { type: 'comment', recommendation: '저장 댓글에서 반복 질문을 찾아 다음 콘텐츠 후보로 사용하세요.' },
+      { type: 'like', recommendation: '같은 채널의 유사 주제 영상과 참여율을 비교하세요.' },
+      { type: 'subscribe', recommendation: '구독 전환은 공개 영상 통계만으로 직접 판정하지 마세요.' },
+    ],
+    nextAction: '같은 주제의 상위/중앙값 영상을 3~5개 나란히 비교하세요.',
+  };
 };
 
 export const getAIThumbnailAnalysis = async (
   videoData: { id: string; title: string; thumbnailUrl: string }[],
   query: string
-): Promise<AIThumbnailInsights> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    
-    const videoListString = videoData.map((v, i) => `${i+1}. Title: "${v.title}", Thumbnail URL: ${v.thumbnailUrl}`).join('\n');
-    
-    const prompt = `As "Content OS", analyze the following top-performing YouTube videos for the keyword "${query}".
-    
-    Videos:
-    ${videoListString}
-    
-    Provide a detailed strategic analysis of their titles and thumbnails. Respond ONLY in the specified JSON format.`;
+): Promise<any> => {
+  const titles = (videoData || []).map(v => v.title || '');
+  const terms = topTerms(titles, 6);
+  const lengths = titles.map(t => t.length);
+  const avgLength = Math.round(average(lengths));
+  const limitation = '이미지 픽셀은 분석하지 않았습니다. 저장된 제목/썸네일 URL 메타만 사용합니다.';
+  const base = String(query || '').trim();
 
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-3.1-pro-preview',
-            contents: prompt,
-            config: { 
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        analysis: {
-                            type: Type.OBJECT,
-                            properties: {
-                                focalPoint: { type: Type.STRING },
-                                colorContrast: { type: Type.STRING },
-                                faceEmotionCTR: { type: Type.STRING },
-                                textReadability: { type: Type.STRING },
-                                brandingConsistency: { type: Type.STRING },
-                                mobileReadability: { type: Type.STRING },
-                                categoryRelevance: { type: Type.STRING },
-                                titlePatterns: { type: Type.STRING },
-                                titleLength: { type: Type.STRING },
-                                titleCredibility: { type: Type.STRING }
-                            },
-                            required: ["focalPoint", "colorContrast", "faceEmotionCTR", "textReadability", "brandingConsistency", "mobileReadability", "categoryRelevance", "titlePatterns", "titleLength", "titleCredibility"]
-                        },
-                        results: {
-                            type: Type.OBJECT,
-                            properties: {
-                                thumbnailSummary: { type: Type.STRING },
-                                improvedConcepts: {
-                                    type: Type.ARRAY,
-                                    items: {
-                                        type: Type.OBJECT,
-                                        properties: {
-                                            concept: { type: Type.STRING },
-                                            description: { type: Type.STRING }
-                                        },
-                                        required: ["concept", "description"]
-                                    }
-                                },
-                                textCandidates: {
-                                    type: Type.ARRAY,
-                                    items: { type: Type.STRING }
-                                },
-                                designGuide: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        colors: { type: Type.STRING },
-                                        fonts: { type: Type.STRING },
-                                        layout: { type: Type.STRING }
-                                    },
-                                    required: ["colors", "fonts", "layout"]
-                                },
-                                titleSummary: { type: Type.STRING },
-                                titleSuggestions: {
-                                    type: Type.ARRAY,
-                                    items: {
-                                        type: Type.OBJECT,
-                                        properties: {
-                                            title: { type: Type.STRING },
-                                            reason: { type: Type.STRING }
-                                        },
-                                        required: ["title", "reason"]
-                                    }
-                                }
-                            },
-                            required: ["thumbnailSummary", "improvedConcepts", "textCandidates", "designGuide", "titleSummary", "titleSuggestions"]
-                        }
-                    },
-                    required: ["analysis", "results"]
-                }
-            }
-        });
-        const text = response.text;
-        if (!text) throw new Error("Empty AI response");
-        return JSON.parse(text);
-    } catch (e) {
-        console.error("Error in getAIThumbnailAnalysis:", e);
-        throw handleGeminiError(e);
-    }
-};
-
-export const getAIRankingAnalysis = async (
-  items: any[],
-  type: 'channels' | 'videos'
-): Promise<{ id: string; insight: string }[]> => {
-    // This function is disabled as it's not currently used in the UI.
-    return [];
+  return {
+    analysis: {
+      focalPoint: limitation,
+      colorContrast: limitation,
+      faceEmotionCTR: limitation,
+      textReadability: limitation,
+      brandingConsistency: '동일 채널의 반복 썸네일 URL/제목 패턴을 별도 비교해야 합니다.',
+      mobileReadability: '이미지 픽셀 분석 없이 모바일 가독성을 판정하지 않습니다.',
+      categoryRelevance: terms.length ? `제목 기준 반복 주제어: ${terms.join(', ')}` : '제목 반복 주제어 부족',
+      titlePatterns: terms.length ? `반복어 중심: ${terms.join(', ')}` : '뚜렷한 반복 패턴 없음',
+      titleLength: `평균 제목 길이 약 ${avgLength}자`,
+      titleCredibility: '메타데이터만으로 과장 여부를 단정하지 않습니다.',
+    },
+    results: {
+      thumbnailSummary: limitation,
+      improvedConcepts: [
+        { concept: '한 메시지', description: '제목의 핵심 주제 하나와 썸네일 메시지를 일치시키세요.' },
+        { concept: '모바일 우선', description: '실제 썸네일을 확인할 때 작은 화면에서 핵심 요소가 읽히는지 검증하세요.' },
+      ],
+      textCandidates: terms.slice(0, 3),
+      designGuide: {
+        colors: '저장 이미지 픽셀 분석 없이 색상을 추천하지 않습니다.',
+        fonts: '짧고 큰 핵심 문구를 우선 검토하세요.',
+        layout: '핵심 피사체와 짧은 문구가 겹치지 않는 단순 배치를 검토하세요.',
+      },
+      titleSummary: `${base || '현재 키워드'} 상위 저장 제목 ${titles.length}건, 평균 ${avgLength}자 기준입니다.`,
+      titleSuggestions: [
+        { title: `${base} 핵심 정리`, reason: '검색어를 앞에 두는 기본 구조' },
+        { title: `${base} 비교`, reason: '비교 의도를 명확히 하는 구조' },
+      ].filter(x => base),
+    },
+  };
 };
 
 export const getAITrendingInsight = async (
-    countryCode: string,
-    trendingVideos: { title: string; channelTitle: string }[],
-    excludedCategories: string[] = [],
-    topChannelsList: string[] = []
-): Promise<{
-  summary: string;
-  viralFactors: string[];
-  topKeywords: string[];
-}> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const prompt = `As "Content OS", analyze today's YouTube trends in ${countryCode}, excluding categories: [${excludedCategories.join(', ')}].
-    Based on the top video titles and top channels provided, generate:
-    1. A summary of the main trend.
-    2. 3-4 key viral factors.
-    3. The top 10 most relevant keywords from these trends.
-    Respond ONLY in JSON format: {"summary": "...", "viralFactors": [...], "topKeywords": [...]}`;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: prompt,
-            config: { responseMimeType: "application/json" }
-        });
-        const text = response.text;
-        if (!text) throw new Error("Empty AI response");
-        return JSON.parse(text);
-    } catch (e) {
-        console.error("Error in getAITrendingInsight", e);
-        throw handleGeminiError(e);
-    }
+  countryCode: string,
+  trendingVideos: { title: string; channelTitle: string }[],
+  _excludedCategories: string[] = [],
+  _topChannelsList: string[] = []
+): Promise<{ summary: string; viralFactors: string[]; topKeywords: string[] }> => {
+  const titles = (trendingVideos || []).map(v => v.title || '');
+  const keywords = topTerms(titles, 10);
+  return {
+    summary: `${countryCode} 저장 트렌드 영상 ${titles.length}건의 제목 빈도를 기준으로 정리했습니다.`,
+    viralFactors: keywords.slice(0, 4).map(k => `반복 제목 신호: ${k}`),
+    topKeywords: keywords,
+  };
 };
 
 export const getAIBenchmarkRecommendations = async (
-    channelName: string,
-    titlePatterns: string[]
-): Promise<{ name: string; reason: string }[]> => {
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const prompt = `For a YouTube channel named "${channelName}" which often uses title patterns like "${titlePatterns.join(', ')}", recommend 3 other fast-growing YouTube channels to benchmark. Provide a one-sentence reason for each. Respond ONLY in JSON format: [{"name": "...", "reason": "..."}]`;
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: prompt,
-            config: { responseMimeType: "application/json" }
-        });
-        const text = response.text;
-        if (!text) return [];
-        return JSON.parse(text);
-    } catch (e) {
-        console.error("Error getting benchmark recommendations:", e);
-        return [];
-    }
+  _channelName: string,
+  _titlePatterns: string[]
+): Promise<{ name: string; reason: string }[]> => [];
+
+export const getAIRankingAnalysis = async (
+  items: any[],
+  _type: 'channels' | 'videos'
+): Promise<{ id: string; insight: string }[]> =>
+  (items || []).slice(0, 20).map((item: any, index: number) => ({
+    id: String(item.id || index),
+    insight: `저장 순위 ${index + 1}; 조회/참여 지표를 동일 기간 조건에서 비교하세요.`,
+  }));
+
+export const getAIChannelComprehensiveAnalysis = async (
+  channelStats: any,
+  videoSnippets: { title: string; tags: string[] }[],
+  _knownFirstVideoDate: string | null
+): Promise<any> => {
+  const terms = topTerms((videoSnippets || []).flatMap(v => [v.title || '', ...(v.tags || [])]), 8);
+  return {
+    overview: {
+      channelFocus: {
+        primaryCategory: terms[0] || 'UNKNOWN',
+        description: `저장 제목/태그 기준 주요 반복어: ${terms.join(', ') || '없음'}`,
+      },
+    },
+    audienceProfile: {
+      summary: '공개 메타데이터만으로 실제 시청자 인구통계를 추정하지 않습니다.',
+      interests: terms,
+      genderRatio: [],
+      ageGroups: [],
+      topCountries: channelStats?.country ? [{ label: channelStats.country, value: 100 }] : [],
+    },
+  };
 };
 
+export const getAIChannelDashboardInsights = async (
+  channelName: string,
+  stats: { subscribers: number; totalViews: number; videoCount: number },
+  recentVideos: { title: string; views: number; publishedAt: string }[]
+): Promise<any> => {
+  const avgViews = Math.round(average((recentVideos || []).map(v => number(v.views))));
+  const terms = topTerms((recentVideos || []).map(v => v.title || ''), 6);
+  const summary = `${channelName}: 구독자 ${number(stats?.subscribers).toLocaleString()}, 전체 조회수 ${number(stats?.totalViews).toLocaleString()}, 영상 ${number(stats?.videoCount).toLocaleString()}개. 최근 저장 영상 평균 조회수 ${avgViews.toLocaleString()}.`;
+  const insight = { summary, positivePatterns: terms.slice(0, 2), growthAreas: ['동일 기간 중앙값 비교', '최신 Seed 갱신 여부 확인'] };
+  return {
+    aiExecutiveSummary: insight,
+    aiGrowthInsight: insight,
+    aiFunnelInsight: insight,
+    contentPopularityPatterns: {
+      titlePatterns: terms,
+      optimalLength: '저장 데이터 분포를 직접 비교하세요.',
+      thumbnailStyle: '이미지 픽셀 분석 없음',
+    },
+    contentIdeas: [],
+    viewerPersona: {
+      name: '미추정',
+      description: '공개 메타데이터만으로 실제 시청자 페르소나를 생성하지 않습니다.',
+      strategy: 'YouTube Analytics의 실제 시청자 데이터를 사용하세요.',
+    },
+  };
+};
 
-let chat: Chat | null = null;
-let chatApiKey: string | null = null;
-
-export const startChatSession = (): Chat => {
-    const currentApiKey = getGeminiApiKey();
-    if (chat && chatApiKey === currentApiKey) {
-        return chat;
-    }
-    
-    console.log("Initializing new chat session.");
-    chatApiKey = currentApiKey;
-    const ai = new GoogleGenAI({ apiKey: chatApiKey });
-    const systemInstruction = `You are 'Johnson', the AI guide for 'Content OS'.
-
-### **Johnson's Official Definition (Your Core Identity)**
-Your role is **not** an AI that knows the answers. You are a **tutor who asks good questions**. Your purpose is to guide the user to their own "aha!" moments.
-- You do NOT provide answers, predictions, or judgments.
-- You DO ask guiding questions, connect the dots for the user, and present the next logical viewpoint.
-- Your entire conversational principle is: "We don't know the answer, but let's look at this together."
-
-### **Workflow Stage Awareness (Your Judgment Target)**
-You do **not** judge the user. You only observe the **workflow stage** they are in (what they have seen vs. what they haven't seen yet).
-- **After Channel Analysis:** You assume "The user has seen the big picture."
-- **After Video Analysis:** You assume "The user has seen a specific example."
-- **After Channel Comparison:** You assume "The user is ready to see their relative position."
-This is **not** an evaluation of the user; it is a check of the learning step.
-
-### **Mandatory Conversational Flow & Language (Strict Rules)**
-
-**1. Guiding Language Principle (The One-Line Rule):**
-- **FORBIDDEN (❌):** "We analyzed...", "We understood...", "We judged..."
-- **ALLOWED (✅):** "Looking at this so far, we can see...", "If we look at this next part together, it becomes clearer...", "This is usually what people get curious about next."
-
-**2. Conversational Tone:**
-- **FORBIDDEN (❌ - Judgmental):** "You understand now.", "You are still lacking.", "You must compare now."
-- **ALLOWED (✅ - Reactive/Guiding):**
-    - After Channel Analysis: "이제 채널의 큰 흐름은 잡혔네요." (Now we've got the general flow of the channel.)
-    - After Video Analysis: "이제 왜 이런 흐름이 나왔는지 조금 보이기 시작해요." (Now it's starting to become a bit clearer why this flow occurred.)
-    - Guiding to Comparison: "이걸 다른 채널과 나란히 보면, 이게 '정말 잘 된 건지'가 더 또렷해져요." (If we look at this side-by-side with another channel, it becomes much clearer if this is 'truly good'.)
-
-**3. Word Choice Rules:**
-- **ABSOLUTELY FORBIDDEN WORDS:** "정답" (the answer), "분석했다" (we analyzed), "판단했다" (we judged), "성공" (success), "실패" (failure).
-- **MANDATORY WORDS (to create a journey):** "아직" (not yet), "하나" (one more thing), "조금 더" (a little more), "같이 보시죠" (let's see together).
-
-### **GOVERNANCE & POLICY**
-- You operate strictly within YouTube API guidelines. You have NOT watched any videos. You only have access to metadata, statistics, and text. You must disclose this limitation if a user assumes you have watched a video.
-- When asked about features, explain them in the context of this "tutoring" journey. For example, explain 'Outlier Analysis' as a way to "find the 'main character' in the story of their channel's data together."`;
-
-    chat = ai.chats.create({
-        model: 'gemini-3-flash-preview',
-        config: { systemInstruction },
-    });
-    return chat;
-}
+export const startChatSession = (): any => ({
+  sendMessage: async ({ message }: any) => ({
+    text: `Content OS 무료 모드입니다. 저장 백데이터를 기준으로 화면의 분석 지표를 확인하세요. 입력: ${String(message || '')}`,
+  }),
+});
