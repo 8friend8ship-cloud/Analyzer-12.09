@@ -1,16 +1,20 @@
-// Content OS canonical free-mode policy:
-// - No browser Gemini API key.
-// - No user-provided API key.
-// - AI final-cooking belongs to the central ChatGPT/workflow layer, outside Content OS runtime search.
+import { getActiveGeminiApiKey } from './localApiKeyService';
 
-export function setSystemGeminiApiKey(_key: string | null) {
-    // Intentionally ignored. Content OS runtime is API-free.
+let transientSystemGeminiKey = '';
+
+export function setSystemGeminiApiKey(key: string | null) {
+    transientSystemGeminiKey = String(key || '').trim();
 }
 
 export function setUserGeminiApiKey(_key: string | null) {
-    // Intentionally ignored. User-side API keys are forbidden in Content OS.
+    // User Gemini keys are persisted only by localApiKeyService for the active login.
 }
 
 export function getGeminiApiKey(): string {
-    throw new Error('CONTENT_OS_FREE_MODE: Gemini API is disabled. Use central Seed/T1/T2/ChatGPT final-cooking workflow instead.');
+    const local = String(getActiveGeminiApiKey() || '').trim();
+    const active = local || transientSystemGeminiKey;
+    if (!active) {
+        throw new Error('Gemini API 키가 없습니다. Content OS 개인 로컬 키 설정에서 Gemini 키를 등록해주세요.');
+    }
+    return active;
 }
