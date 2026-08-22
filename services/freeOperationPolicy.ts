@@ -1,21 +1,14 @@
 import { reserveYoutubeQuota } from './youtubeQuotaGuard';
+import { getActiveGeminiApiKey, getActiveYouTubeApiKey } from './localApiKeyService';
 
 const nativeFetch = globalThis.fetch.bind(globalThis);
 
-const toJsonResponse = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
-  status,
-  headers: {
-    'Content-Type': 'application/json; charset=utf-8',
-    'X-Content-OS-Data-Mode': 'FREE_OPERATION_POLICY',
-  },
-});
-
 /**
- * Canonical Content OS transport policy.
- * - Browser Gemini/generative-language calls are blocked.
- * - Browser YouTube Data API calls never carry a user/browser key upstream.
- * - YouTube requests are rewritten to the same-origin server-only proxy.
- * - The server proxy calls the official API only when an approved server key exists.
+ * Content OS hybrid learning transport policy.
+ * - A logged-in user's YouTube/Gemini keys stay in this browser's Local Pack.
+ * - Explicit local-key calls go directly from the browser to Google APIs.
+ * - If no local YouTube key exists, legacy YouTube requests fall back to the approved same-origin server proxy.
+ * - API responses may be archived as JSON learning data, but credentials are never mirrored to Drive/GitHub/Vercel.
  */
 export function installFreeOperationPolicy() {
   if ((globalThis as any).__CONTENT_OS_FREE_POLICY__) return;
@@ -39,6 +32,12 @@ export function installFreeOperationPolicy() {
       const endpoint = url.pathname.split('/').filter(Boolean).pop() || '';
       reserveYoutubeQuota(endpoint);
 
+      const localKey = String(getActiveYouTubeApiKey() || '').trim();
+      const requestKey = String(url.searchParams.get('key') || '').trim();
+      if (localKey && requestKey && requestKey === localKey) {
+        return nativeFetch(url.toString(), init);
+      }
+
       const proxy = new URL('/api/youtube-proxy', globalThis.location?.origin || 'https://contents-os.com');
       proxy.searchParams.set('endpoint', endpoint);
       url.searchParams.forEach((value, key) => {
@@ -53,7 +52,19 @@ export function installFreeOperationPolicy() {
     }
 
     if (url.hostname.includes('generativelanguage.googleapis.com')) {
-      return toJsonResponse({ ok: false, error: 'FREE_MODE_EXTERNAL_AI_API_DISABLED' }, 403);
+      const localKey = String(getActiveGeminiApiKey() || '').trim();
+      const requestKey = String(url.searchParams.get('key') || '').trim();
+      if (localKey && requestKey && requestKey === localKey) {
+        return nativeFetch(url.toString(), init);
+      }
+      return new Response(JSON.stringify({
+        ok: false,
+        error: 'LOCAL_GEMINI_KEY_REQUIRED',
+        guidance: 'Register a personal Gemini API key in this browser Local Pack for learning analysis.',
+      }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      });
     }
 
     return nativeFetch(input as any, init);
