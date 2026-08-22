@@ -71,6 +71,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
 
 
   useEffect(() => {
+    if (isPreviewE2E) return;
+
     // Google's script is loaded async, so we poll for its availability.
     const checkGoogleInterval = setInterval(() => {
         if (typeof window.google !== 'undefined' && window.google.accounts) {
@@ -95,7 +97,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigate }) => {
     }, 100);
 
     return () => clearInterval(checkGoogleInterval);
-  }, [handleGoogleLogin]);
+  }, [handleGoogleLogin, isPreviewE2E]);
 
 
   return (
