@@ -1,5 +1,7 @@
 import type { VideoData, FilterState, ChannelRankingData } from '../types';
-import { getActiveYouTubeApiKey } from './localApiKeyService';
+import { getActiveLocalApiUser, getActiveYouTubeApiKey } from './localApiKeyService';
+import { runGeminiLearningAnalysis } from './geminiLearningService';
+import { saveLearningArchiveSession } from './learningArchiveService';
 import {
   createYoutubeCachePayload,
   readYoutubeCache,
@@ -28,6 +30,8 @@ const countryToLangCode: Record<string, string> = {
   PE: 'es', IN: 'hi', BR: 'pt',
 };
 
+let youtubeApiCallCounter = 0;
+
 const chunks = <T,>(items: T[], size: number): T[][] => {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
@@ -37,7 +41,7 @@ const chunks = <T,>(items: T[], size: number): T[][] => {
 const apiGet = async (endpoint: string, params: Record<string, string>, apiKey: string) => {
   const key = String(apiKey || '').trim();
   if (!key) {
-    throw new Error('YouTube API 키가 없습니다. 화면 왼쪽 아래의 “YouTube API 키 등록”에서 이 로그인 계정의 개인 키를 저장해주세요.');
+    throw new Error('YouTube API 키가 없습니다. 왼쪽 아래 “학습 API”에서 이 로그인 계정의 개인 YouTube 키를 저장해주세요.');
   }
   const url = new URL(`${BASE_URL}/${endpoint}`);
   Object.entries(params).forEach(([name, value]) => {
@@ -45,6 +49,7 @@ const apiGet = async (endpoint: string, params: Record<string, string>, apiKey: 
   });
   url.searchParams.set('key', key);
 
+  youtubeApiCallCounter += 1;
   const response = await fetch(url.toString());
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -208,63 +213,171 @@ const fetchChannels = async (query: string, filters: FilterState, apiKey: string
   });
 };
 
+const newestPublishedAt = (videos: VideoData[]) => videos.reduce((latest, video) => {
+  const value = Date.parse(video.publishedAt || '');
+  return Number.isFinite(value) && value > latest ? value : latest;
+}, 0);
+
+const qualitySnapshot = (videos: VideoData[]) => ({
+  count: videos.length,
+  newestPublishedAt: newestPublishedAt(videos) ? new Date(newestPublishedAt(videos)).toISOString() : null,
+  topViewCount: videos.reduce((max, video) => Math.max(max, Number(video.viewCount || 0)), 0),
+  medianViewCount: videos.length
+    ? [...videos].map(video => Number(video.viewCount || 0)).sort((a, b) => a - b)[Math.floor(videos.length / 2)]
+    : 0,
+});
+
 export async function fetchCentralBackdata(
   query: string,
   filters: FilterState,
   mode: 'video' | 'channel' = 'video'
 ): Promise<CentralSearchResponse> {
-  // 1) Never spend YouTube quota until both local browser cache and Drive/Sheets cache miss.
+  youtubeApiCallCounter = 0;
+  const userId = getActiveLocalApiUser() || 'anonymous-local';
+
+  // Stored data is a baseline for A/B comparison, not the final answer when a local API key is available.
   const cached = await readYoutubeCache(query, filters, mode);
-  if (cached.hit && cached.payload) {
-    const cachedVideos = cached.payload.videos || [];
-    const cachedChannels = cached.payload.channels || [];
-    return {
-      ok: true,
-      status: 'READY',
-      query,
-      normalizedQuery: cached.payload.normalizedQuery || query.trim(),
-      videos: mode === 'video' ? cachedVideos : [],
-      channels: mode === 'channel' ? cachedChannels : [],
-      lineage: [cached.source, 'YOUTUBE_STORED_CACHE', 'NO_API_CALL'],
-      message: mode === 'channel'
-        ? `저장된 YouTube 데이터에서 채널 ${cachedChannels.length}건을 불러왔습니다. API 호출 0회.`
-        : `저장된 YouTube 데이터에서 영상 ${cachedVideos.length}건을 불러왔습니다. API 호출 0회.`,
-    };
-  }
+  const cachedVideos = cached.hit && cached.payload ? (cached.payload.videos || []) : [];
+  const cachedChannels = cached.hit && cached.payload ? (cached.payload.channels || []) : [];
+  const apiKey = String(getActiveYouTubeApiKey() || '').trim();
 
-  // 2) Cache MISS only: use the active login's browser-local key exactly once for this query/filter signature.
-  const apiKey = getActiveYouTubeApiKey();
   if (!apiKey) {
-    throw new Error('저장 데이터에 없는 신규 검색입니다. YouTube API 키가 없습니다. 화면 왼쪽 아래의 “YouTube API 키 등록”을 눌러 이 로그인 계정의 개인 키를 저장해주세요.');
+    if (cached.hit && cached.payload) {
+      saveLearningArchiveSession({
+        sessionId: `${Date.now()}-${mode}-${query}`,
+        userId,
+        createdAt: new Date().toISOString(),
+        query,
+        mode,
+        filters,
+        storedBaseline: mode === 'video' ? cachedVideos : cachedChannels,
+        lineage: [cached.source, 'STORED_BASELINE_ONLY', 'LOCAL_YOUTUBE_KEY_MISSING'],
+        apiUsage: { youtubeCallsObserved: 0, geminiCallsObserved: 0 },
+      });
+      return {
+        ok: true,
+        status: 'READY',
+        query,
+        normalizedQuery: cached.payload.normalizedQuery || query.trim(),
+        videos: mode === 'video' ? cachedVideos : [],
+        channels: mode === 'channel' ? cachedChannels : [],
+        lineage: [cached.source, 'STORED_BASELINE_ONLY', 'LOCAL_YOUTUBE_KEY_MISSING'],
+        message: '저장 백데이터만 표시했습니다. 학습 API 패널에 개인 YouTube 키를 넣으면 같은 조건으로 live 검색을 실행해 품질 비교·학습까지 진행합니다.',
+      };
+    }
+    throw new Error('저장 데이터도 없고 개인 YouTube API 키도 없습니다. 왼쪽 아래 “학습 API”에서 YouTube Data API 키를 등록해주세요.');
   }
 
-  if (mode === 'channel') {
-    const channels = await fetchChannels(query, filters, apiKey);
-    const payload = createYoutubeCachePayload(query, filters, mode, [], channels);
+  try {
+    if (mode === 'channel') {
+      const channels = await fetchChannels(query, filters, apiKey);
+      const payload = createYoutubeCachePayload(query, filters, mode, [], channels);
+      storeYoutubeCache(payload);
+      const qualityDelta = {
+        storedCount: cachedChannels.length,
+        liveCount: channels.length,
+        coverageGain: channels.length - cachedChannels.length,
+      };
+      saveLearningArchiveSession({
+        sessionId: `${Date.now()}-channel-${query}`,
+        userId,
+        createdAt: new Date().toISOString(),
+        query,
+        mode,
+        filters,
+        storedBaseline: cachedChannels,
+        youtube: channels,
+        qualityDelta,
+        lineage: [cached.hit ? cached.source : 'NO_STORED_BASELINE', 'LIVE_YOUTUBE_DATA_API_V3', 'A_B_QUALITY_COMPARE', 'CACHE_WRITEBACK'],
+        apiUsage: { youtubeCallsObserved: youtubeApiCallCounter, geminiCallsObserved: 0 },
+      });
+      return {
+        ok: true,
+        status: 'READY',
+        query,
+        normalizedQuery: payload.normalizedQuery,
+        videos: [],
+        channels,
+        lineage: [cached.hit ? cached.source : 'NO_STORED_BASELINE', 'LIVE_YOUTUBE_DATA_API_V3', 'A_B_QUALITY_COMPARE', 'CACHE_WRITEBACK'],
+        message: `예전 방식의 live YouTube 채널 검색을 실행했습니다. 저장 기준 ${cachedChannels.length}건 ↔ live ${channels.length}건, 관측 API 호출 ${youtubeApiCallCounter}회. 결과 JSON을 학습 아카이브에 저장했습니다.`,
+      };
+    }
+
+    const videos = await fetchVideos(query, filters, apiKey);
+    const payload = createYoutubeCachePayload(query, filters, mode, videos, []);
     storeYoutubeCache(payload);
+
+    const gemini = await runGeminiLearningAnalysis(query, videos, filters);
+    const storedQuality = qualitySnapshot(cachedVideos);
+    const liveQuality = qualitySnapshot(videos);
+    const qualityDelta = {
+      stored: storedQuality,
+      live: liveQuality,
+      coverageGain: liveQuality.count - storedQuality.count,
+      freshnessGainMs: (Date.parse(liveQuality.newestPublishedAt || '') || 0) - (Date.parse(storedQuality.newestPublishedAt || '') || 0),
+      topViewGain: liveQuality.topViewCount - storedQuality.topViewCount,
+    };
+
+    saveLearningArchiveSession({
+      sessionId: `${Date.now()}-video-${query}`,
+      userId,
+      createdAt: new Date().toISOString(),
+      query,
+      mode,
+      filters,
+      storedBaseline: cachedVideos,
+      youtube: videos,
+      gemini,
+      qualityDelta,
+      seedCandidate: gemini?.seedCandidate || null,
+      lineage: [
+        cached.hit ? cached.source : 'NO_STORED_BASELINE',
+        'LEGACY_STRENGTH_LIVE_YOUTUBE_SEARCH',
+        'YOUTUBE_DATA_API_V3',
+        gemini ? 'GEMINI_LEARNING_ANALYSIS' : 'GEMINI_NOT_CONFIGURED_OR_FAILED',
+        'A_B_QUALITY_COMPARE',
+        'LEARNING_ARCHIVE_JSON',
+        'CACHE_WRITEBACK',
+      ],
+      apiUsage: {
+        youtubeCallsObserved: youtubeApiCallCounter,
+        geminiCallsObserved: gemini ? 1 : 0,
+      },
+    });
+
     return {
       ok: true,
       status: 'READY',
       query,
       normalizedQuery: payload.normalizedQuery,
-      videos: [],
-      channels,
-      lineage: ['CACHE_MISS', 'LOGIN_LOCAL_API_KEY', 'YOUTUBE_DATA_API_V3', 'DRIVE_SHEETS_CACHE_WRITEBACK', 'CHANNEL_SEARCH'],
-      message: `신규 검색이라 개인 YouTube API 키를 사용해 채널 ${channels.length}건을 조회했고, 다음 검색부터 재사용하도록 Drive/Sheets 캐시에 저장했습니다.`,
+      videos,
+      channels: [],
+      seedId: gemini ? `LOCAL_SEED_${Date.now()}` : null,
+      lineage: [
+        cached.hit ? cached.source : 'NO_STORED_BASELINE',
+        'LEGACY_STRENGTH_LIVE_YOUTUBE_SEARCH',
+        'YOUTUBE_DATA_API_V3',
+        gemini ? 'GEMINI_LEARNING_ANALYSIS' : 'GEMINI_NOT_CONFIGURED_OR_FAILED',
+        'A_B_QUALITY_COMPARE',
+        'LEARNING_ARCHIVE_JSON',
+        'CACHE_WRITEBACK',
+      ],
+      message: `live YouTube 검색 ${videos.length}건을 기준으로 분석했습니다. 저장 기준 ${cachedVideos.length}건과 A/B 비교했고, 관측 YouTube API 호출 ${youtubeApiCallCounter}회${gemini ? ' + Gemini 학습분석 1회' : ''}. 전체 세션 JSON을 Learning Archive에 저장했습니다.`,
     };
+  } catch (error) {
+    if (cached.hit && cached.payload) {
+      console.warn('[ContentOS] live learning refresh failed; using stored baseline:', error);
+      return {
+        ok: true,
+        status: 'REFRESH_REQUIRED',
+        query,
+        normalizedQuery: cached.payload.normalizedQuery || query.trim(),
+        videos: mode === 'video' ? cachedVideos : [],
+        channels: mode === 'channel' ? cachedChannels : [],
+        lineage: [cached.source, 'LIVE_API_REFRESH_FAILED', 'STORED_BASELINE_FALLBACK'],
+        message: `live API 학습 갱신에 실패해 저장 기준값으로 표시했습니다. 관측 API 호출 ${youtubeApiCallCounter}회.`,
+      };
+    }
+    throw error;
   }
-
-  const videos = await fetchVideos(query, filters, apiKey);
-  const payload = createYoutubeCachePayload(query, filters, mode, videos, []);
-  storeYoutubeCache(payload);
-  return {
-    ok: true,
-    status: 'READY',
-    query,
-    normalizedQuery: payload.normalizedQuery,
-    videos,
-    channels: [],
-    lineage: ['CACHE_MISS', 'LOGIN_LOCAL_API_KEY', 'YOUTUBE_DATA_API_V3', 'DRIVE_SHEETS_CACHE_WRITEBACK', 'VIDEO_SEARCH'],
-    message: `신규 검색이라 개인 YouTube API 키를 사용해 영상 ${videos.length}건을 조회했고, 다음 검색부터 재사용하도록 Drive/Sheets 캐시에 저장했습니다.`,
-  };
 }
