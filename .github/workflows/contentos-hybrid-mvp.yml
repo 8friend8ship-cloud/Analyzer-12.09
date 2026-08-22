@@ -1,0 +1,50 @@
+name: ContentOS Hybrid MVP
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm install
+
+      - name: Typecheck
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Validate hybrid learning sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f services/learningArchiveService.ts
+          test -f services/geminiLearningService.ts
+          grep -q "saveLocalGeminiApiKey" services/localApiKeyService.ts
+          grep -q "LEGACY_STRENGTH_LIVE_YOUTUBE_SEARCH" services/centralBackdataService.ts
+          grep -q "learning.archive.upsert" services/learningArchiveService.ts
+          grep -q "contents-os:local-session:v2" App.tsx
+          grep -q "Gemini API" App.tsx
+
+      - name: Reject literal Google API secrets in tracked source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -nE 'AIza[0-9A-Za-z_-]{30,}' -- ':!*.md' ':!*.txt'; then
+            echo "Literal Google API key-like value found in tracked source"
+            exit 1
+          fi
