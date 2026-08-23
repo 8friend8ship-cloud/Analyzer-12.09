@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 
-const rawClient = String(process.env.VITE_ADSENSE_CLIENT || '').trim();
+const DEFAULT_ADSENSE_CLIENT = 'ca-pub-2826263278655860';
+const rawClient = String(process.env.VITE_ADSENSE_CLIENT || DEFAULT_ADSENSE_CLIENT).trim();
 const match = rawClient.match(/^ca-pub-(\d+)$/);
 
 await mkdir('public', { recursive: true });
