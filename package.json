@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/generate-ads-txt.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit"
