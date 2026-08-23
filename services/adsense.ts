@@ -1,4 +1,5 @@
 const ADSENSE_SCRIPT_ID = 'google-adsense-script';
+const DEFAULT_ADSENSE_CLIENT = 'ca-pub-2826263278655860';
 const DEFAULT_EXCLUDED_PATHS = ['/login', '/settings', '/privacy', '/terms', '/api'];
 
 function env(name: string): string {
@@ -7,7 +8,7 @@ function env(name: string): string {
 }
 
 export function getAdSenseClient(): string {
-  return env('VITE_ADSENSE_CLIENT');
+  return env('VITE_ADSENSE_CLIENT') || DEFAULT_ADSENSE_CLIENT;
 }
 
 export function isValidAdSenseClient(client = getAdSenseClient()): boolean {
