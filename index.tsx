@@ -3,10 +3,8 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { installFreeOperationPolicy } from './services/freeOperationPolicy';
-import { installAdSense } from './services/adsense';
 
 installFreeOperationPolicy();
-installAdSense();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
