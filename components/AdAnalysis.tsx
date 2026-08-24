@@ -13,6 +13,24 @@ const SmallSpinner: React.FC = () => (
     </svg>
 );
 
+const fallbackKeywords = (videos: VideoData[]): string[] => {
+  const stop = new Set(['영상','유튜브','youtube','shorts','쇼츠','official','video','feat','추천','리뷰']);
+  const counts = new Map<string, number>();
+  (videos || []).forEach(video => {
+    String(video.title || '')
+      .toLowerCase()
+      .replace(/[^0-9a-zA-Z가-힣ぁ-んァ-ヶ一-龥\s]/g, ' ')
+      .split(/\s+/)
+      .map(v => v.trim())
+      .filter(v => v.length >= 2 && !stop.has(v))
+      .forEach(v => counts.set(v, (counts.get(v) || 0) + 1));
+  });
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 10)
+    .map(([term]) => term);
+};
+
 const AdAnalysis: React.FC<AdAnalysisProps> = ({ videos }) => {
   const [keywords, setKeywords] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -20,14 +38,9 @@ const AdAnalysis: React.FC<AdAnalysisProps> = ({ videos }) => {
   const isMounted = useRef(false);
 
   useEffect(() => {
-    // Skip the first render effect, only run on subsequent video changes
     if (!isMounted.current) {
       isMounted.current = true;
-      if (videos && videos.length > 0) {
-        // Run on initial load if videos are already present
-      } else {
-        return;
-      }
+      if (!videos || videos.length === 0) return;
     }
 
     const fetchKeywords = async () => {
@@ -40,24 +53,25 @@ const AdAnalysis: React.FC<AdAnalysisProps> = ({ videos }) => {
       setError(null);
       try {
         const topicKeywords = await getAITopicKeywords(videos);
-        setKeywords(topicKeywords);
+        const resolved = Array.isArray(topicKeywords) && topicKeywords.length ? topicKeywords : fallbackKeywords(videos);
+        setKeywords(resolved);
+        if (!resolved.length) setError('현재 표본이 적어 추천 키워드를 만들 수 없습니다. 백데이터 수집 후 자동 갱신됩니다.');
       } catch (err) {
-        setError("키워드 추천 생성에 실패했습니다. (Failed to generate keyword recommendations.)");
-        console.error(err);
+        console.warn('[ContentOS] topic keyword primary analysis failed; local fallback used:', err);
+        const resolved = fallbackKeywords(videos);
+        setKeywords(resolved);
+        setError(resolved.length ? null : '현재 표본이 적어 추천 키워드를 만들 수 없습니다. 백데이터 수집 후 자동 갱신됩니다.');
       } finally {
         setIsLoading(false);
       }
     };
-    
-    fetchKeywords();
+
+    void fetchKeywords();
   }, [videos]);
 
   const renderContent = () => {
     if (isLoading) {
       return <div className="flex justify-center items-center h-full"><SmallSpinner /></div>;
-    }
-    if (error) {
-      return <div className="text-center text-red-400 p-4 text-xs">{error}</div>;
     }
     if (keywords.length > 0) {
       return (
@@ -68,8 +82,8 @@ const AdAnalysis: React.FC<AdAnalysisProps> = ({ videos }) => {
         </div>
       );
     }
-    if (videos.length > 0) {
-         return <div className="flex justify-center items-center h-full"><SmallSpinner /></div>;
+    if (error) {
+      return <div className="text-center text-amber-300 p-4 text-xs">{error}</div>;
     }
     return <div className="text-center text-sm text-gray-500">검색 결과가 있으면 자동으로 추천을 시작합니다.<br/>(Recommendations will start automatically with search results.)</div>;
   };
