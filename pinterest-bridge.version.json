@@ -1,0 +1,12 @@
+{
+  "bridge": "PINTEREST_CONTENT_HUB",
+  "version": "1.0.0",
+  "canonicalRepository": "8friend8ship-cloud/contents-os-git",
+  "productionCompatibilityRepository": "8friend8ship-cloud/Analyzer-12.09",
+  "status": "METADATA_ONLY",
+  "requiredActivation": [
+    "PINTEREST_ACCESS_TOKEN",
+    "CONTENT_OS_PINTEREST_INGEST_URL"
+  ],
+  "verifiedAt": "2026-08-26T11:19:00+09:00"
+}
