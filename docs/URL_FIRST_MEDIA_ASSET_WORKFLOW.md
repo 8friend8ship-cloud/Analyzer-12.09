@@ -87,3 +87,16 @@ Do not create or publish to boards before Trial approval and OAuth account verif
 QUEENS_URL_VERIFIED -> SEED_DERIVATIVE_VERIFIED -> TEMPLATE_LINK_VERIFIED -> VIDEO_BRIDGE_READBACK_VERIFIED -> PLATFORM_PUBLISH_READBACK_VERIFIED -> PINTEREST_BOARD_WRITEBACK_VERIFIED
 
 A workflow is not COMPLETE while any required gate is pending.
+
+## Advanced Template T1/T2 conditional API gate
+
+- After the base Seed is verified, build Advanced Template 1 with both the GPT Chrome bridge and the Flow Chrome bridge first.
+- Promote only T1 outputs that pass structure, scene, copy, asset-link, brand, rights, and platform-format checks.
+- Advanced Template 2 combines the selected GPT result with Flow video/motion output and completes voice, captions, expression, lip-sync, transitions, BGM, CTA, and platform aspect ratios.
+- Do not call paid external APIs during the default path. Reuse Queens, Seed, templates, Drive assets, local functions, and Chrome bridges first.
+- Conditional API execution is allowed only when the user explicitly requests a finished/perfect result or automated QA identifies a missing required capability.
+- Before an API call, record API_NEED_REASON, missing capability, estimated calls, cost class, and why existing assets/functions cannot satisfy it.
+- Call only the missing capability; do not regenerate the complete result unnecessarily.
+- The perfect-result gate checks image quality, scene continuity, voice, captions, expression/lip-sync, transitions, BGM, CTA, brand, platform format, rights, URL readback, and publish readback.
+- All checks must pass for PERFECT_RESULT_VERIFIED. Any failure becomes QUALITY_HOLD followed by the smallest repair and same-condition verification.
+- Chrome and API outputs are derivative assets linked to the original Seed, with tool/version/cost/result URL/quality score recorded.
