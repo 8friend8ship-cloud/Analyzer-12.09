@@ -19,7 +19,7 @@ export default async function handler(_req: any, res: any) {
     res.status(ok ? 200 : 500).json({
       ok,
       bridge: "PINTEREST_CONTENT_HUB",
-      version: "1.0.0",
+      version: "1.0.1",
       mode: process.env.PINTEREST_ACCESS_TOKEN ? "API_READY" : "METADATA_ONLY",
       centralHub: process.env.CONTENT_OS_PINTEREST_INGEST_URL ? "CONFIGURED" : "NOT_CONFIGURED",
       checks
