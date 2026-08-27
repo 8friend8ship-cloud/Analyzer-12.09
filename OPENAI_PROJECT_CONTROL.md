@@ -3,7 +3,7 @@
 - Repository: `8friend8ship-cloud/Analyzer-12.09`
 - Project role: **Content OS / 전 프로젝트 분석·진단·수익화 관제**
 - Management status: `ACTIVE_CONTROL_PLANE`
-- Last reviewed: `2026-07-30 KST`
+- Last reviewed: `2026-08-27 KST`
 - Architecture: React/Vite + Gemini + Firebase + charts
 
 ## 1. 활용 방향
@@ -81,7 +81,33 @@
 5. 키·토큰·OAuth Secret은 저장소에 커밋하지 않는다.
 6. 코드 변경은 작업 브랜치와 Draft PR을 기본으로 한다.
 7. 분석 결과는 실제 수정 작업·Issue·Agent Task Queue로 이어지게 한다.
+8. **DEPLOYMENT_TRUTH_FIRST**: Production 관련 수정 전 Vercel Project → 실제 GitHub repo → branch → Production commit SHA → domain을 먼저 readback한다.
+9. `CANONICAL_REPO`와 `DEPLOYED_REPO`가 다르면 canonical만 수정하고 Production 수정 완료로 표시하지 않는다. 운영 결과를 바꾸는 최소 delta는 실제 `DEPLOYED_REPO`에 반영하고 같은 delta를 canonical에도 back-sync한다.
+10. `CANONICAL_REPO != DEPLOYED_REPO`는 `CANONICAL_DEPLOYMENT_MAPPING_MISMATCH` 상태다. 배포 repo를 임의로 canonical로 승격하지 않으며, relink와 runtime hotfix/back-sync를 서로 다른 변경으로 관리한다.
+11. 통합본 전체를 Production repo에 덮어쓰지 않는다. Production LAST_GOOD와 canonical 최신본을 diff하고 누락·퇴행 기능만 최소 delta로 옮긴다.
+12. Production 수정 완료는 `FIX_COMMIT == PROD_DEPLOYMENT_COMMIT` 확인과 운영 URL same-fixture x2/readback/regression PASS 후에만 인정한다.
+13. Vercel Git relink, Production branch 변경, domain/환경변수 영향 변경은 별도 승인·rollback·E2E gate를 통과해야 한다.
+14. relink가 실패하거나 승인 전이면 기존 Production 연결을 깨지 않고 DEPLOYED_REPO를 실제 수정 대상으로 사용한다. relink 자동화의 존재나 CI 성공만으로 mapping이 변경됐다고 가정하지 않는다.
 
-## 7. 결정 기록
+## 7. ContentOS 배포 소스 가드
+
+- 장기 canonical: `8friend8ship-cloud/contents-os-git/main`.
+- 2026-08-27 실제 Vercel `content-os` Production source readback: `8friend8ship-cloud/Analyzer-12.09/main`.
+- 따라서 `contents-os-git`의 최근 통합 변경이 자동으로 `contents-os.com`에 반영된다고 가정하면 안 된다.
+- 명시적 relink 완료 전 `contents-os.com` 운영 수정은 이 저장소의 Production LAST_GOOD와 `contents-os-git/main` 최신본을 diff해 최소 delta로 적용한 뒤 canonical에 back-sync한다.
+- 장기 해소는 Vercel 프로젝트를 canonical repo로 안전하게 relink한 뒤 Production identity와 검색 fixture를 x2 readback하여 단일 계보로 정리하는 것이다.
+- canonical relink workflow가 실패하면 실패 단계와 원인을 먼저 읽는다. 새 credential/OAuth를 추측하거나 같은 relink를 blind retry하지 않는다.
+
+## 8. PRE_CHECK / POST_CHECK 필수 필드
+
+### PRE_CHECK
+`APP_ID`, `CANONICAL_REPO`, `CANONICAL_HEAD`, `VERCEL_PROJECT_ID`, `PROD_DOMAIN`, `DEPLOYED_REPO`, `DEPLOYED_BRANCH`, `PROD_DEPLOYMENT_ID`, `PROD_COMMIT_SHA`, `MAPPING_MATCH`, `LAST_GOOD`, `PENDING_INTEGRATION_DELTA`
+
+### POST_CHECK
+`FIX_REPO`, `FIX_COMMIT`, `CANONICAL_SYNC_COMMIT`, `PROD_DEPLOYMENT_COMMIT`, `SAME_FIXTURE_RETEST_1`, `SAME_FIXTURE_RETEST_2`, `RESULT_READBACK_PASS`, `REGRESSION_CHECK_PASS`, `MAPPING_MATCH_AFTER`, `LESSON_CHECKED`
+
+## 9. 결정 기록
 
 - `2026-07-30`: Analyzer를 전 프로젝트 분석·수익화·운영 관제 저장소로 지정함.
+- `2026-08-27`: ContentOS의 canonical repo와 실제 Vercel Production repo 불일치를 재확인. ROOT_CAUSE=`DEPLOYMENT_SOURCE_MAPPING`, WRONG_ASSUMPTION=`CANONICAL_CHANGE_EQUALS_PRODUCTION_CHANGE`로 분류하고 `DEPLOYED_REPO_FIRST` hard guard를 추가함.
+- `2026-08-27`: `contents-os-git` main의 canonical relink 자동화는 `Require existing Vercel credential` 단계 실패로 relink/deploy/readback이 실행되지 않았음을 확인. 자동화 파일 존재를 실제 relink 성공으로 간주하지 않는다.
