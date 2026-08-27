@@ -27,7 +27,7 @@ function safeUrl(body:any){
 
 function builtinGet(query: URLSearchParams) {
   const action = query.get('action') || 'health';
-  if (action === 'health') return { status: 200, body: { ok:true, service:'CENTRAL_INTELLIGENCE_HUB', version:'WRITEBUS_V1_20260821', mode: BACKEND_URL ? 'UPSTREAM_PREFERRED' : 'COLLECTOR_WRITE_FALLBACK', backend_configured:Boolean(BACKEND_URL), collector_write:true, builtin_events:BUILTIN_EVENTS.length, at:new Date().toISOString() } };
+  if (action === 'health') return { status: 200, body: { ok:true, service:'CENTRAL_INTELLIGENCE_HUB', version:'WRITEBUS_V2_20260826', mode: BACKEND_URL ? 'UPSTREAM_PREFERRED' : 'STORED_BACKDATA_THEN_BUILTIN', backend_configured:Boolean(BACKEND_URL), collector_read:true, collector_write:true, builtin_events:BUILTIN_EVENTS.length, at:new Date().toISOString() } };
   if (action === 'events') {
     const appId = String(query.get('app_id') || 'ALL_APPS');
     const limit = Math.max(1, Math.min(200, Number(query.get('limit') || 100)));
@@ -37,15 +37,79 @@ function builtinGet(query: URLSearchParams) {
   return { status:400, body:{ ok:false, error:'UNSUPPORTED_ACTION', action } };
 }
 
+function rowToEvent(row:any, appId:string, index:number){
+  const sourceId=String(row?.SOURCE_ID || row?.source_id || `ROW_${index}`);
+  const status=String(row?.QUEENS_SEED_STATUS || row?.STATUS || row?.VERIFIED_STATUS || 'STORED');
+  return {
+    EVENT_ID:`EVT_STORED_${sourceId}`,
+    EVENT_AT:String(row?.LAST_CHECKED_AT || row?.LAST_SYNC || row?.FIRST_SEEN_AT || new Date().toISOString()),
+    PRODUCER_APP_ID:'APP_CONTENT_OS',
+    DATA_STAGE: status.includes('T1') ? 'T1' : status.includes('SEED') ? 'SEED' : 'QUEENS',
+    ENTITY_TYPE:String(row?.PRIMARY_CODE || 'STORED_BACKDATA'),
+    ENTITY_ID:sourceId,
+    KEYWORD:String(row?.TITLE || row?.KEYWORDS || appId),
+    LOCALE:String(row?.LANGUAGE || 'ko-KR'),
+    SUMMARY:String(row?.SUMMARY || row?.TITLE || ''),
+    KEYWORDS:String(row?.KEYWORDS || ''),
+    TAGS:[row?.PRIMARY_CODE,row?.SUB_KEY,row?.QUEENS_SEED_STATUS,'STORED_BACKDATA'].filter(Boolean).join('|'),
+    METRICS_JSON:JSON.stringify({ verified_status:row?.VERIFIED_STATUS || '', link_alive:row?.LINK_ALIVE || '', enrichment_required:true }),
+    SOURCE_URL:String(row?.ARTICLE_URL || ''),
+    CALL_URL:`https://contents-os.com/api/intelligence?action=events&app_id=${encodeURIComponent(appId)}`,
+    LINEAGE_IDS:String(row?.SEARCH_BARCODE || sourceId),
+    CONFIDENCE: row?.VERIFIED_STATUS === 'FRESH' ? 0.85 : 0.65,
+    STATUS:String(row?.QUEENS_SEED_STATUS || row?.VERIFIED_STATUS || 'STORED'),
+    CONSUMER_SCOPE:String(row?.TARGET_APPS || appId),
+    MEMO:`SOURCE_MODE=STORED_BACKDATA; USE_CASE=${String(row?.USE_CASE || '')}`,
+  };
+}
+
+async function collectorGetEvents(query:URLSearchParams){
+  const appId=String(query.get('app_id') || 'ALL_APPS');
+  if(appId === 'ALL_APPS') return null;
+  const limit=Math.max(1,Math.min(200,Number(query.get('limit') || 100)));
+  const headers:Record<string,string>={'Content-Type':'application/json','Accept':'application/json'};
+  const token=process.env.CONTENT_OS_BACKEND_TOKEN;
+  if(token) headers['X-Content-OS-Token']=token;
+  const r=await fetch(COLLECTOR_URL,{method:'POST',headers,body:JSON.stringify({action:'search',asset_type:'TEXT',query:appId,limit}),redirect:'follow'});
+  const text=await r.text();
+  let body:any=null; try{body=JSON.parse(text)}catch{}
+  if(!r.ok || !body || body.ok===false) return null;
+  const rows=Array.isArray(body.results)?body.results:[];
+  const events=rows.map((row:any,index:number)=>rowToEvent(row,appId,index)).slice(-limit);
+  if(!events.length) return null;
+  return {status:200,body:{ok:true,mode:'STORED_BACKDATA',app_id:appId,count:events.length,events,scanned_rows:Number(body.scanned_rows||0)}};
+}
+
 async function upstreamGet(query: URLSearchParams) {
-  if (!BACKEND_URL) return builtinGet(query);
+  if (!BACKEND_URL) {
+    if ((query.get('action') || 'health') === 'events') {
+      try {
+        const stored=await collectorGetEvents(query);
+        if(stored) return stored;
+      } catch (error:any) {
+        const fallback=builtinGet(query);
+        return {status:fallback.status,body:{...fallback.body,collector_read_error:String(error?.message||error)}};
+      }
+    }
+    return builtinGet(query);
+  }
   try {
     const url = `${BACKEND_URL}${BACKEND_URL.includes('?') ? '&' : '?'}${query.toString()}`;
     const r = await fetch(url, { redirect: 'follow' });
     const text = await r.text();
-    try { const body = JSON.parse(text); if (r.ok && body?.ok !== false) return { status:r.status, body }; } catch {}
+    try { const body = JSON.parse(text); if (r.ok && body?.ok !== false) return { status:r.status, body:{...body,mode:body.mode || 'LIVE'} }; } catch {}
+    if ((query.get('action') || '') === 'events') {
+      const stored=await collectorGetEvents(query);
+      if(stored) return {...stored,body:{...stored.body,upstream_status:r.status,upstream_fallback:true}};
+    }
     const fallback = builtinGet(query); return { status:fallback.status, body:{ ...fallback.body, upstream_status:r.status, upstream_fallback:true } };
   } catch (error:any) {
+    if ((query.get('action') || '') === 'events') {
+      try {
+        const stored=await collectorGetEvents(query);
+        if(stored) return {...stored,body:{...stored.body,upstream_fallback:true,upstream_error:String(error?.message||error)}};
+      } catch {}
+    }
     const fallback = builtinGet(query); return { status:fallback.status, body:{ ...fallback.body, upstream_fallback:true, upstream_error:String(error?.message||error) } };
   }
 }
