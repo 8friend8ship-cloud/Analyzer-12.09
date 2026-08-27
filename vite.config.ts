@@ -11,7 +11,6 @@ export default defineConfig(() => ({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
-      '@google/genai': path.resolve(__dirname, './services/genaiDisabled.ts'),
     }
   }
 }));
