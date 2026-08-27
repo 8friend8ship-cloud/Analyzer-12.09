@@ -35,9 +35,17 @@ jobs:
           test -f services/geminiLearningService.ts
           grep -q "saveLocalGeminiApiKey" services/localApiKeyService.ts
           grep -q "LEGACY_STRENGTH_LIVE_YOUTUBE_SEARCH" services/centralBackdataService.ts
-          grep -q "learning.archive.upsert" services/learningArchiveService.ts
+          grep -q "GEMINI_LEARNING_ANALYSIS" services/centralBackdataService.ts
+          grep -q "runGeminiLearningAnalysis" services/geminiLearningService.ts
+          grep -q "sendIntelligenceEvent" services/learningArchiveService.ts
+          grep -q "CONTENT_OS_LEARNING_ARCHIVE" services/learningArchiveService.ts
           grep -q "contents-os:local-session:v2" App.tsx
           grep -q "Gemini API" App.tsx
+          grep -q "@google/genai" package.json
+          if grep -q "genaiDisabled.ts" vite.config.ts; then
+            echo "Gemini disable alias regression detected"
+            exit 1
+          fi
 
       - name: Reject literal Google API secrets in tracked source
         shell: bash
