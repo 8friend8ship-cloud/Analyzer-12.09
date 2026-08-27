@@ -46,13 +46,17 @@ export function normalizePinterestRecord(body: any): PinterestRecord {
   if (!sourceUrl) throw new Error("SOURCE_URL_REQUIRED");
   const canonicalUrl = canonicalizePinterestUrl(sourceUrl);
   const pinId = String(body.pinId || body.id || canonicalUrl.match(/\/pin\/(\d+)/)?.[1] || "").trim();
-  const keywords = Array.from(new Set(
-    (Array.isArray(body.keywords) ? body.keywords : String(body.keywords || "").split(","))
-      .map((x: unknown) => String(x).trim().toLowerCase()).filter(Boolean)
+  const keywordValues: unknown[] = Array.isArray(body.keywords)
+    ? body.keywords
+    : String(body.keywords || "").split(",");
+  const keywords: string[] = Array.from(new Set<string>(
+    keywordValues
+      .map((x: unknown) => String(x).trim().toLowerCase())
+      .filter((x: string) => Boolean(x))
   )).slice(0, 30);
-  const rights = body.rights === "OWNED" ? "OWNED" : "REFERENCE_ONLY";
-  const base = {
-    platform: "PINTEREST" as const,
+  const rights: PinterestRecord["rights"] = body.rights === "OWNED" ? "OWNED" : "REFERENCE_ONLY";
+  const base: Omit<PinterestRecord, "pipelineStage"> = {
+    platform: "PINTEREST",
     pinId,
     sourceUrl,
     canonicalUrl,
@@ -64,7 +68,7 @@ export function normalizePinterestRecord(body: any): PinterestRecord {
     keywords,
     rights,
     usageProjects: (Array.isArray(body.usageProjects) ? body.usageProjects : ["COMMON"]).map(String),
-    publishStatus: (body.publishStatus === "PUBLISHED" || body.publishStatus === "DRAFT") ? body.publishStatus : "REFERENCE" as const,
+    publishStatus: (body.publishStatus === "PUBLISHED" || body.publishStatus === "DRAFT") ? body.publishStatus : "REFERENCE",
     dedupeKey: `PINTEREST:${pinId || canonicalUrl}`,
     collectedAt: new Date().toISOString()
   };
