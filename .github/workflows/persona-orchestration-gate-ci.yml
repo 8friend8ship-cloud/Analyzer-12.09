@@ -18,7 +18,7 @@ jobs:
         run: |
           cp apps-script/personaOrchestrationGate.gs /tmp/personaOrchestrationGate.js
           node --check /tmp/personaOrchestrationGate.js
-      - name: Fail-closed regression checks
+      - name: Fail-closed regression and mock-sheet gate checks
         run: |
           node <<'NODE'
           const fs = require('fs');
@@ -29,6 +29,7 @@ jobs:
           vm.createContext(sandbox);
           vm.runInContext(code, sandbox);
 
+          // Primitive allow-list regressions.
           assert.strictEqual(sandbox.personaReviewPass_('PASS'), true);
           assert.strictEqual(sandbox.personaReviewPass_('VERIFIED'), true);
           assert.strictEqual(sandbox.personaReviewPass_('APPROVED'), true);
@@ -48,5 +49,64 @@ jobs:
           assert.strictEqual(sandbox.personaPassOrNotRequired_('PENDING'), false);
           assert.strictEqual(sandbox.personaPassOrNotRequired_('FAIL'), false);
 
-          console.log('persona orchestration fail-closed regression checks: PASS');
+          function makeSheet(values) {
+            return {
+              getDataRange() { return { getDisplayValues() { return values; } }; },
+              getLastColumn() { return values[0] ? values[0].length : 1; },
+              getRange() { return { getDisplayValues() { return [values[0] || ['X']]; } }; },
+              appendRow() {}
+            };
+          }
+
+          const sheetMap = {};
+          sandbox.PERSONA_ORCH_V1.requiredTabs.forEach(name => { sheetMap[name] = makeSheet([['X']]); });
+
+          const personaHeader = ['MATCH_ID','APP_ID','FRONT_REQUEST_ID','CONTENT_ID','STORY_ROLE','REQUIRED_YN','MATCH_MODE','PERSONA_ID','PERSONA_SNAPSHOT_ID','DOMAIN_EXPERTISE','TONE','LANGUAGE_PACK_ID','VOICE_PACK_ID','VTUBE_ASSET_ID','GEMINI_QA','FINAL_DECISION'];
+          sheetMap.PERSONA_MATCH_QUEUE = makeSheet([
+            personaHeader,
+            ['NEG_MATCH','APP_TRAVEL','REQ_NEG','NEG','narrator','YES','TEST','PNEG','SNEG','travel','dry','','','','NOT_RUN','PASS'],
+            ['POS_MATCH','APP_TRAVEL','REQ_POS','POS','narrator','YES','TEST','PPOS','SPOS','travel','dry','LANG_OK','VOICE_OK','','PASS','PASS']
+          ]);
+
+          const botHeader = ['PACK_ID','APP_ID','PERSONA_ID','PERSONA_SNAPSHOT_ID','DOMAIN','ROLE','EXPERTISE_SOURCES','KNOWLEDGE_SUMMARY','KEYWORDS','TAGS','LANGUAGE_PACK_ID','VOICE_PACK_ID','CHAT_POLICY','QUEENS_SOURCE','SEED_ID','TEMPLATE_ID','UPDATED_AT','STATUS'];
+          sheetMap.BOT_PERSONA_KNOWLEDGE = makeSheet([
+            botHeader,
+            ['BOT_NEG','APP_TRAVEL','PNEG','SNEG','travel','bot','src','summary','','','','','','','','','2026-08-28T00:00:00Z','NOT_READY'],
+            ['BOT_POS','APP_TRAVEL','PPOS','SPOS','travel','bot','verified src','verified summary','','','LANG_OK','VOICE_OK','','','','TPL_OK','2026-08-28T00:00:00Z','READY']
+          ]);
+
+          const crossHeader = ['CHECK_ID','APP_ID','CONTENT_ID','FRONT_REQUEST_ID','SHEET_GEMINI_REVIEW_ID','DRIVE_PROJECT_ID','DRIVE_GEMINI_CHAT_REF','DOC_EXPORT_ID','DOC_CROSSCHECK','PERSONA_QA','STORYBOARD_QA','ASSET_QA','LANGUAGE_VOICE_QA','FACT_QA','REQUIREMENT_MATCH','ERROR_SUMMARY','FIX_APPLIED','FINAL_DECISION','CHECKED_AT','NOTES'];
+          sheetMap.GEMINI_PROJECT_CROSSCHECK = makeSheet([
+            crossHeader,
+            ['CROSS_NEG','APP_TRAVEL','NEG','REQ_NEG','SHEET_REF','PROJECT','','DOC_REF','PENDING','PENDING','NOT_REQUIRED','NOT_REQUIRED','NOT_REQUIRED','PENDING','PENDING','','','PASS','',''],
+            ['CROSS_POS','APP_TRAVEL','POS','REQ_POS','SHEET_REF','PROJECT','DRIVE_CHAT_REF','DOC_REF','PASS','PASS','NOT_REQUIRED','NOT_REQUIRED','NOT_REQUIRED','PASS','PASS','','','PASS','','']
+          ]);
+
+          const ss = { getSheetByName(name) { return sheetMap[name] || null; } };
+
+          const negPersona = sandbox.resolvePersonaMatch_(ss, { appId: 'APP_TRAVEL', contentId: 'NEG', storyRole: 'narrator' });
+          assert.strictEqual(negPersona.ok, false, 'NOT_RUN Gemini QA must block persona match');
+
+          const posPersona = sandbox.resolvePersonaMatch_(ss, { appId: 'APP_TRAVEL', contentId: 'POS', storyRole: 'narrator' });
+          assert.strictEqual(posPersona.ok, true, 'explicit PASS Gemini QA + snapshot should pass persona match');
+
+          assert.strictEqual(sandbox.botKnowledgePackState_(ss, 'APP_TRAVEL', 'SNEG').ok, false, 'NOT_READY bot pack must block');
+          assert.strictEqual(sandbox.botKnowledgePackState_(ss, 'APP_TRAVEL', 'SPOS').ok, true, 'READY bot pack should pass');
+
+          const negCross = sandbox.runGeminiProjectCrosscheckGate_(ss, { contentId: 'NEG' });
+          assert.strictEqual(negCross.ok, false, 'missing Drive Gemini ref and explicit QA must block crosscheck');
+
+          const posCross = sandbox.runGeminiProjectCrosscheckGate_(ss, { contentId: 'POS' });
+          assert.strictEqual(posCross.ok, true, 'complete refs + explicit QA should pass crosscheck');
+
+          let blocked = false;
+          try {
+            sandbox.assertPersonaPackagePromotionAllowed_(ss, { appId: 'APP_TRAVEL', contentId: 'NEG', storyRole: 'narrator' });
+          } catch (e) { blocked = true; }
+          assert.strictEqual(blocked, true, 'negative persona package must throw BLOCK');
+
+          const promoted = sandbox.assertPersonaPackagePromotionAllowed_(ss, { appId: 'APP_TRAVEL', contentId: 'POS', storyRole: 'narrator' });
+          assert.strictEqual(promoted.ok, true, 'fully evidenced persona package should pass');
+
+          console.log('persona orchestration full PASS/BLOCK regression: PASS');
           NODE
