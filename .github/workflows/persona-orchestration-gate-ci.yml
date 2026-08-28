@@ -1,0 +1,52 @@
+name: Persona Orchestration Gate CI
+
+on:
+  push:
+    paths:
+      - 'apps-script/personaOrchestrationGate.gs'
+      - '.github/workflows/persona-orchestration-gate-ci.yml'
+  pull_request:
+    paths:
+      - 'apps-script/personaOrchestrationGate.gs'
+
+jobs:
+  validate-persona-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax check
+        run: |
+          cp apps-script/personaOrchestrationGate.gs /tmp/personaOrchestrationGate.js
+          node --check /tmp/personaOrchestrationGate.js
+      - name: Fail-closed regression checks
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const vm = require('vm');
+          const assert = require('assert');
+          const code = fs.readFileSync('apps-script/personaOrchestrationGate.gs', 'utf8');
+          const sandbox = { Object, String, Array, Date, JSON, RegExp, Math };
+          vm.createContext(sandbox);
+          vm.runInContext(code, sandbox);
+
+          assert.strictEqual(sandbox.personaReviewPass_('PASS'), true);
+          assert.strictEqual(sandbox.personaReviewPass_('VERIFIED'), true);
+          assert.strictEqual(sandbox.personaReviewPass_('APPROVED'), true);
+          assert.strictEqual(sandbox.personaReviewPass_('NOT_RUN'), false);
+          assert.strictEqual(sandbox.personaReviewPass_('PENDING_GEMINI'), false);
+          assert.strictEqual(sandbox.personaReviewPass_(''), false);
+
+          assert.strictEqual(sandbox.personaPackReady_('READY'), true);
+          assert.strictEqual(sandbox.personaPackReady_('ACTIVE'), true);
+          assert.strictEqual(sandbox.personaPackReady_('NOT_READY'), false);
+          assert.strictEqual(sandbox.personaPackReady_('INACTIVE'), false);
+          assert.strictEqual(sandbox.personaPackReady_(''), false);
+
+          assert.strictEqual(sandbox.personaPassOrNotRequired_('PASS'), true);
+          assert.strictEqual(sandbox.personaPassOrNotRequired_('NOT_REQUIRED'), true);
+          assert.strictEqual(sandbox.personaPassOrNotRequired_('N/A'), true);
+          assert.strictEqual(sandbox.personaPassOrNotRequired_('PENDING'), false);
+          assert.strictEqual(sandbox.personaPassOrNotRequired_('FAIL'), false);
+
+          console.log('persona orchestration fail-closed regression checks: PASS');
+          NODE
