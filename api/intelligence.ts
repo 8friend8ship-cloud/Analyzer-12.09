@@ -1,13 +1,13 @@
-const CONFIGURED_BACKEND_URL = process.env.CENTRAL_INTELLIGENCE_BACKEND_URL || process.env.CONTENT_OS_BACKEND_URL || '';
+const BACKEND_URL = process.env.CENTRAL_INTELLIGENCE_BACKEND_URL || process.env.CONTENT_OS_BACKEND_URL || '';
 const CONTENTOS_RUNTIME_URL = process.env.CONTENTOS_RUNTIME_V3_URL || 'https://script.google.com/macros/s/AKfycbzz247_Mwl9c6N1WxmpHAttwHQJB6RCFtaY08XlHgxysz1iEzg7HWDXa3i5oXhDS1jo/exec';
 const COLLECTOR_URL = 'https://script.google.com/macros/s/AKfycbx5WTegTKUnyvFZC_qOaGBPlmKANLwXyNue19jLkFhdFwHnnp1E6_trZeVGdIg7B3GA/exec';
 
 const BUILTIN_EVENTS = [
   {
-    EVENT_ID: 'EVT_TRAVEL_KR_VALUE_MUKBANG_SEED_20260821_001', EVENT_AT: '2026-08-21T05:20:00.000Z', PRODUCER_APP_ID: 'APP_CONTENT_OS', DATA_STAGE: 'SEED', ENTITY_TYPE: 'TRAVEL_SEED', ENTITY_ID: 'SEED_TRAVEL_KR_VALUE_MUKBANG_20260821_001', KEYWORD: '가성비 한국여행 먹방 스케줄', LOCALE: 'ko-KR', SUMMARY: '한국 가성비 먹방여행을 지역·시장·노포·맛집·예산·이동동선으로 조합하는 공용 Travel Seed', KEYWORDS: '한국|가성비|먹방|여행|스케줄|노포|시장|맛집|동선|예산', TAGS: 'TRAVEL|VALUE|MUKBANG|SCHEDULE|COMMON_TREND_SEED', METRICS_JSON: JSON.stringify({ enrichment_required: true, source_verified: true }), SOURCE_URL: 'https://docs.google.com/spreadsheets/d/1o6Me_qcdrSEVNvufjD_EQWVGvxvGKR_9ZYWSSYMclgQ/edit', CALL_URL: 'https://contents-os.com/api/intelligence?action=events&app_id=APP_TRAVEL', LINEAGE_IDS: 'QUEENS_KR_TRAVEL_MUKBANG|SEED_TRAVEL_KR_VALUE_MUKBANG_20260821_001', CONFIDENCE: 0.8, STATUS: 'READY_FALLBACK', CONSUMER_SCOPE: 'APP_TRAVEL|APP_KFOOD|APP_DRYWRITE|APP_ANALYZER', MEMO: 'Emergency fixture only. Live Central Bus and stored backdata are attempted first.'
+    EVENT_ID: 'EVT_TRAVEL_KR_VALUE_MUKBANG_SEED_20260821_001', EVENT_AT: '2026-08-21T05:20:00.000Z', PRODUCER_APP_ID: 'APP_CONTENT_OS', DATA_STAGE: 'SEED', ENTITY_TYPE: 'TRAVEL_SEED', ENTITY_ID: 'SEED_TRAVEL_KR_VALUE_MUKBANG_20260821_001', KEYWORD: '가성비 한국여행 먹방 스케줄', LOCALE: 'ko-KR', SUMMARY: '한국 가성비 먹방여행을 지역·시장·노포·맛집·예산·이동동선으로 조합하는 공용 Travel Seed', KEYWORDS: '한국|가성비|먹방|여행|스케줄|노포|시장|맛집|동선|예산', TAGS: 'TRAVEL|VALUE|MUKBANG|SCHEDULE|COMMON_TREND_SEED', METRICS_JSON: JSON.stringify({ enrichment_required: true, source_verified: true }), SOURCE_URL: 'https://docs.google.com/spreadsheets/d/1o6Me_qcdrSEVNvufjD_EQWVGvxvGKR_9ZYWSSYMclgQ/edit', CALL_URL: 'https://contents-os.com/api/intelligence?action=events&app_id=APP_TRAVEL', LINEAGE_IDS: 'QUEENS_KR_TRAVEL_MUKBANG|SEED_TRAVEL_KR_VALUE_MUKBANG_20260821_001', CONFIDENCE: 0.8, STATUS: 'READY_FALLBACK', CONSUMER_SCOPE: 'APP_TRAVEL|APP_KFOOD|APP_DRYWRITE|APP_ANALYZER', MEMO: 'Emergency fixture only. Live Central Bus and stored backdata are always attempted first.'
   },
   {
-    EVENT_ID: 'EVT_TRAVEL_KR_VALUE_MUKBANG_T1_20260821_001', EVENT_AT: '2026-08-21T05:21:00.000Z', PRODUCER_APP_ID: 'APP_TRAVEL', DATA_STAGE: 'T1', ENTITY_TYPE: 'TRAVEL_T1', ENTITY_ID: 'T1_TRAVEL_KR_VALUE_MUKBANG_20260821_001', KEYWORD: '가성비 한국여행 먹방 스케줄', LOCALE: 'ko-KR', SUMMARY: '지역별 장소·시장·노포·추천메뉴·가격상태·체류시간·다음 이동·총예산으로 조립하는 여행 T1 패키지', KEYWORDS: '한국|가성비|먹방|여행|스케줄|노포|시장|맛집|동선|예산', TAGS: 'TRAVEL|T1|AUTO_ROUTE|VALUE|MUKBANG', METRICS_JSON: JSON.stringify({ enrichment_required: true }), SOURCE_URL: 'https://docs.google.com/spreadsheets/d/1o6Me_qcdrSEVNvufjD_EQWVGvxvGKR_9ZYWSSYMclgQ/edit', CALL_URL: 'https://contents-os.com/api/intelligence?action=events&app_id=APP_TRAVEL', LINEAGE_IDS: 'SEED_TRAVEL_KR_VALUE_MUKBANG_20260821_001|T1_TRAVEL_KR_VALUE_MUKBANG_20260821_001', CONFIDENCE: 0.8, STATUS: 'READY_FALLBACK', CONSUMER_SCOPE: 'APP_TRAVEL|APP_KFOOD|APP_DRYWRITE|APP_ANALYZER', MEMO: 'Emergency fixture only. Live Central Bus and stored backdata are attempted first.'
+    EVENT_ID: 'EVT_TRAVEL_KR_VALUE_MUKBANG_T1_20260821_001', EVENT_AT: '2026-08-21T05:21:00.000Z', PRODUCER_APP_ID: 'APP_TRAVEL', DATA_STAGE: 'T1', ENTITY_TYPE: 'TRAVEL_T1', ENTITY_ID: 'T1_TRAVEL_KR_VALUE_MUKBANG_20260821_001', KEYWORD: '가성비 한국여행 먹방 스케줄', LOCALE: 'ko-KR', SUMMARY: '지역별 장소·시장·노포·추천메뉴·가격상태·체류시간·다음 이동·총예산으로 조립하는 여행 T1 패키지', KEYWORDS: '한국|가성비|먹방|여행|스케줄|노포|시장|맛집|동선|예산', TAGS: 'TRAVEL|T1|AUTO_ROUTE|VALUE|MUKBANG', METRICS_JSON: JSON.stringify({ enrichment_required: true }), SOURCE_URL: 'https://docs.google.com/spreadsheets/d/1o6Me_qcdrSEVNvufjD_EQWVGvxvGKR_9ZYWSSYMclgQ/edit', CALL_URL: 'https://contents-os.com/api/intelligence?action=events&app_id=APP_TRAVEL', LINEAGE_IDS: 'SEED_TRAVEL_KR_VALUE_MUKBANG_20260821_001|T1_TRAVEL_KR_VALUE_MUKBANG_20260821_001', CONFIDENCE: 0.8, STATUS: 'READY_FALLBACK', CONSUMER_SCOPE: 'APP_TRAVEL|APP_KFOOD|APP_DRYWRITE|APP_ANALYZER', MEMO: 'Emergency fixture only. Live Central Bus and stored backdata are always attempted first.'
   }
 ];
 
@@ -28,7 +28,7 @@ function safeUrl(body:any){
 
 function builtinGet(query: URLSearchParams, extra:any = {}) {
   const action = query.get('action') || 'health';
-  if (action === 'health') return { status: 200, body: { ok:true, service:'CENTRAL_INTELLIGENCE_HUB', version:'WRITEBUS_V4_LIVE_BUS_FIRST_20260828', canonical_repo:'8friend8ship-cloud/contents-os-git', mode:'LIVE_BUS_THEN_STORED_BACKDATA_THEN_BUILTIN', backend_configured:Boolean(CONFIGURED_BACKEND_URL), runtime_bridge_configured:Boolean(CONTENTOS_RUNTIME_URL), collector_read:true, collector_write:true, builtin_events:BUILTIN_EVENTS.length, at:new Date().toISOString(), ...extra } };
+  if (action === 'health') return { status: 200, body: { ok:true, service:'CENTRAL_INTELLIGENCE_HUB', version:'WRITEBUS_V4_LIVE_STORED_CHAIN_20260828', canonical_repo:'8friend8ship-cloud/contents-os-git', mode: BACKEND_URL ? 'UPSTREAM_PREFERRED' : 'LIVE_BUS_THEN_STORED_THEN_BUILTIN', backend_configured:Boolean(BACKEND_URL), runtime_bridge_configured:Boolean(CONTENTOS_RUNTIME_URL), collector_read:true, collector_write:true, builtin_events:BUILTIN_EVENTS.length, at:new Date().toISOString(), ...extra } };
   if (action === 'events') {
     const appId = String(query.get('app_id') || 'ALL_APPS');
     const limit = Math.max(1, Math.min(200, Number(query.get('limit') || 100)));
@@ -65,6 +65,24 @@ function rowToEvent(row:any, appId:string, index:number){
   };
 }
 
+async function collectorGetEvents(query:URLSearchParams){
+  const appId=String(query.get('app_id') || 'ALL_APPS');
+  if(appId === 'ALL_APPS') return null;
+  const limit=Math.max(1,Math.min(200,Number(query.get('limit') || 100)));
+  const eventId=String(query.get('event_id') || '');
+  const headers:Record<string,string>={'Content-Type':'application/json','Accept':'application/json'};
+  const token=process.env.CONTENT_OS_BACKEND_TOKEN;
+  if(token) headers['X-Content-OS-Token']=token;
+  const r=await fetch(COLLECTOR_URL,{method:'POST',headers,body:JSON.stringify({action:'search',asset_type:'TEXT',query:appId,limit}),redirect:'follow'});
+  const text=await r.text();
+  let body:any=null; try{body=JSON.parse(text)}catch{}
+  if(!r.ok || !body || body.ok===false) return null;
+  const rows=Array.isArray(body.results)?body.results:[];
+  const events=rows.map((row:any,index:number)=>rowToEvent(row,appId,index)).filter((event:any)=>!eventId || event.EVENT_ID===eventId).slice(-limit);
+  if(!events.length) return null;
+  return {status:200,body:{ok:true,mode:'STORED_BACKDATA',app_id:appId,count:events.length,events,scanned_rows:Number(body.scanned_rows||0)}};
+}
+
 function copyQuery(query: URLSearchParams) {
   const out = new URLSearchParams();
   query.forEach((value,key) => out.set(key,value));
@@ -72,7 +90,7 @@ function copyQuery(query: URLSearchParams) {
 }
 
 async function fetchJson(url:string) {
-  const r = await fetch(url, { redirect:'follow' });
+  const r = await fetch(url, { redirect:'follow', headers:{'Accept':'application/json'} });
   const text = await r.text();
   let body:any = null;
   try { body = JSON.parse(text); } catch {}
@@ -80,8 +98,8 @@ async function fetchJson(url:string) {
 }
 
 async function configuredBackendGet(query: URLSearchParams) {
-  if (!CONFIGURED_BACKEND_URL) return null;
-  const url = `${CONFIGURED_BACKEND_URL}${CONFIGURED_BACKEND_URL.includes('?') ? '&' : '?'}${query.toString()}`;
+  if (!BACKEND_URL) return null;
+  const url = `${BACKEND_URL}${BACKEND_URL.includes('?') ? '&' : '?'}${query.toString()}`;
   const {r,body} = await fetchJson(url);
   if (r.ok && body && body.ok !== false) return {status:r.status,body:{...body,mode:body.mode || 'LIVE',proxy_source:'CONFIGURED_BACKEND'}};
   throw new Error(`CONFIGURED_BACKEND_${r.status}`);
@@ -94,49 +112,41 @@ async function runtimeBridgeGet(query: URLSearchParams) {
   p.set('action', externalAction === 'events' ? 'contentos.intelligence.events.v3' : 'contentos.intelligence.health.v3');
   const url = `${CONTENTOS_RUNTIME_URL}${CONTENTOS_RUNTIME_URL.includes('?') ? '&' : '?'}${p.toString()}`;
   const {r,body} = await fetchJson(url);
-  if (r.ok && body && body.ok !== false) return {status:r.status,body:{...body,mode:body.mode || 'LIVE_CENTRAL_BUS',proxy_source:'WEBAPP_TEMPLATE_05_LIVE_CENTRAL_BUS'}};
-  throw new Error(`CONTENTOS_RUNTIME_BRIDGE_${r.status}`);
-}
-
-async function collectorGetEvents(query:URLSearchParams){
-  const appId=String(query.get('app_id') || 'ALL_APPS');
-  if(appId === 'ALL_APPS') return null;
-  const limit=Math.max(1,Math.min(200,Number(query.get('limit') || 100)));
-  const headers:Record<string,string>={'Content-Type':'application/json','Accept':'application/json'};
-  const token=process.env.CONTENT_OS_BACKEND_TOKEN;
-  if(token) headers['X-Content-OS-Token']=token;
-  const r=await fetch(COLLECTOR_URL,{method:'POST',headers,body:JSON.stringify({action:'search',asset_type:'TEXT',query:appId,limit}),redirect:'follow'});
-  const text=await r.text();
-  let body:any=null; try{body=JSON.parse(text)}catch{}
-  if(!r.ok || !body || body.ok===false) return null;
-  const rows=Array.isArray(body.results)?body.results:[];
-  const events=rows.map((row:any,index:number)=>rowToEvent(row,appId,index)).slice(-limit);
-  if(!events.length) return null;
-  return {status:200,body:{ok:true,mode:'STORED_BACKDATA',app_id:appId,count:events.length,events,scanned_rows:Number(body.scanned_rows||0)}};
+  if (!r.ok || !body || body.ok === false) throw new Error(`CONTENTOS_RUNTIME_BRIDGE_${r.status}`);
+  if (externalAction === 'events' && Number(body.count || 0) < 1) throw new Error('CONTENTOS_RUNTIME_BRIDGE_EMPTY');
+  return {status:r.status,body:{...body,proxy_source:'WEBAPP_TEMPLATE_05_LIVE_CENTRAL_BUS'}};
 }
 
 async function upstreamGet(query: URLSearchParams) {
+  const action=query.get('action') || 'health';
   const errors:string[] = [];
-  if (CONFIGURED_BACKEND_URL) {
+
+  if (BACKEND_URL) {
     try {
-      const configured = await configuredBackendGet(query);
-      if (configured) return configured;
-    } catch (error:any) { errors.push(String(error?.message || error)); }
+      const configured=await configuredBackendGet(query);
+      if(configured) return configured;
+    } catch (error:any) {
+      errors.push(String(error?.message || error));
+    }
   }
 
   try {
-    const live = await runtimeBridgeGet(query);
-    if (live) return live;
-  } catch (error:any) { errors.push(String(error?.message || error)); }
-
-  if ((query.get('action') || 'health') === 'events') {
-    try {
-      const stored=await collectorGetEvents(query);
-      if(stored) return {...stored,body:{...stored.body,live_bus_fallback:true,upstream_errors:errors.slice(0,3)}};
-    } catch (error:any) { errors.push(String(error?.message || error)); }
+    const live=await runtimeBridgeGet(query);
+    if(live) return live;
+  } catch (error:any) {
+    errors.push(String(error?.message || error));
   }
 
-  return builtinGet(query,{upstream_fallback:true,upstream_errors:errors.slice(0,3)});
+  if (action === 'events') {
+    try {
+      const stored=await collectorGetEvents(query);
+      if(stored) return {status:stored.status,body:{...stored.body,live_bus_fallback:true,upstream_errors:errors.slice(0,4)}};
+    } catch (error:any) {
+      errors.push(String(error?.message || error));
+    }
+  }
+
+  return builtinGet(query,{upstream_fallback:true,upstream_errors:errors.slice(0,4)});
 }
 
 async function collectorPost(body:any){
@@ -158,9 +168,9 @@ async function collectorPost(body:any){
 }
 
 async function upstreamPost(body:any) {
-  if (!CONFIGURED_BACKEND_URL) return collectorPost(body);
+  if (!BACKEND_URL) return collectorPost(body);
   try {
-    const r=await fetch(CONFIGURED_BACKEND_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),redirect:'follow'});
+    const r=await fetch(BACKEND_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),redirect:'follow'});
     const text=await r.text();
     try { const parsed=JSON.parse(text); if(r.ok && parsed?.ok!==false) return {status:r.status,body:parsed}; } catch {}
   } catch {}
