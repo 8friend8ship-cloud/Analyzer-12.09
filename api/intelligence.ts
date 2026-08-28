@@ -28,7 +28,7 @@ function safeUrl(body:any){
 
 function builtinGet(query: URLSearchParams, extra:any = {}) {
   const action = query.get('action') || 'health';
-  if (action === 'health') return { status: 200, body: { ok:true, service:'CENTRAL_INTELLIGENCE_HUB', version:'WRITEBUS_V4_LIVE_STORED_CHAIN_20260828', canonical_repo:'8friend8ship-cloud/contents-os-git', mode: BACKEND_URL ? 'UPSTREAM_PREFERRED' : 'LIVE_BUS_THEN_STORED_THEN_BUILTIN', backend_configured:Boolean(BACKEND_URL), runtime_bridge_configured:Boolean(CONTENTOS_RUNTIME_URL), collector_read:true, collector_write:true, builtin_events:BUILTIN_EVENTS.length, at:new Date().toISOString(), ...extra } };
+  if (action === 'health') return { status: 200, body: { ok:true, service:'CENTRAL_INTELLIGENCE_HUB', version:'WRITEBUS_V5_ANALYZER_PRODUCTION_CANONICAL_20260828', canonical_repo:'8friend8ship-cloud/Analyzer-12.09', feature_upstream_repo:'8friend8ship-cloud/contents-os-git', deployment_policy:'KEEP_EXISTING_VERCEL_BINDING', mode: BACKEND_URL ? 'UPSTREAM_PREFERRED' : 'LIVE_BUS_THEN_STORED_THEN_BUILTIN', backend_configured:Boolean(BACKEND_URL), runtime_bridge_configured:Boolean(CONTENTOS_RUNTIME_URL), collector_read:true, collector_write:true, builtin_events:BUILTIN_EVENTS.length, at:new Date().toISOString(), ...extra } };
   if (action === 'events') {
     const appId = String(query.get('app_id') || 'ALL_APPS');
     const limit = Math.max(1, Math.min(200, Number(query.get('limit') || 100)));
