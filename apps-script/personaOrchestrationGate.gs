@@ -1,5 +1,5 @@
 /*
- * PERSONA_ORCHESTRATION_GATE_V1_20260828
+ * PERSONA_ORCHESTRATION_GATE_V1_1_20260828
  * API-free central contract for all front-app DryWriter persona flows.
  *
  * This module intentionally does NOT call Gemini or a paid model API.
@@ -30,6 +30,18 @@ function personaNormalize_(v) {
 
 function personaUpper_(v) {
   return personaNormalize_(v).toUpperCase();
+}
+
+function personaReviewPass_(v) {
+  return ['PASS', 'VERIFIED', 'APPROVED'].indexOf(personaUpper_(v)) !== -1;
+}
+
+function personaPackReady_(v) {
+  return ['ACTIVE', 'PASS', 'READY', 'VERIFIED', 'APPROVED'].indexOf(personaUpper_(v)) !== -1;
+}
+
+function personaPassOrNotRequired_(v) {
+  return ['PASS', 'VERIFIED', 'APPROVED', 'NOT_REQUIRED', 'N/A'].indexOf(personaUpper_(v)) !== -1;
 }
 
 function personaRows_(sheet) {
@@ -85,8 +97,9 @@ function resolvePersonaMatch_(ss, request) {
   var snapshot = personaNormalize_(latest.PERSONA_SNAPSHOT_ID);
   var geminiQa = personaUpper_(latest.GEMINI_QA);
   return {
-    ok: decision === PERSONA_ORCH_V1.pass && !!snapshot && geminiQa !== 'PENDING' && geminiQa !== 'PENDING_GEMINI',
+    ok: decision === PERSONA_ORCH_V1.pass && !!snapshot && personaReviewPass_(geminiQa),
     decision: decision || 'PENDING',
+    geminiQa: geminiQa || 'MISSING',
     personaId: latest.PERSONA_ID || '',
     personaSnapshotId: snapshot,
     languagePackId: latest.LANGUAGE_PACK_ID || '',
@@ -103,7 +116,7 @@ function buildPersonaStoryboard_(ss, payload) {
   var appId = personaNormalize_(payload.appId || payload.APP_ID || payload.SOURCE_APP_ID);
   var scenes = payload.scenes || [];
   var persona = resolvePersonaMatch_(ss, payload);
-  if (!persona.ok && persona.decision !== 'NOT_REQUIRED') throw new Error('PERSONA_MATCH_BLOCKED:' + persona.decision);
+  if (!persona.ok && persona.decision !== 'NOT_REQUIRED') throw new Error('PERSONA_MATCH_BLOCKED:' + persona.decision + ':' + (persona.geminiQa || ''));
   if (!Array.isArray(scenes) || !scenes.length) throw new Error('STORYBOARD_SCENES_REQUIRED');
   var sheet = ss.getSheetByName('STORYBOARD_PERSONA');
   scenes.forEach(function(scene, i) {
@@ -167,7 +180,7 @@ function botKnowledgePackState_(ss, appId, personaSnapshotId) {
   if (!rows.length) return { ok: false, state: 'MISSING_BOT_KNOWLEDGE_PACK' };
   var latest = rows[rows.length - 1];
   return {
-    ok: /ACTIVE|PASS|READY/.test(personaUpper_(latest.STATUS)),
+    ok: personaPackReady_(latest.STATUS),
     state: latest.STATUS || 'PENDING',
     pack: latest
   };
@@ -201,12 +214,29 @@ function runGeminiProjectCrosscheckGate_(ss, payload) {
   var driveChat = personaNormalize_(latest.DRIVE_GEMINI_CHAT_REF);
   var docExport = personaNormalize_(latest.DOC_EXPORT_ID);
   var decision = personaUpper_(latest.FINAL_DECISION);
+  var docQa = personaReviewPass_(latest.DOC_CROSSCHECK);
+  var factQa = personaReviewPass_(latest.FACT_QA);
+  var requirementQa = personaReviewPass_(latest.REQUIREMENT_MATCH);
+  var personaQa = personaPassOrNotRequired_(latest.PERSONA_QA);
+  var storyboardQa = personaPassOrNotRequired_(latest.STORYBOARD_QA);
+  var assetQa = personaPassOrNotRequired_(latest.ASSET_QA);
+  var languageVoiceQa = personaPassOrNotRequired_(latest.LANGUAGE_VOICE_QA);
   return {
-    ok: decision === PERSONA_ORCH_V1.pass && !!sheetRef && !!driveChat && !!docExport,
+    ok: decision === PERSONA_ORCH_V1.pass && !!sheetRef && !!driveChat && !!docExport &&
+      docQa && factQa && requirementQa && personaQa && storyboardQa && assetQa && languageVoiceQa,
     decision: decision || 'PENDING',
     hasSheetReview: !!sheetRef,
     hasDriveGeminiChatRef: !!driveChat,
     hasDocExport: !!docExport,
+    qa: {
+      doc: docQa,
+      fact: factQa,
+      requirement: requirementQa,
+      persona: personaQa,
+      storyboard: storyboardQa,
+      asset: assetQa,
+      languageVoice: languageVoiceQa
+    },
     evidence: latest
   };
 }
@@ -219,6 +249,7 @@ function assertPersonaPackagePromotionAllowed_(ss, payload) {
   var ok = persona.ok && bot.ok && cross.ok;
   if (!ok) throw new Error('PERSONA_PACKAGE_PROMOTION_BLOCKED:' + JSON.stringify({
     persona: persona.decision,
+    geminiQa: persona.geminiQa || '',
     bot: bot.state,
     crosscheck: cross.decision
   }));
