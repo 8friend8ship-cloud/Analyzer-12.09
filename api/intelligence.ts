@@ -83,7 +83,7 @@ async function configuredBackendGet(query: URLSearchParams) {
   if (!CONFIGURED_BACKEND_URL) return null;
   const url = `${CONFIGURED_BACKEND_URL}${CONFIGURED_BACKEND_URL.includes('?') ? '&' : '?'}${query.toString()}`;
   const {r,body} = await fetchJson(url);
-  if (r.ok && body?.ok !== false) return {status:r.status,body:{...body,mode:body.mode || 'LIVE',proxy_source:'CONFIGURED_BACKEND'}};
+  if (r.ok && body && body.ok !== false) return {status:r.status,body:{...body,mode:body.mode || 'LIVE',proxy_source:'CONFIGURED_BACKEND'}};
   throw new Error(`CONFIGURED_BACKEND_${r.status}`);
 }
 
@@ -94,7 +94,7 @@ async function runtimeBridgeGet(query: URLSearchParams) {
   p.set('action', externalAction === 'events' ? 'contentos.intelligence.events.v3' : 'contentos.intelligence.health.v3');
   const url = `${CONTENTOS_RUNTIME_URL}${CONTENTOS_RUNTIME_URL.includes('?') ? '&' : '?'}${p.toString()}`;
   const {r,body} = await fetchJson(url);
-  if (r.ok && body?.ok !== false) return {status:r.status,body:{...body,mode:body.mode || 'LIVE_CENTRAL_BUS',proxy_source:'WEBAPP_TEMPLATE_05_LIVE_CENTRAL_BUS'}};
+  if (r.ok && body && body.ok !== false) return {status:r.status,body:{...body,mode:body.mode || 'LIVE_CENTRAL_BUS',proxy_source:'WEBAPP_TEMPLATE_05_LIVE_CENTRAL_BUS'}};
   throw new Error(`CONTENTOS_RUNTIME_BRIDGE_${r.status}`);
 }
 
