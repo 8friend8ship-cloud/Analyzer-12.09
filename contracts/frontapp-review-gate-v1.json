@@ -1,0 +1,70 @@
+{
+  "contractId": "FRONTAPP_REVIEW_GATE_V1_20260828",
+  "status": "ACTIVE_SPEC_SHEETS_INSTALLED_RUNTIME_PROVIDER_PENDING",
+  "sourceOfTruth": "01_MASTER_REGISTRY",
+  "purpose": "Fail-closed review gate for DryWriter text and all derived front-app assets before template promotion or publishing.",
+  "apps": {
+    "APP_ANALYZER": {"sheet": "WEBAPP_TEMPLATE_05"},
+    "APP_INTERIOR": {"sheet": "WEBAPP_TEMPLATE_06"},
+    "APP_TRAVEL": {"sheet": "WEBAPP_TEMPLATE_07"},
+    "APP_SECURITIES_FRONT": {"sheet": "WEBAPP_TEMPLATE_08"},
+    "APP_KFOOD": {"sheet": "WEBAPP_TEMPLATE_09"},
+    "APP_DRYWRITE": {"sheet": "J365_AI_작가에이전트_V2_운영시트"}
+  },
+  "requiredTabs": [
+    "GEMINI_REVIEW",
+    "ASSET_QA_REQUIREMENTS",
+    "ASSET_QA_QUEUE",
+    "WORKFLOW_CROSSCHECK"
+  ],
+  "flow": [
+    "FRONT_UI_REQUEST",
+    "DRYWRITER_QUEUE",
+    "AUTO_QA",
+    "APPROVED_REVIEW_PROVIDER",
+    "FIX",
+    "RETEST",
+    "TEXT_PASS",
+    "DERIVED_ASSET_REQUIREMENTS",
+    "ASSET_QA",
+    "WORKFLOW_CROSSCHECK",
+    "TEMPLATE_PROMOTION",
+    "CENTRAL_WRITEBACK",
+    "PUBLISH_GATE"
+  ],
+  "reviewProviders": [
+    "SHEETS_GEMINI_OR_USER_APPROVED_GEMINI",
+    "CHATGPT_REVIEW",
+    "DETERMINISTIC_EXISTING_QA"
+  ],
+  "providerPolicy": {
+    "paidGeminiDeveloperApiDefault": false,
+    "missingProviderResult": "BLOCK",
+    "fallbackMustRecordProviderAndEvidence": true,
+    "neverConvertPendingToPass": true
+  },
+  "assetTypes": [
+    "IMAGE",
+    "IMAGE_CHART",
+    "VIDEO",
+    "VOICE_AUDIO",
+    "LANGUAGE",
+    "TTS",
+    "SUBTITLE",
+    "MOTION_LIPSYNC_FACE",
+    "BGM_SFX"
+  ],
+  "promotionGate": {
+    "textFinalDecision": "PASS",
+    "allUsedAssetsFinalDecision": "PASS",
+    "criticalWorkflowCrosscheck": "PASS",
+    "runtimeReadback": "X2_WHEN_RUNTIME_MUTATION_OR_DELIVERY_IS_CLAIMED"
+  },
+  "repairRule": "Repair only the failing sentence, claim, asset dimension, or runtime stage; preserve LAST_GOOD and failure evidence.",
+  "learningWriteback": {
+    "success": "Seed/Template/Asset Pack",
+    "failure": "Queens/DO_NOT_REPEAT/PREVENTION",
+    "centralTabs": ["18_AGENT_INSTRUCTION","34_CHAT_COMMAND_HISTORY","56_FRONTAPP_WORKFLOW_MAP","63_EVOLUTION_CHANGELOG","69_MULTIMODAL_EXECUTION_ROUTER","70_MULTIMODAL_TEMPLATE_LIBRARY","71_MULTIMODAL_QA_HISTORY","75_ORCHESTRA_WORKFLOW_MAP","76_ASSET_PACK_FACTORY","77_TEMPLATE_EVOLUTION_FACTORY","79_FUNCTION_DATA_USAGE_MAP","80_DATA_RUNTIME_QA_LOG"]
+  },
+  "approvalBoundary": "New OAuth, new cost, public publishing, destructive operations, secrets, payments or other irreversible actions remain human-gated."
+}
