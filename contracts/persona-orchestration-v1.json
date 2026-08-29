@@ -1,0 +1,63 @@
+{
+  "contractId": "PERSONA_ORCHESTRATION_V1",
+  "version": "1.0.0",
+  "canonicalSource": "apps-script/personaOrchestrator.gs",
+  "routing": [
+    "42_PERSONA_ROUTING_MASTER:PR_ALL_PERSONA_AUTOMATION_V1",
+    "47_PERSONA_DATA_ROUTING:PDR_ALL_PERSONA_ORCH_V1"
+  ],
+  "stages": [
+    "FRONT_REQUEST",
+    "DRYWRITER_TEXT_PASS",
+    "PERSONA_ROLE_DETECT",
+    "CENTRAL_MATCH_REUSE_FIRST",
+    "CREATE_IF_MISSING",
+    "PERSONA_GEMINI_QA",
+    "SNAPSHOT_LOCK",
+    "STORYBOARD_PERSONA",
+    "VTUBE_PERSONA_ASSET_QA",
+    "LANGUAGE_VOICE_PACK",
+    "BOT_PERSONA_KNOWLEDGE",
+    "SHEET_GEMINI_REVIEW",
+    "DRIVE_PROJECT_GEMINI_REVIEW",
+    "DOC_EXPORT_CROSSCHECK",
+    "PROMOTION_GATE"
+  ],
+  "requiredTabs": [
+    "PERSONA_MATCH_QUEUE",
+    "STORYBOARD_PERSONA",
+    "BOT_PERSONA_KNOWLEDGE",
+    "GEMINI_PROJECT_CROSSCHECK"
+  ],
+  "rules": {
+    "personaReuseBeforeCreate": true,
+    "immutableSnapshotWhenUsed": true,
+    "verifiedEvidenceOnlyForBotKnowledge": true,
+    "rightsEvidenceRequiredForVisiblePersonaAssets": true,
+    "twoStageGeminiEvidenceRequired": true,
+    "docExportCrosscheckRequired": true,
+    "paidGeminiDeveloperApiDefault": false,
+    "providerInvocationInThisSource": false,
+    "failClosed": true,
+    "repairFailedDimensionOnly": true,
+    "duplicateDailyTriggerForbidden": true,
+    "successToSeedTemplateAssetPack": true,
+    "failureToPreventionQueens": true
+  },
+  "runtimeLimits": {
+    "maxSecondsPerRun": 240,
+    "batchSize": 20,
+    "maxNewRowsPerDay": 200,
+    "dailyHandler": "personaDailyScheduler_"
+  },
+  "promotionEvidence": [
+    "persona match QA PASS",
+    "immutable persona snapshot id",
+    "storyboard/persona asset QA PASS when required",
+    "language/voice QA PASS when required",
+    "sheet Gemini review evidence",
+    "Drive project Gemini chat reference",
+    "Docs export crosscheck PASS",
+    "same fixture readback x2"
+  ]
+}
