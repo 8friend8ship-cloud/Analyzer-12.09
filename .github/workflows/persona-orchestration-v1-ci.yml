@@ -4,11 +4,13 @@ on:
   push:
     branches: [main]
     paths:
+      - 'apps-script/personaOrchestrationGate.gs'
       - 'apps-script/personaOrchestrator.gs'
       - 'contracts/persona-orchestration-v1.json'
       - '.github/workflows/persona-orchestration-v1-ci.yml'
   pull_request:
     paths:
+      - 'apps-script/personaOrchestrationGate.gs'
       - 'apps-script/personaOrchestrator.gs'
       - 'contracts/persona-orchestration-v1.json'
       - '.github/workflows/persona-orchestration-v1-ci.yml'
@@ -18,19 +20,49 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Parse Apps Script as JavaScript
+      - name: Parse factory and canonical gate together
         run: |
-          cp apps-script/personaOrchestrator.gs /tmp/personaOrchestrator.js
-          node --check /tmp/personaOrchestrator.js
-      - name: Validate contract JSON
-        run: node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('contracts/persona-orchestration-v1.json','utf8'));if(x.contractId!=='PERSONA_ORCHESTRATION_V1'||x.rules.failClosed!==true||x.rules.providerInvocationInThisSource!==false||x.rules.paidGeminiDeveloperApiDefault!==false)process.exit(1);"
-      - name: Enforce fail-closed evidence contract
+          cat apps-script/personaOrchestrationGate.gs apps-script/personaOrchestrator.gs > /tmp/personaCombined.js
+          node --check /tmp/personaCombined.js
+      - name: Validate reconciled contract JSON
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const x=JSON.parse(fs.readFileSync('contracts/persona-orchestration-v1.json','utf8'));
+          if(x.contractId!=='PERSONA_ORCHESTRATION_V1') process.exit(1);
+          if(x.version!=='1.1.0') process.exit(1);
+          if(x.rules.failClosed!==true) process.exit(1);
+          if(x.rules.promotionTruthOnlyInCanonicalGate!==true) process.exit(1);
+          if(x.rules.providerInvocationInFactorySource!==false) process.exit(1);
+          if(x.rules.paidGeminiDeveloperApiDefault!==false) process.exit(1);
+          if(x.rules.duplicateDailyTriggerForbidden!==true) process.exit(1);
+          if(x.runtimeLimits.schedulerMode!=='EXISTING_5M_FACTORY_WAKE') process.exit(1);
+          NODE
+      - name: Enforce canonical delegation and no duplicate clock
         shell: bash
         run: |
-          grep -q "function assertPersonaMatchAllowed_" apps-script/personaOrchestrator.gs
-          grep -q "function assertTwoStageGeminiCrosscheck_" apps-script/personaOrchestrator.gs
-          grep -q "DRIVE_GEMINI_CHAT_REF" apps-script/personaOrchestrator.gs
-          grep -q "DOC_EXPORT_ID" apps-script/personaOrchestrator.gs
-          grep -q "GEMINI_X2_FINAL_NOT_PASS" apps-script/personaOrchestrator.gs
-          grep -q "function ensurePersonaDailyTrigger_" apps-script/personaOrchestrator.gs
+          grep -q "function assertPersonaPackagePromotionAllowed_" apps-script/personaOrchestrationGate.gs
+          grep -q "function runGeminiProjectCrosscheckGate_" apps-script/personaOrchestrationGate.gs
+          grep -q "function matchPersonaForContent_" apps-script/personaOrchestrator.gs
+          grep -q "function buildBotPersonaKnowledgePack_" apps-script/personaOrchestrator.gs
+          grep -q "function collectRecurringPersonaErrors_" apps-script/personaOrchestrator.gs
+          grep -q "return assertPersonaPackagePromotionAllowed_" apps-script/personaOrchestrator.gs
+          grep -q "runGeminiProjectCrosscheckGate_" apps-script/personaOrchestrator.gs
+          grep -q "function runPersonaFactoryDailyIfDue_" apps-script/personaOrchestrator.gs
+          grep -q "installNewTrigger: false" apps-script/personaOrchestrator.gs
+          ! grep -q "ScriptApp.newTrigger" apps-script/personaOrchestrator.gs
           ! grep -Eiq "generativelanguage\.googleapis\.com|GEMINI_API_KEY|GOOGLE_API_KEY" apps-script/personaOrchestrator.gs
+      - name: Load both modules without global redeclaration conflict
+        run: |
+          node <<'NODE'
+          const fs=require('fs'), vm=require('vm'), assert=require('assert');
+          const code=fs.readFileSync('apps-script/personaOrchestrationGate.gs','utf8')+'\n'+fs.readFileSync('apps-script/personaOrchestrator.gs','utf8');
+          const sandbox={Object,String,Array,Date,JSON,RegExp,Math,Set};
+          vm.createContext(sandbox);
+          vm.runInContext(code,sandbox);
+          assert.strictEqual(sandbox.PERSONA_ORCH_V1.pass,'PASS');
+          assert.strictEqual(sandbox.PERSONA_FACTORY_V1.runtime.schedulerMode,'EXISTING_5M_FACTORY_WAKE');
+          assert.strictEqual(typeof sandbox.assertPersonaPackagePromotionAllowed_,'function');
+          assert.strictEqual(typeof sandbox.matchPersonaForContent_,'function');
+          console.log('canonical gate + persona factory combined-load PASS');
+          NODE
