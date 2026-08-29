@@ -1,0 +1,30 @@
+{
+  "version": "2026-08-29.1",
+  "manager": "CENTRAL_QR_MANAGER",
+  "registry": {
+    "assetSheet": "01_MASTER_REGISTRY/55_QR_TOUCH_ASSET_MAP",
+    "lifecycleSheet": "01_MASTER_REGISTRY/90_QR_LIFECYCLE_CONTROL"
+  },
+  "assets": [
+    {
+      "qrAssetId": "QR_MVP_CONTENTOS_ROOT_001",
+      "appId": "APP_ANALYZER",
+      "contentId": "MVP_CONTENTOS_ROOT",
+      "qrClass": "STOREFRONT_STATIC_ROUTE",
+      "targetUrl": "https://contents-os.com",
+      "touchUrl": "https://contents-os.com",
+      "frontMvpPath": "/qr/contentos/",
+      "sha256": "9ff67b300f1d0646ceb23625977902ce4e7f9eec3b5d335b48d0e9aeefd11602",
+      "status": "FRONT_MVP_STAGED",
+      "linkRefreshPolicy": "STABLE_ROUTE_HOURLY_HEALTH_DAILY_FULL_RECONCILE"
+    }
+  ],
+  "rules": {
+    "sameMobile": "TOUCH_TARGET_URL",
+    "otherDeviceOrPrint": "SCAN_QR",
+    "shoppingExpiry": "REFRESH_BACKING_TARGET_FIRST",
+    "reissue": "ONLY_IF_STABLE_TARGET_CANNOT_BE_PRESERVED_OR_SECURITY_IDENTITY_REQUIRES_ROTATION",
+    "paymentOrPairExpiry": "RETIRE_AND_RECREATE_ONLY_ON_NEW_USER_ACTION",
+    "secretsInQr": false
+  }
+}
