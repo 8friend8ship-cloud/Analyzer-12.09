@@ -1,0 +1,36 @@
+name: Persona Orchestration V1 CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps-script/personaOrchestrator.gs'
+      - 'contracts/persona-orchestration-v1.json'
+      - '.github/workflows/persona-orchestration-v1-ci.yml'
+  pull_request:
+    paths:
+      - 'apps-script/personaOrchestrator.gs'
+      - 'contracts/persona-orchestration-v1.json'
+      - '.github/workflows/persona-orchestration-v1-ci.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse Apps Script as JavaScript
+        run: |
+          cp apps-script/personaOrchestrator.gs /tmp/personaOrchestrator.js
+          node --check /tmp/personaOrchestrator.js
+      - name: Validate contract JSON
+        run: node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('contracts/persona-orchestration-v1.json','utf8'));if(x.contractId!=='PERSONA_ORCHESTRATION_V1'||x.rules.failClosed!==true||x.rules.providerInvocationInThisSource!==false||x.rules.paidGeminiDeveloperApiDefault!==false)process.exit(1);"
+      - name: Enforce fail-closed evidence contract
+        shell: bash
+        run: |
+          grep -q "function assertPersonaMatchAllowed_" apps-script/personaOrchestrator.gs
+          grep -q "function assertTwoStageGeminiCrosscheck_" apps-script/personaOrchestrator.gs
+          grep -q "DRIVE_GEMINI_CHAT_REF" apps-script/personaOrchestrator.gs
+          grep -q "DOC_EXPORT_ID" apps-script/personaOrchestrator.gs
+          grep -q "GEMINI_X2_FINAL_NOT_PASS" apps-script/personaOrchestrator.gs
+          grep -q "function ensurePersonaDailyTrigger_" apps-script/personaOrchestrator.gs
+          ! grep -Eiq "generativelanguage\.googleapis\.com|GEMINI_API_KEY|GOOGLE_API_KEY" apps-script/personaOrchestrator.gs
