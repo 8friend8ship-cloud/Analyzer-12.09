@@ -1,0 +1,43 @@
+name: QR MVP Contract
+
+on:
+  push:
+    branches:
+      - feature/central-qr-front-mvp-20260829
+  pull_request:
+    paths:
+      - 'public/qr/**'
+      - '.github/workflows/qr-mvp-contract.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify central QR contract
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const manifest = JSON.parse(fs.readFileSync('public/qr/manifest.json','utf8'));
+          const html = fs.readFileSync('public/qr/contentos/index.html','utf8');
+          const asset = manifest.assets.find(x => x.qrAssetId === 'QR_MVP_CONTENTOS_ROOT_001');
+          if (!asset) throw new Error('QR_ASSET_MISSING');
+          if (asset.targetUrl !== 'https://contents-os.com') throw new Error('TARGET_MISMATCH');
+          if (asset.touchUrl !== asset.targetUrl) throw new Error('TOUCH_TARGET_MISMATCH');
+          if (manifest.rules?.secretsInQr !== false) throw new Error('SECRET_POLICY_MISSING');
+          if (!html.includes('href="https://contents-os.com"')) throw new Error('TOUCH_LINK_MISSING');
+          if (!html.includes('data:image/png;base64,')) throw new Error('LOCAL_QR_IMAGE_MISSING');
+          if (!html.includes('noindex')) throw new Error('NOINDEX_MISSING');
+          const forbidden = /(cardNumber|\bCVC\b|\bCVV\b|accountPassword|bankPassword|pgSecret|privateKey|secretKey)/i;
+          if (forbidden.test(html) || forbidden.test(JSON.stringify(manifest))) throw new Error('FORBIDDEN_SECRET_FIELD_PRESENT');
+          console.log('QR_CONTRACT_PASS', asset.qrAssetId, asset.targetUrl);
+          NODE
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build
+        run: npm run build
