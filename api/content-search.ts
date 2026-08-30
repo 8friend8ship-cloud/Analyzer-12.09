@@ -1,3 +1,5 @@
+import { findVerifiedSeedReuse } from './verified-seed-reuse';
+
 const BACKEND_URL = process.env.CONTENT_OS_BACKEND_URL || process.env.CENTRAL_INTELLIGENCE_BACKEND_URL || '';
 const CANONICAL_COLLECTOR_URL = 'https://script.google.com/macros/s/AKfycbx5WTegTKUnyvFZC_qOaGBPlmKANLwXyNue19jLkFhdFwHnnp1E6_trZeVGdIg7B3GA/exec';
 
@@ -108,6 +110,31 @@ export default async function handler(req:any,res:any){
   if(!q) return res.status(400).json({ok:false,status:'ERROR',videos:[],message:'QUERY_REQUIRED'});
   const normalized=normalizeQuery(q);
   const requestedLimit=numberParam(req.query?.resultsLimit,25);
+
+  const verifiedSeed=findVerifiedSeedReuse(normalized);
+  if(verifiedSeed && verifiedSeed.appId==='APP_CONTENT_OS'){
+    return res.status(200).json({
+      ok:true,
+      status:'READY',
+      sourceMode:'VERIFIED_SEED_REUSE',
+      query:q,
+      normalizedQuery:verifiedSeed.canonicalQuery,
+      seedId:verifiedSeed.seedId,
+      t1Id:null,
+      t2Id:verifiedSeed.frontPackageId || null,
+      frontPackageId:verifiedSeed.frontPackageId,
+      videos:[],
+      channels:[],
+      seedReuse:{
+        topicId:verifiedSeed.topicId,
+        sourceIds:verifiedSeed.sourceIds,
+        status:verifiedSeed.status,
+        evidence:verifiedSeed.evidence,
+      },
+      lineage:['QUERY','VERIFIED_SEED_REUSE',verifiedSeed.seedId,verifiedSeed.frontPackageId].filter(Boolean),
+      message:'Existing verified/front-ready Seed reused. Queens refresh is not required for this query.',
+    });
+  }
 
   const params=new URLSearchParams({
     action:'content.search',
