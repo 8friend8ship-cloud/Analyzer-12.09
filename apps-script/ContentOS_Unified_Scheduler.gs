@@ -1,4 +1,4 @@
-const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V5_20260823';
+const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V6_IMAGE_LEARNING_20260831';
 
 /**
  * Single logical entrypoint intended to be called by the already-installed
@@ -22,10 +22,11 @@ function contentOsUnifiedSchedulerTick() {
   out.stages.apiAbQa = runOptionalContentOsStage_('runApiAbQaControlServerFallback');
   out.stages.allAppFactory = runOptionalContentOsStage_('runAllAppBackdataFactoryControl10m');
   out.stages.allAppApiAb = runOptionalContentOsStage_('runAllAppApiAbQaRequestWindow');
+  out.stages.imageLearning = runOptionalContentOsStage_('runImageLearning10mTickV2');
 
   out.ok = Object.keys(out.stages).every(function(k) {
     const r = out.stages[k];
-    return r && (r.ok !== false || r.skipped === true || r.degraded === true);
+    return r && (r.ok !== false || r.skipped === true || r.degraded === true || r.hold === true);
   });
   out.finishedAt = new Date().toISOString();
   return out;
@@ -63,6 +64,9 @@ function runOptionalContentOsStage_(handlerName) {
     if (handlerName === 'runAllAppApiAbQaRequestWindow' && typeof runAllAppApiAbQaRequestWindow === 'function') {
       return runAllAppApiAbQaRequestWindow();
     }
+    if (handlerName === 'runImageLearning10mTickV2' && typeof runImageLearning10mTickV2 === 'function') {
+      return runImageLearning10mTickV2();
+    }
     return {ok:true, skipped:true, reason:'HANDLER_NOT_SYNCED', handler:handlerName};
   } catch (err) {
     return {ok:false, handler:handlerName, error:String(err && err.message || err)};
@@ -88,11 +92,14 @@ function auditContentOsTriggerContract() {
   });
   const duplicateOwn = rows.filter(function(r) { return r.handler === 'contentOsUnifiedSchedulerTick'; }).length;
   const duplicateAllApp = rows.filter(function(r) { return r.handler === 'runAllAppBackdataFactoryControl10m'; }).length;
+  const duplicateImage = rows.filter(function(r) { return r.handler === 'runImageLearning10mTickV2' || r.handler === 'runImageLearningFromFactoryWakeV2'; }).length;
   return {
-    ok: duplicateOwn <= 1 && duplicateAllApp === 0,
+    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0,
     physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE',
     unifiedTriggerCount: duplicateOwn,
     allAppPhysicalTriggerCount: duplicateAllApp,
+    imageLearningPhysicalTriggerCount: duplicateImage,
+    imageLearningLogicalMinutes: 10,
     triggers: rows,
     version: CONTENTOS_UNIFIED_SCHEDULER_VERSION
   };
