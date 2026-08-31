@@ -1,0 +1,54 @@
+{
+  "contractId": "PERSONA_MVP_HOURLY_GOVERNOR_V1",
+  "version": "1.0.0",
+  "source": "apps-script/personaMvpHourlyGovernor.gs",
+  "physicalWakeMinutes": 5,
+  "learningDueMinutes": 10,
+  "hourlyDueMinutes": 60,
+  "runtime": {
+    "safeYieldSeconds": 270,
+    "hardStopSeconds": 285,
+    "preservePartial": true,
+    "staleClaimSeconds": 300,
+    "resumeFromLastGood": true,
+    "duplicateTimerForbidden": true
+  },
+  "requiredModalities": [
+    "IMAGE",
+    "LANGUAGE",
+    "VOICE",
+    "FACE_EXPRESSION",
+    "MOUTH_LIPSYNC",
+    "GESTURE",
+    "MOTION"
+  ],
+  "comparisonSources": {
+    "V_TUBE": "persona image, face/expression, mouth/lipsync, gesture, motion planning and video-template queue",
+    "ANIMATION": "deterministic motion/scene/render baseline and API-free fallback",
+    "NOTEBOOKLM": "voice/audio learning source only after actual artifact + Drive readback",
+    "FLOW": "generative comparison teacher/exception path only after result ACK x2"
+  },
+  "learningOrder": [
+    "ACTUAL_OUTPUT",
+    "QA_COMPARE",
+    "SEED_CANDIDATE",
+    "FAILURE_SIGNATURE",
+    "TEMPLATE_PATCH_CANDIDATE",
+    "SAME_FIXTURE_X2",
+    "VERIFIED_TEMPLATE_PROMOTION"
+  ],
+  "promotionGate": {
+    "sourceOrPreviewOnlyCannotPromote": true,
+    "actualOutputRequired": true,
+    "driveReadbackX2Required": true,
+    "allRequiredModalitiesRequired": true,
+    "criticalFailureCount": 0
+  },
+  "runnerPolicy": {
+    "staleHeartbeatMinutes": 15,
+    "claimWithoutResultSeconds": 300,
+    "onStale": "SAVE_PARTIAL_RELEASE_REQUEUE_LAST_GOOD",
+    "blindRetryForbidden": true
+  },
+  "installNewTrigger": false
+}
