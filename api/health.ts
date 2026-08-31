@@ -7,7 +7,7 @@ export default async function handler(_req: any, res: any) {
   return res.status(200).json({
     ok: true,
     service: 'content-os',
-    version: '2026-08-27-canonical-integration',
+    version: '2026.8.31',
     canonicalRepo: '8friend8ship-cloud/contents-os-git',
     canonicalBranch: 'main',
     runtimeMirrorRepo: '8friend8ship-cloud/Analyzer-12.09',
