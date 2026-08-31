@@ -1,0 +1,48 @@
+name: Runtime Identity Probe
+
+on:
+  push:
+    branches:
+      - test/runtime-identity-probe-20260831
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe existing WEBAPP_TEMPLATE_05 identity endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://script.google.com/macros/s/AKfycbzz247_Mwl9c6N1WxmpHAttwHQJB6RCFtaY08XlHgxysz1iEzg7HWDXa3i5oXhDS1jo/exec'
+          curl -sS -L --max-time 30 \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json' \
+            -d '{"action":"contentos.runtime.identity.v3"}' \
+            -D headers.txt \
+            -o body.txt \
+            "$URL"
+          echo '--- RESPONSE HEADERS ---'
+          tail -n 30 headers.txt
+          echo '--- RESPONSE BODY (first 4000 bytes) ---'
+          head -c 4000 body.txt
+          echo
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          text = Path('body.txt').read_text(errors='replace')
+          try:
+              body = json.loads(text)
+          except Exception:
+              print('PROBE_RESULT=NON_JSON')
+              raise SystemExit(0)
+          print('PROBE_RESULT=JSON')
+          print('OK=' + str(body.get('ok')))
+          print('ACTION=' + str(body.get('action') or body.get('service') or ''))
+          print('SCRIPT_ID=' + str(body.get('scriptId') or body.get('script_id') or ''))
+          print('SPREADSHEET_ID=' + str(body.get('spreadsheetId') or body.get('spreadsheet_id') or ''))
+          print('TRIGGER_COUNT=' + str(body.get('triggerCount') or body.get('trigger_count') or ''))
+          PY
