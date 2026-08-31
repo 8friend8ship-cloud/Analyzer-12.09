@@ -19,7 +19,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Parse Apps Script source
-        run: node --check apps-script/personaMvpHourlyGovernor.gs
+        run: |
+          cp apps-script/personaMvpHourlyGovernor.gs /tmp/personaMvpHourlyGovernor.js
+          node --check /tmp/personaMvpHourlyGovernor.js
       - name: Validate contract
         run: |
           node <<'NODE'
