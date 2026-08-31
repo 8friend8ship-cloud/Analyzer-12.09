@@ -1,8 +1,9 @@
 {
   "contractId": "PERSONA_ORCHESTRATION_V1",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "canonicalGateSource": "apps-script/personaOrchestrationGate.gs",
   "factorySource": "apps-script/personaOrchestrator.gs",
+  "learningSource": "apps-script/personaLearning10m.gs",
   "routing": [
     "42_PERSONA_ROUTING_MASTER:PR_ALL_PERSONA_AUTOMATION_V1",
     "47_PERSONA_DATA_ROUTING:PDR_ALL_PERSONA_ORCH_V1"
@@ -19,6 +20,10 @@
     "VTUBE_PERSONA_ASSET_QA",
     "LANGUAGE_VOICE_PACK",
     "BOT_PERSONA_KNOWLEDGE",
+    "TEN_MINUTE_LEARNING_CYCLE",
+    "VERIFIED_OUTPUT_TO_SEED_CANDIDATE",
+    "RECURRING_ERROR_TO_PREVENTION_CANDIDATE",
+    "TEMPLATE_PATCH_CANDIDATE_X2",
     "SHEET_GEMINI_REVIEW",
     "DRIVE_PROJECT_GEMINI_REVIEW",
     "DOC_EXPORT_CROSSCHECK",
@@ -32,7 +37,11 @@
     "PERSONA_MATCH_QUEUE",
     "STORYBOARD_PERSONA",
     "BOT_PERSONA_KNOWLEDGE",
-    "GEMINI_PROJECT_CROSSCHECK"
+    "GEMINI_PROJECT_CROSSCHECK",
+    "PERSONA_LEARNING_CYCLE",
+    "PERSONA_SEED_CANDIDATE",
+    "PERSONA_ERROR_LEARNING",
+    "PERSONA_TEMPLATE_PATCH_CANDIDATE"
   ],
   "rules": {
     "personaReuseBeforeCreate": true,
@@ -48,16 +57,29 @@
     "repairFailedDimensionOnly": true,
     "duplicateDailyTriggerForbidden": true,
     "successToSeedTemplateAssetPack": true,
-    "failureToPreventionQueens": true
+    "failureToPreventionQueens": true,
+    "verifiedOnlyTemplatePromotion": true,
+    "automaticProductionTemplateMutation": false,
+    "sameFixtureX2BeforePromotion": true
   },
   "runtimeLimits": {
     "maxSecondsPerRun": 240,
     "batchSize": 20,
     "maxNewRowsPerDay": 200,
     "maintenanceEveryHours": 24,
-    "schedulerMode": "EXISTING_5M_FACTORY_WAKE",
-    "dueHandler": "runPersonaFactoryDailyIfDue_"
+    "learningEveryMinutes": 10,
+    "physicalWakeMinutes": 5,
+    "schedulerMode": "EXISTING_5M_FACTORY_WAKE_WITH_10M_DUE_GUARD",
+    "dailyDueHandler": "runPersonaFactoryDailyIfDue_",
+    "learningDueHandler": "runPersonaLearningCycle10mIfDue_",
+    "installNewTrigger": false
   },
+  "learningOutputs": [
+    "PERSONA_LEARNING_CYCLE",
+    "PERSONA_SEED_CANDIDATE",
+    "PERSONA_ERROR_LEARNING",
+    "PERSONA_TEMPLATE_PATCH_CANDIDATE"
+  ],
   "promotionEvidence": [
     "persona match QA PASS",
     "immutable persona snapshot id",
@@ -66,6 +88,7 @@
     "sheet Gemini review evidence",
     "Drive project Gemini chat reference",
     "Docs export crosscheck PASS",
-    "same fixture readback x2"
+    "same fixture readback x2",
+    "10-minute learning candidate lineage when promoted"
   ]
 }
