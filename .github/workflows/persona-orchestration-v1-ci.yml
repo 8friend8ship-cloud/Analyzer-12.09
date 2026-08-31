@@ -72,3 +72,39 @@ jobs:
           assert.strictEqual(typeof sandbox.runPersonaLearningCycle10mIfDue_,'function');
           console.log('canonical gate + persona factory + 10m learning companion combined-load PASS');
           NODE
+      - name: Exercise 10-minute due guard x2 without duplicate clock
+        run: |
+          node <<'NODE'
+          const fs=require('fs'), vm=require('vm'), assert=require('assert');
+          const code=fs.readFileSync('apps-script/personaLearning10m.gs','utf8');
+          const store={};
+          const sandbox={
+            Object,String,Array,Date,JSON,RegExp,Math,Set,
+            PropertiesService:{getScriptProperties:()=>({getProperty:k=>store[k]||null,setProperty:(k,v)=>{store[k]=String(v)}})},
+            SpreadsheetApp:{getActiveSpreadsheet:()=>({})},
+            Utilities:{formatDate:()=> '20260831_124500'},
+            Session:{getScriptTimeZone:()=> 'Asia/Seoul'}
+          };
+          vm.createContext(sandbox);
+          vm.runInContext(code,sandbox);
+          let callCount=0;
+          sandbox.runPersonaLearningCycle10m_=()=>({ok:true,cycleId:'TEST_CYCLE_'+(++callCount)});
+          const ss={};
+          const pass1=sandbox.runPersonaLearningCycle10mIfDue_(ss,{});
+          assert.strictEqual(pass1.ok,true);
+          assert.strictEqual(pass1.ran,true);
+          assert.strictEqual(callCount,1);
+          const held=sandbox.runPersonaLearningCycle10mIfDue_(ss,{});
+          assert.strictEqual(held.ok,true);
+          assert.strictEqual(held.ran,false);
+          assert.strictEqual(callCount,1);
+          store.PERSONA_LEARNING_10M_LAST_RUN_AT=String(Date.now()-(11*60*1000));
+          const pass2=sandbox.runPersonaLearningCycle10mIfDue_(ss,{});
+          assert.strictEqual(pass2.ok,true);
+          assert.strictEqual(pass2.ran,true);
+          assert.strictEqual(callCount,2);
+          const trigger=sandbox.ensurePersonaLearning10mTrigger_();
+          assert.strictEqual(trigger.installNewTrigger,false);
+          assert.strictEqual(trigger.logicalDueMinutes,10);
+          console.log('10m due guard PASS_X2; duplicate clock prohibited');
+          NODE
