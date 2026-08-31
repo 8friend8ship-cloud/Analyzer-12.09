@@ -1,0 +1,60 @@
+name: Persona MVP Hourly Governor V1 CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps-script/personaMvpHourlyGovernor.gs'
+      - 'apps-script/personaCombinedWakeAdapter.gs'
+      - 'contracts/persona-mvp-hourly-governor-v1.json'
+      - '.github/workflows/persona-mvp-hourly-governor-v1-ci.yml'
+  pull_request:
+    paths:
+      - 'apps-script/personaMvpHourlyGovernor.gs'
+      - 'apps-script/personaCombinedWakeAdapter.gs'
+      - 'contracts/persona-mvp-hourly-governor-v1.json'
+      - '.github/workflows/persona-mvp-hourly-governor-v1-ci.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse Apps Script sources
+        run: |
+          cat apps-script/personaMvpHourlyGovernor.gs apps-script/personaCombinedWakeAdapter.gs > /tmp/personaMvpCombined.js
+          node --check /tmp/personaMvpCombined.js
+      - name: Validate contract
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const c=JSON.parse(fs.readFileSync('contracts/persona-mvp-hourly-governor-v1.json','utf8'));
+          if(c.contractId!=='PERSONA_MVP_HOURLY_GOVERNOR_V1') process.exit(1);
+          if(c.runtime.safeYieldSeconds!==270) process.exit(1);
+          if(c.runtime.hardStopSeconds!==285) process.exit(1);
+          if(c.runtime.staleClaimSeconds!==300) process.exit(1);
+          if(c.hourlyDueMinutes!==60) process.exit(1);
+          if(c.installNewTrigger!==false) process.exit(1);
+          if(c.promotionGate.driveReadbackX2Required!==true) process.exit(1);
+          NODE
+      - name: Runtime slicer comparison and combined-wake policy x2
+        run: |
+          node <<'NODE'
+          const fs=require('fs'),vm=require('vm'),assert=require('assert');
+          const code=fs.readFileSync('apps-script/personaMvpHourlyGovernor.gs','utf8')+'\n'+fs.readFileSync('apps-script/personaCombinedWakeAdapter.gs','utf8');
+          const s={Object,String,Array,Date,JSON,Math,Number}; vm.createContext(s); vm.runInContext(code,s);
+          let d=s.pmhgRuntimeDecision_(0,269000); assert.equal(d.action,'CONTINUE');
+          d=s.pmhgRuntimeDecision_(0,270000); assert.equal(d.action,'YIELD_AND_RESUME');
+          d=s.pmhgRuntimeDecision_(0,285000); assert.equal(d.action,'STOP_AND_RESUME');
+          let l=s.pmhgRunnerLeaseDecision_({status:'CLAIMED',heartbeatAgeMinutes:1,claimedAgeSeconds:301}); assert.equal(l.action,'STALE_RELEASE_REQUEUE');
+          l=s.pmhgRunnerLeaseDecision_({status:'READY',heartbeatAgeMinutes:1,claimedAgeSeconds:0}); assert.equal(l.action,'KEEP_LEASE');
+          const r1=s.pmhgSelectComparisonRoute_({vtube:'READY',animation:'LINEAGE_CONFIRMED',notebooklm:'SOURCE_FIXED_DEVICE_READBACK_PENDING',flow:'RESULT_ACK_VERIFICATION_PENDING'});
+          assert.equal(r1.motionBaseline,'ANIMATION'); assert.equal(r1.generativeCompare,'FLOW_COMPARE_HOLD');
+          const r2=s.pmhgSelectComparisonRoute_({vtube:'PASS',animation:'PASS',notebooklm:'VERIFIED',flow:'ACK_X2'});
+          assert.equal(r2.voiceAudio,'NOTEBOOKLM'); assert.equal(r2.generativeCompare,'FLOW_COMPARE_ACTIVE');
+          const t=s.pmhgTemplateCompleteness_({IMAGE:'PASS',LANGUAGE:'PASS',VOICE:'PASS',FACE_EXPRESSION:'PASS',MOUTH_LIPSYNC:'PASS',GESTURE:'PASS',MOTION:'PASS'});
+          assert.equal(t.complete,true);
+          assert.equal(s.PERSONA_COMBINED_WAKE_ADAPTER_V1.installNewTrigger,false);
+          if(code.includes('ScriptApp.newTrigger')) process.exit(1);
+          console.log('runtime slicer + comparison + combined wake x2 PASS');
+          NODE
