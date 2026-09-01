@@ -1,4 +1,4 @@
-const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V6_IMAGE_LEARNING_20260831';
+const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V7_API_CREDENTIAL_AUDIT_20260902';
 
 /**
  * Single logical entrypoint intended to be called by the already-installed
@@ -23,6 +23,7 @@ function contentOsUnifiedSchedulerTick() {
   out.stages.allAppFactory = runOptionalContentOsStage_('runAllAppBackdataFactoryControl10m');
   out.stages.allAppApiAb = runOptionalContentOsStage_('runAllAppApiAbQaRequestWindow');
   out.stages.imageLearning = runOptionalContentOsStage_('runImageLearning10mTickV2');
+  out.stages.apiCredentialUsage = runOptionalContentOsStage_('runCentralApiCredentialUsageAuditHourly');
 
   out.ok = Object.keys(out.stages).every(function(k) {
     const r = out.stages[k];
@@ -67,6 +68,9 @@ function runOptionalContentOsStage_(handlerName) {
     if (handlerName === 'runImageLearning10mTickV2' && typeof runImageLearning10mTickV2 === 'function') {
       return runImageLearning10mTickV2();
     }
+    if (handlerName === 'runCentralApiCredentialUsageAuditHourly' && typeof runCentralApiCredentialUsageAuditHourly === 'function') {
+      return runCentralApiCredentialUsageAuditHourly();
+    }
     return {ok:true, skipped:true, reason:'HANDLER_NOT_SYNCED', handler:handlerName};
   } catch (err) {
     return {ok:false, handler:handlerName, error:String(err && err.message || err)};
@@ -93,13 +97,16 @@ function auditContentOsTriggerContract() {
   const duplicateOwn = rows.filter(function(r) { return r.handler === 'contentOsUnifiedSchedulerTick'; }).length;
   const duplicateAllApp = rows.filter(function(r) { return r.handler === 'runAllAppBackdataFactoryControl10m'; }).length;
   const duplicateImage = rows.filter(function(r) { return r.handler === 'runImageLearning10mTickV2' || r.handler === 'runImageLearningFromFactoryWakeV2'; }).length;
+  const duplicateApiAudit = rows.filter(function(r) { return r.handler === 'runCentralApiCredentialUsageAuditHourly'; }).length;
   return {
-    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0,
+    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateApiAudit === 0,
     physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE',
     unifiedTriggerCount: duplicateOwn,
     allAppPhysicalTriggerCount: duplicateAllApp,
     imageLearningPhysicalTriggerCount: duplicateImage,
+    apiCredentialAuditPhysicalTriggerCount: duplicateApiAudit,
     imageLearningLogicalMinutes: 10,
+    apiCredentialAuditLogicalMinutes: 60,
     triggers: rows,
     version: CONTENTOS_UNIFIED_SCHEDULER_VERSION
   };
