@@ -14,66 +14,128 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Probe bound Apps Script image runtime
+      - name: Probe bound Apps Script runtime without false PASS
+        id: probe
         shell: bash
         run: |
-          set -euo pipefail
+          set -u
           URL='https://script.google.com/macros/s/AKfycbzz247_Mwl9c6N1WxmpHAttwHQJB6RCFtaY08XlHgxysz1iEzg7HWDXa3i5oXhDS1jo/exec'
           mkdir -p probe-results
           : > probe-results/all.txt
+          FAIL_COUNT=0
 
-          # Existing image runtime actions.
+          probe_post() {
+            ACTION="$1"
+            SAFE_NAME="${ACTION//./_}"
+            BODY="probe-results/${SAFE_NAME}.txt"
+            HDR="probe-results/${SAFE_NAME}.headers.txt"
+            META="probe-results/${SAFE_NAME}.meta.txt"
+            echo "=== POST ${ACTION} ===" | tee -a probe-results/all.txt
+            HTTP_CODE=$(curl -sS -L -D "$HDR" \
+              -H 'Content-Type: application/json' \
+              --data "{\"action\":\"${ACTION}\"}" \
+              -o "$BODY" -w '%{http_code}' "$URL" 2>>probe-results/curl-errors.txt || echo 000)
+            CONTENT_TYPE=$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{v=$0} END{sub(/^[^:]+:[[:space:]]*/,"",v); gsub(/\r/,"",v); print v}' "$HDR")
+            FINAL_LOCATION=$(awk 'BEGIN{IGNORECASE=1} /^location:/{v=$0} END{sub(/^[^:]+:[[:space:]]*/,"",v); gsub(/\r/,"",v); print v}' "$HDR")
+            printf 'HTTP_CODE=%s\nCONTENT_TYPE=%s\nFINAL_LOCATION=%s\n' "$HTTP_CODE" "$CONTENT_TYPE" "$FINAL_LOCATION" | tee "$META" -a probe-results/all.txt
+
+            CLASS='RUNTIME_JSON_OK'
+            if [ "$HTTP_CODE" = '401' ] || [ "$HTTP_CODE" = '403' ]; then
+              CLASS='AUTH_REQUIRED'
+            elif grep -Eqi '<html|accounts\.google\.com|Page Not Found|unable to open the file|ServiceLogin' "$BODY"; then
+              CLASS='AUTH_OR_HTML_RESPONSE'
+            elif ! python - "$BODY" <<'PY'
+import json,sys
+p=sys.argv[1]
+try:
+    x=json.load(open(p,encoding='utf-8'))
+    assert isinstance(x,dict)
+    assert 'ok' in x
+except Exception:
+    raise SystemExit(1)
+PY
+            then
+              CLASS='NON_JSON_OR_MISSING_OK'
+            fi
+            echo "CLASS=${CLASS}" | tee -a "$META" probe-results/all.txt
+            if [ "$CLASS" != 'RUNTIME_JSON_OK' ]; then FAIL_COUNT=$((FAIL_COUNT+1)); fi
+          }
+
+          probe_get() {
+            ACTION="$1"
+            SAFE_NAME="${ACTION//./_}_get"
+            BODY="probe-results/${SAFE_NAME}.txt"
+            HDR="probe-results/${SAFE_NAME}.headers.txt"
+            META="probe-results/${SAFE_NAME}.meta.txt"
+            echo "=== GET ${ACTION} ===" | tee -a probe-results/all.txt
+            HTTP_CODE=$(curl -sS -L -D "$HDR" -H 'Accept: application/json' \
+              -o "$BODY" -w '%{http_code}' "$URL?action=${ACTION}" 2>>probe-results/curl-errors.txt || echo 000)
+            CONTENT_TYPE=$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{v=$0} END{sub(/^[^:]+:[[:space:]]*/,"",v); gsub(/\r/,"",v); print v}' "$HDR")
+            FINAL_LOCATION=$(awk 'BEGIN{IGNORECASE=1} /^location:/{v=$0} END{sub(/^[^:]+:[[:space:]]*/,"",v); gsub(/\r/,"",v); print v}' "$HDR")
+            printf 'HTTP_CODE=%s\nCONTENT_TYPE=%s\nFINAL_LOCATION=%s\n' "$HTTP_CODE" "$CONTENT_TYPE" "$FINAL_LOCATION" | tee "$META" -a probe-results/all.txt
+
+            CLASS='RUNTIME_JSON_OK'
+            if [ "$HTTP_CODE" = '401' ] || [ "$HTTP_CODE" = '403' ]; then
+              CLASS='AUTH_REQUIRED'
+            elif grep -Eqi '<html|accounts\.google\.com|Page Not Found|unable to open the file|ServiceLogin' "$BODY"; then
+              CLASS='AUTH_OR_HTML_RESPONSE'
+            elif ! python - "$BODY" <<'PY'
+import json,sys
+p=sys.argv[1]
+try:
+    x=json.load(open(p,encoding='utf-8'))
+    assert isinstance(x,dict)
+    assert 'ok' in x
+except Exception:
+    raise SystemExit(1)
+PY
+            then
+              CLASS='NON_JSON_OR_MISSING_OK'
+            fi
+            echo "CLASS=${CLASS}" | tee -a "$META" probe-results/all.txt
+            if [ "$CLASS" != 'RUNTIME_JSON_OK' ]; then FAIL_COUNT=$((FAIL_COUNT+1)); fi
+          }
+
+          # Read-only probes. A GitHub Actions green check is NOT runtime proof unless
+          # these return actual JSON; Google login/Page-Not-Found HTML is failure evidence.
           for ACTION in \
             contentos.image.audit.v2 \
             contentos.image.health.v2 \
             contentos.image.static.v2 \
-            contentos.image.tick.v2
+            contentos.image.tick.v2 \
+            contentos.runtime.identity.v3
           do
-            SAFE_NAME="${ACTION//./_}"
-            echo "=== POST ${ACTION} ===" | tee -a probe-results/all.txt
-            HTTP_CODE=$(curl -sS -L \
-              -H 'Content-Type: application/json' \
-              --data "{\"action\":\"${ACTION}\"}" \
-              -o "probe-results/${SAFE_NAME}.txt" \
-              -w '%{http_code}' \
-              "$URL" || true)
-            echo "HTTP_CODE=${HTTP_CODE}" | tee -a probe-results/all.txt
-            cat "probe-results/${SAFE_NAME}.txt" | tee -a probe-results/all.txt
-            echo | tee -a probe-results/all.txt
+            probe_post "$ACTION"
           done
+          probe_get 'contentos.runtime.identity.v3'
 
-          # P0 central runtime recovery probes. These do not create a project,
-          # deployment, OAuth grant, paid call, or physical trigger.
-          for ACTION in \
-            contentos.runtime.identity.v3 \
-            contentos.runtime.register.v3
-          do
-            SAFE_NAME="${ACTION//./_}"
-            echo "=== POST ${ACTION} ===" | tee -a probe-results/all.txt
-            HTTP_CODE=$(curl -sS -L \
-              -H 'Content-Type: application/json' \
-              --data "{\"action\":\"${ACTION}\"}" \
-              -o "probe-results/${SAFE_NAME}.txt" \
-              -w '%{http_code}' \
-              "$URL" || true)
-            echo "HTTP_CODE=${HTTP_CODE}" | tee -a probe-results/all.txt
-            cat "probe-results/${SAFE_NAME}.txt" | tee -a probe-results/all.txt
-            echo | tee -a probe-results/all.txt
-          done
-
-          echo '=== GET contentos.runtime.identity.v3 ===' | tee -a probe-results/all.txt
-          HTTP_CODE=$(curl -sS -L \
-            -H 'Accept: application/json' \
-            -o probe-results/contentos_runtime_identity_v3_get.txt \
-            -w '%{http_code}' \
-            "$URL?action=contentos.runtime.identity.v3" || true)
-          echo "HTTP_CODE=${HTTP_CODE}" | tee -a probe-results/all.txt
-          cat probe-results/contentos_runtime_identity_v3_get.txt | tee -a probe-results/all.txt
-          echo | tee -a probe-results/all.txt
+          echo "FAIL_COUNT=${FAIL_COUNT}" | tee probe-results/summary.txt -a probe-results/all.txt
+          if [ "$FAIL_COUNT" -eq 0 ]; then
+            echo 'PROBE_CLASS=VALID_RUNTIME_JSON_X1' | tee -a probe-results/summary.txt
+          else
+            echo 'PROBE_CLASS=RUNTIME_NOT_PROVEN_AUTH_OR_RESPONSE_FAILURE' | tee -a probe-results/summary.txt
+          fi
+          echo "fail_count=${FAIL_COUNT}" >> "$GITHUB_OUTPUT"
 
       - name: Upload probe evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: image-runtime-probe-results
           path: probe-results/
           retention-days: 7
+
+      - name: Enforce runtime proof gate
+        if: always()
+        shell: bash
+        run: |
+          FAIL_COUNT='${{ steps.probe.outputs.fail_count }}'
+          if [ -z "$FAIL_COUNT" ]; then
+            echo 'Probe did not produce a classification.' >&2
+            exit 1
+          fi
+          if [ "$FAIL_COUNT" -ne 0 ]; then
+            echo "Runtime probe failed validation: ${FAIL_COUNT} endpoint(s) returned auth/HTML/non-JSON instead of runtime JSON." >&2
+            exit 1
+          fi
+          echo 'Runtime probe JSON gate PASS.'
