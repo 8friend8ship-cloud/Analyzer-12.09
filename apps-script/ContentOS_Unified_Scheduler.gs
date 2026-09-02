@@ -1,4 +1,4 @@
-const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V8_CENTRAL_SHEET_RUNTIME_AUDIT_20260902';
+const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V10_IMAGE_SUPPLY_GOVERNOR_20260902';
 
 /**
  * Single logical entrypoint intended to be called by the already-installed
@@ -28,6 +28,7 @@ function contentOsUnifiedSchedulerTick() {
   out.stages.allAppFactory = runOptionalContentOsStage_('runAllAppBackdataFactoryControl10m');
   out.stages.allAppApiAb = runOptionalContentOsStage_('runAllAppApiAbQaRequestWindow');
   out.stages.imageLearning = runOptionalContentOsStage_('runImageLearning10mTickV2');
+  out.stages.imageSupplyGovernor = runOptionalContentOsStage_('runImageSupplyGovernor10mV1_');
   out.stages.apiCredentialUsage = runOptionalContentOsStage_('runCentralApiCredentialUsageAuditHourly');
   out.stages.centralSheetRuntimeAudit = runOptionalContentOsStage_('runCentralSheetRuntimeAuditAutofix10m');
 
@@ -74,6 +75,9 @@ function runOptionalContentOsStage_(handlerName) {
     if (handlerName === 'runImageLearning10mTickV2' && typeof runImageLearning10mTickV2 === 'function') {
       return runImageLearning10mTickV2();
     }
+    if (handlerName === 'runImageSupplyGovernor10mV1_' && typeof runImageSupplyGovernor10mV1_ === 'function') {
+      return runImageSupplyGovernor10mV1_();
+    }
     if (handlerName === 'runCentralApiCredentialUsageAuditHourly' && typeof runCentralApiCredentialUsageAuditHourly === 'function') {
       return runCentralApiCredentialUsageAuditHourly();
     }
@@ -106,17 +110,25 @@ function auditContentOsTriggerContract() {
   const duplicateOwn = rows.filter(function(r) { return r.handler === 'contentOsUnifiedSchedulerTick'; }).length;
   const duplicateAllApp = rows.filter(function(r) { return r.handler === 'runAllAppBackdataFactoryControl10m'; }).length;
   const duplicateImage = rows.filter(function(r) { return r.handler === 'runImageLearning10mTickV2' || r.handler === 'runImageLearningFromFactoryWakeV2'; }).length;
+  const duplicateImageSupply = rows.filter(function(r) {
+    return r.handler === 'runImageSupplyGovernor10mV1_' ||
+      r.handler === 'runImageSupplyPriorityGovernorV1_' ||
+      r.handler === 'runGeneratedImageReingestV1_' ||
+      r.handler === 'runImageDailyTargetAutoScaleV1_';
+  }).length;
   const duplicateApiAudit = rows.filter(function(r) { return r.handler === 'runCentralApiCredentialUsageAuditHourly'; }).length;
   const centralSheetAudit = rows.filter(function(r) { return r.handler === 'runCentralSheetRuntimeAuditAutofix10m'; }).length;
   return {
-    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateApiAudit === 0 && centralSheetAudit <= 1,
-    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
+    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && centralSheetAudit <= 1,
+    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE;NO_IMAGE_SUPPLY_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
     unifiedTriggerCount: duplicateOwn,
     allAppPhysicalTriggerCount: duplicateAllApp,
     imageLearningPhysicalTriggerCount: duplicateImage,
+    imageSupplyPhysicalTriggerCount: duplicateImageSupply,
     apiCredentialAuditPhysicalTriggerCount: duplicateApiAudit,
     centralSheetAuditTriggerCount: centralSheetAudit,
     imageLearningLogicalMinutes: 10,
+    imageSupplyLogicalMinutes: 10,
     apiCredentialAuditLogicalMinutes: 60,
     centralSheetAuditLogicalMinutes: 10,
     triggers: rows,
