@@ -1,0 +1,47 @@
+name: Image Runtime Probe
+
+on:
+  push:
+    paths:
+      - '.github/workflows/image-runtime-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe bound Apps Script image runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://script.google.com/macros/s/AKfycbzz247_Mwl9c6N1WxmpHAttwHQJB6RCFtaY08XlHgxysz1iEzg7HWDXa3i5oXhDS1jo/exec'
+          mkdir -p probe-results
+          : > probe-results/all.txt
+          for ACTION in \
+            contentos.image.audit.v2 \
+            contentos.image.health.v2 \
+            contentos.image.static.v2 \
+            contentos.image.tick.v2
+          do
+            SAFE_NAME="${ACTION//./_}"
+            echo "=== ${ACTION} ===" | tee -a probe-results/all.txt
+            HTTP_CODE=$(curl -sS -L \
+              -H 'Content-Type: application/json' \
+              --data "{\"action\":\"${ACTION}\"}" \
+              -o "probe-results/${SAFE_NAME}.txt" \
+              -w '%{http_code}' \
+              "$URL" || true)
+            echo "HTTP_CODE=${HTTP_CODE}" | tee -a probe-results/all.txt
+            cat "probe-results/${SAFE_NAME}.txt" | tee -a probe-results/all.txt
+            echo | tee -a probe-results/all.txt
+          done
+      - name: Upload probe evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-runtime-probe-results
+          path: probe-results/
+          retention-days: 7
