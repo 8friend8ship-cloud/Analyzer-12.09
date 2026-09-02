@@ -1,4 +1,4 @@
-const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V8_CENTRAL_SHEET_RUNTIME_AUDIT_20260902';
+const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V9_CENTRAL_LEARNING_FLYWHEEL_20260902';
 
 /**
  * Single logical entrypoint intended to be called by the already-installed
@@ -9,6 +9,9 @@ const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V8_CENT
  * independent watchdog trigger may be installed exactly once by
  * installOrRepairCentralSheetRuntimeAuditTrigger(). This is intentional: the
  * primary factory wake must not be its only watchdog.
+ *
+ * Central learning is a logical stage only. It reuses processTaskQueue and must
+ * never own a dedicated clock: Map -> Queens -> Drive fallback -> Seed -> QA.
  */
 function contentOsUnifiedSchedulerTick() {
   const out = {
@@ -30,6 +33,7 @@ function contentOsUnifiedSchedulerTick() {
   out.stages.imageLearning = runOptionalContentOsStage_('runImageLearning10mTickV2');
   out.stages.apiCredentialUsage = runOptionalContentOsStage_('runCentralApiCredentialUsageAuditHourly');
   out.stages.centralSheetRuntimeAudit = runOptionalContentOsStage_('runCentralSheetRuntimeAuditAutofix10m');
+  out.stages.centralLearningFlywheel = runOptionalContentOsStage_('runCentralLearningFlywheelFromFactoryV1');
 
   out.ok = Object.keys(out.stages).every(function(k) {
     const r = out.stages[k];
@@ -80,6 +84,9 @@ function runOptionalContentOsStage_(handlerName) {
     if (handlerName === 'runCentralSheetRuntimeAuditAutofix10m' && typeof runCentralSheetRuntimeAuditAutofix10m === 'function') {
       return runCentralSheetRuntimeAuditAutofix10m();
     }
+    if (handlerName === 'runCentralLearningFlywheelFromFactoryV1' && typeof runCentralLearningFlywheelFromFactoryV1 === 'function') {
+      return runCentralLearningFlywheelFromFactoryV1({source:'contentOsUnifiedSchedulerTick'});
+    }
     return {ok:true, skipped:true, reason:'HANDLER_NOT_SYNCED', handler:handlerName};
   } catch (err) {
     return {ok:false, handler:handlerName, error:String(err && err.message || err)};
@@ -108,15 +115,20 @@ function auditContentOsTriggerContract() {
   const duplicateImage = rows.filter(function(r) { return r.handler === 'runImageLearning10mTickV2' || r.handler === 'runImageLearningFromFactoryWakeV2'; }).length;
   const duplicateApiAudit = rows.filter(function(r) { return r.handler === 'runCentralApiCredentialUsageAuditHourly'; }).length;
   const centralSheetAudit = rows.filter(function(r) { return r.handler === 'runCentralSheetRuntimeAuditAutofix10m'; }).length;
+  const dedicatedLearning = rows.filter(function(r) { return r.handler === 'runCentralLearningFlywheelFromFactoryV1'; }).length;
+  const factoryWake = rows.filter(function(r) { return r.handler === 'processTaskQueue'; }).length;
   return {
-    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateApiAudit === 0 && centralSheetAudit <= 1,
-    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
+    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateApiAudit === 0 && centralSheetAudit <= 1 && dedicatedLearning === 0 && factoryWake <= 1,
+    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE;ZERO_DEDICATED_LEARNING_CLOCKS;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
+    processTaskQueueCount: factoryWake,
     unifiedTriggerCount: duplicateOwn,
     allAppPhysicalTriggerCount: duplicateAllApp,
     imageLearningPhysicalTriggerCount: duplicateImage,
     apiCredentialAuditPhysicalTriggerCount: duplicateApiAudit,
     centralSheetAuditTriggerCount: centralSheetAudit,
+    centralLearningPhysicalTriggerCount: dedicatedLearning,
     imageLearningLogicalMinutes: 10,
+    centralLearningLogicalMinutes: 10,
     apiCredentialAuditLogicalMinutes: 60,
     centralSheetAuditLogicalMinutes: 10,
     triggers: rows,
