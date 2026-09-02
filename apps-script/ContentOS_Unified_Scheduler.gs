@@ -1,4 +1,4 @@
-const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V10_IMAGE_SUPPLY_GOVERNOR_20260902';
+const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V11_WORKFLOW_BRIDGE_CROSSCHECK_20260902';
 
 /**
  * Single logical entrypoint intended to be called by the already-installed
@@ -9,6 +9,10 @@ const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V10_IMA
  * independent watchdog trigger may be installed exactly once by
  * installOrRepairCentralSheetRuntimeAuditTrigger(). This is intentional: the
  * primary factory wake must not be its only watchdog.
+ *
+ * Central workflow/bridge crosscheck is logical-only and MUST reuse the existing
+ * processTaskQueue physical wake. It validates Sheet↔function↔trigger↔workflow/map
+ * ↔bridge↔queue↔runtime/front relationships and split-brain mirror state.
  */
 function contentOsUnifiedSchedulerTick() {
   const out = {
@@ -31,6 +35,7 @@ function contentOsUnifiedSchedulerTick() {
   out.stages.imageSupplyGovernor = runOptionalContentOsStage_('runImageSupplyGovernor10mV1_');
   out.stages.apiCredentialUsage = runOptionalContentOsStage_('runCentralApiCredentialUsageAuditHourly');
   out.stages.centralSheetRuntimeAudit = runOptionalContentOsStage_('runCentralSheetRuntimeAuditAutofix10m');
+  out.stages.centralWorkflowBridgeCrosscheck = runOptionalContentOsStage_('runCentralWorkflowBridgeCrosscheck10m');
 
   out.ok = Object.keys(out.stages).every(function(k) {
     const r = out.stages[k];
@@ -84,6 +89,9 @@ function runOptionalContentOsStage_(handlerName) {
     if (handlerName === 'runCentralSheetRuntimeAuditAutofix10m' && typeof runCentralSheetRuntimeAuditAutofix10m === 'function') {
       return runCentralSheetRuntimeAuditAutofix10m();
     }
+    if (handlerName === 'runCentralWorkflowBridgeCrosscheck10m' && typeof runCentralWorkflowBridgeCrosscheck10m === 'function') {
+      return runCentralWorkflowBridgeCrosscheck10m();
+    }
     return {ok:true, skipped:true, reason:'HANDLER_NOT_SYNCED', handler:handlerName};
   } catch (err) {
     return {ok:false, handler:handlerName, error:String(err && err.message || err)};
@@ -118,19 +126,22 @@ function auditContentOsTriggerContract() {
   }).length;
   const duplicateApiAudit = rows.filter(function(r) { return r.handler === 'runCentralApiCredentialUsageAuditHourly'; }).length;
   const centralSheetAudit = rows.filter(function(r) { return r.handler === 'runCentralSheetRuntimeAuditAutofix10m'; }).length;
+  const workflowBridgeCrosscheck = rows.filter(function(r) { return r.handler === 'runCentralWorkflowBridgeCrosscheck10m'; }).length;
   return {
-    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && centralSheetAudit <= 1,
-    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE;NO_IMAGE_SUPPLY_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
+    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && centralSheetAudit <= 1 && workflowBridgeCrosscheck === 0,
+    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE_AND_CWBX;NO_CWBX_PHYSICAL_TRIGGER;NO_IMAGE_SUPPLY_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
     unifiedTriggerCount: duplicateOwn,
     allAppPhysicalTriggerCount: duplicateAllApp,
     imageLearningPhysicalTriggerCount: duplicateImage,
     imageSupplyPhysicalTriggerCount: duplicateImageSupply,
     apiCredentialAuditPhysicalTriggerCount: duplicateApiAudit,
     centralSheetAuditTriggerCount: centralSheetAudit,
+    workflowBridgeCrosscheckPhysicalTriggerCount: workflowBridgeCrosscheck,
     imageLearningLogicalMinutes: 10,
     imageSupplyLogicalMinutes: 10,
     apiCredentialAuditLogicalMinutes: 60,
     centralSheetAuditLogicalMinutes: 10,
+    workflowBridgeCrosscheckLogicalMinutes: 10,
     triggers: rows,
     version: CONTENTOS_UNIFIED_SCHEDULER_VERSION
   };
