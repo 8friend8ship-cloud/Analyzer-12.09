@@ -45,17 +45,7 @@ jobs:
               CLASS='AUTH_REQUIRED'
             elif grep -Eqi '<html|accounts\.google\.com|Page Not Found|unable to open the file|ServiceLogin' "$BODY"; then
               CLASS='AUTH_OR_HTML_RESPONSE'
-            elif ! python - "$BODY" <<'PY'
-import json,sys
-p=sys.argv[1]
-try:
-    x=json.load(open(p,encoding='utf-8'))
-    assert isinstance(x,dict)
-    assert 'ok' in x
-except Exception:
-    raise SystemExit(1)
-PY
-            then
+            elif ! python -c 'import json,sys; x=json.load(open(sys.argv[1],encoding="utf-8")); assert isinstance(x,dict) and "ok" in x' "$BODY"; then
               CLASS='NON_JSON_OR_MISSING_OK'
             fi
             echo "CLASS=${CLASS}" | tee -a "$META" probe-results/all.txt
@@ -80,17 +70,7 @@ PY
               CLASS='AUTH_REQUIRED'
             elif grep -Eqi '<html|accounts\.google\.com|Page Not Found|unable to open the file|ServiceLogin' "$BODY"; then
               CLASS='AUTH_OR_HTML_RESPONSE'
-            elif ! python - "$BODY" <<'PY'
-import json,sys
-p=sys.argv[1]
-try:
-    x=json.load(open(p,encoding='utf-8'))
-    assert isinstance(x,dict)
-    assert 'ok' in x
-except Exception:
-    raise SystemExit(1)
-PY
-            then
+            elif ! python -c 'import json,sys; x=json.load(open(sys.argv[1],encoding="utf-8")); assert isinstance(x,dict) and "ok" in x' "$BODY"; then
               CLASS='NON_JSON_OR_MISSING_OK'
             fi
             echo "CLASS=${CLASS}" | tee -a "$META" probe-results/all.txt
