@@ -1,279 +1,35 @@
-var IMAGE_LEARNING_V2_VERSION = 'IMAGE_QUEENS_SEED_AUTOLEARN_V2_20260831';
-var IMAGE_LEARNING_PACK_ID = '1vjB64BlUFsDmblwWaVdVE8iXw-JhK8T6A3z9Hk6J_hk';
-var IMAGE_LEARNING_MASTER_ID = '1C_CznU1Uo7dk-gKay3-oH8wFxutsGMlz27RSrbdVQwI';
-var IMAGE_LEARNING_TABS = {
-  QUEENS: 'PINTEREST_QUEENS_INTAKE',
-  FEATURES: 'VISUAL_FEATURE_EXTRACTOR',
-  ASSET_GATE: 'ASSET_QUEENS_SEED_GATE',
-  MASTER: 'IMAGE_PACK_MASTER',
-  PROMOTION: 'PROMOTION_GATE',
-  SEED: '35_INTERNAL_SEED_REGISTRY',
-  LEARNING_LOG: '31_학습실행로그',
-  QA_LOG: '80_DATA_RUNTIME_QA_LOG',
-  CHANGELOG: '63_EVOLUTION_CHANGELOG'
-};
-
-function runImageLearning10mTickV2() {
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(5000)) return {ok:true, skipped:true, reason:'LOCK_BUSY', version:IMAGE_LEARNING_V2_VERSION};
-  var started = new Date();
-  var bucket = Utilities.formatDate(started, 'Asia/Seoul', 'yyyyMMddHH') + Math.floor(Number(Utilities.formatDate(started, 'Asia/Seoul', 'mm')) / 10);
-  var props = PropertiesService.getScriptProperties();
-  try {
-    if (props.getProperty('IMG_LEARN_LAST_BUCKET') === bucket) {
-      return {ok:true, skipped:true, reason:'SAME_10M_BUCKET', bucket:bucket, version:IMAGE_LEARNING_V2_VERSION};
-    }
-    var out = {ok:true, bucket:bucket, version:IMAGE_LEARNING_V2_VERSION, stages:{}};
-    out.stages.collect = collectPinterestImageQueensV2();
-    out.stages.features = extractImageQueensVisualSpatialFeaturesV2();
-    out.stages.seed = promoteVerifiedImageQueensToSeedV2();
-    out.stages.gate = evaluateImageAssetSeedGateV2();
-    out.health = imageLearningHealthV2();
-    out.ok = [out.stages.collect, out.stages.features, out.stages.seed, out.stages.gate, out.health].every(function(x) {
-      return x && (x.ok !== false || x.skipped === true || x.hold === true);
-    });
-    out.finishedAt = new Date().toISOString();
-    recordImageLearningRunV2_(out, started);
-    if (out.ok) props.setProperty('IMG_LEARN_LAST_BUCKET', bucket);
-    else recordImageLearningFailureV2_(out);
-    return out;
-  } catch (err) {
-    var failure = {ok:false, bucket:bucket, error:String(err && err.message || err), version:IMAGE_LEARNING_V2_VERSION};
-    recordImageLearningRunV2_(failure, started);
-    recordImageLearningFailureV2_(failure);
-    return failure;
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function runImageLearningFromFactoryWakeV2() {
-  return runImageLearning10mTickV2();
-}
-
-function collectPinterestImageQueensV2() {
-  var sheet = imgPackSheetV2_(IMAGE_LEARNING_TABS.QUEENS);
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 2) return {ok:true, scanned:0, collected:0, skipped:0, status:'PASS_NO_INPUT'};
-  var idx = imgIndexV2_(data[0]);
-  var collected = 0, skipped = 0;
-  for (var r = 1; r < data.length; r++) {
-    var qid = String(data[r][idx.QUEENS_ID] || '');
-    if (!qid || String(data[r][idx.REQUEST_ID] || '') === 'POLICY') continue;
-    var url = String(data[r][idx.SOURCE_URL] || '');
-    if (!url) { skipped++; continue; }
-    var pin = String(data[r][idx.SOURCE_PIN_ID] || '');
-    var hash = String(data[r][idx.SOURCE_HASH] || '') || imgSha256V2_(url + '|' + pin);
-    imgSetV2_(sheet, r + 1, idx, {
-      SOURCE_HASH: hash,
-      COLLECTED_AT: data[r][idx.COLLECTED_AT] || new Date(),
-      RIGHTS_ROLE: data[r][idx.RIGHTS_ROLE] || 'REFERENCE_ONLY',
-      REFERENCE_ONLY: 'Y',
-      FEATURE_STATUS: data[r][idx.FEATURE_STATUS] || 'PENDING_FEATURE_EVIDENCE',
-      STATUS: data[r][idx.STATUS] || 'QUEENS_COLLECTED'
-    });
-    collected++;
-  }
-  return {ok:true, scanned:data.length-2, collected:collected, skipped:skipped};
-}
-
-function extractImageQueensVisualSpatialFeaturesV2() {
-  var queens = imgPackSheetV2_(IMAGE_LEARNING_TABS.QUEENS);
-  var features = imgPackSheetV2_(IMAGE_LEARNING_TABS.FEATURES);
-  var qData = queens.getDataRange().getValues();
-  var fData = features.getDataRange().getValues();
-  var qi = imgIndexV2_(qData[0]);
-  var fi = imgIndexV2_(fData[0]);
-  var requiredSpatial = ['HUMAN_SCALE','CLEARANCE','CIRCULATION','DEPTH'];
-  var missingSchema = requiredSpatial.filter(function(k){ return typeof fi[k] !== 'number'; });
-  if (missingSchema.length) return {ok:false, error:'SPATIAL_FEATURE_COLUMNS_MISSING:' + missingSchema.join(',')};
-  var byUrl = {};
-  for (var f = 1; f < fData.length; f++) {
-    var u = String(fData[f][fi.SOURCE_URL] || '');
-    if (u && String(fData[f][fi.VERIFIED] || '').toUpperCase() === 'Y') byUrl[u] = fData[f];
-  }
-  var matched = 0, held = 0;
-  for (var r = 1; r < qData.length; r++) {
-    if (String(qData[r][qi.REQUEST_ID] || '') === 'POLICY') continue;
-    var url = String(qData[r][qi.SOURCE_URL] || '');
-    if (!url || !byUrl[url]) { if (url) held++; continue; }
-    var fr = byUrl[url];
-    var spatial = imgIsSpatialClassV2_(String(qData[r][qi.ASSET_CLASS] || ''));
-    var spatialComplete = requiredSpatial.every(function(k){ return String(fr[fi[k]] || '').trim() !== ''; });
-    var patch = {FEATURE_STATUS:'PASS_VERIFIED_FEATURE'};
-    if (spatial) {
-      patch.SPATIAL_STATUS = spatialComplete ? 'FEATURE_SPATIAL_EVIDENCE_READY_QA_PENDING' : 'WAITING_HUMAN_SCALE_CLEARANCE_CIRCULATION_DEPTH';
-      if (!spatialComplete) patch.FEATURE_STATUS = 'HOLD_SPATIAL_FEATURE_INCOMPLETE';
-    } else {
-      patch.SPATIAL_STATUS = 'NOT_REQUIRED';
-    }
-    imgSetV2_(queens, r + 1, qi, patch);
-    if (patch.FEATURE_STATUS === 'PASS_VERIFIED_FEATURE') matched++; else held++;
-  }
-  return {ok:true, matched:matched, held:held, noFabrication:true};
-}
-
-function promoteVerifiedImageQueensToSeedV2() {
-  var queens = imgPackSheetV2_(IMAGE_LEARNING_TABS.QUEENS);
-  var features = imgPackSheetV2_(IMAGE_LEARNING_TABS.FEATURES);
-  var seedSheet = imgMasterSheetV2_(IMAGE_LEARNING_TABS.SEED);
-  var qData = queens.getDataRange().getValues();
-  var fData = features.getDataRange().getValues();
-  var sData = seedSheet.getDataRange().getValues();
-  var qi = imgIndexV2_(qData[0]), fi = imgIndexV2_(fData[0]), si = imgIndexV2_(sData[0]);
-  var byUrl = {}, existing = {};
-  for (var f = 1; f < fData.length; f++) {
-    var fu = String(fData[f][fi.SOURCE_URL] || '');
-    if (fu && String(fData[f][fi.VERIFIED] || '').toUpperCase() === 'Y') byUrl[fu] = fData[f];
-  }
-  for (var s = 1; s < sData.length; s++) existing[String(sData[s][si.SEED_ID] || '')] = true;
-  var promoted = 0, held = 0;
-  for (var r = 1; r < qData.length; r++) {
-    if (String(qData[r][qi.REQUEST_ID] || '') === 'POLICY') continue;
-    var featureState = String(qData[r][qi.FEATURE_STATUS] || '');
-    var rights = String(qData[r][qi.RIGHTS_ROLE] || '');
-    var url = String(qData[r][qi.SOURCE_URL] || '');
-    var fr = byUrl[url];
-    if (featureState !== 'PASS_VERIFIED_FEATURE' || !rights || !fr) { held++; continue; }
-    var spatial = imgIsSpatialClassV2_(String(qData[r][qi.ASSET_CLASS] || ''));
-    var spatialState = String(qData[r][qi.SPATIAL_STATUS] || '');
-    if (spatial && spatialState.indexOf('PASS') !== 0) {
-      imgSetV2_(queens, r + 1, qi, {SEED_STATUS:'HOLD_SPATIAL_QA_REQUIRED'});
-      held++; continue;
-    }
-    var qid = String(qData[r][qi.QUEENS_ID] || '');
-    var sourceHash = String(qData[r][qi.SOURCE_HASH] || imgSha256V2_(url));
-    var seedId = 'IMGSEED_' + sourceHash.substring(0, 16).toUpperCase();
-    if (!existing[seedId]) {
-      var seedText = imgFeatureSeedTextV2_(fr, fi);
-      seedSheet.appendRow([
-        seedId,
-        String(qData[r][qi.PROJECT_ID] || 'ALL_IMAGE_WORKFLOWS'),
-        'PINTEREST_REFERENCE_FEATURE_SEED',
-        qid + '|' + sourceHash,
-        String(qData[r][qi.TOPIC] || 'IMAGE_REFERENCE'),
-        seedText,
-        'IMAGE_QUEENS_FEATURE_SEED_V2',
-        'VERIFIED_REFERENCE_FEATURE',
-        'REFERENCE_SEED_TEMPLATE_PENDING',
-        new Date().toISOString(),
-        new Date().toISOString(),
-        '', '',
-        'QUEENS_ID=' + qid + ';SOURCE_URL=' + url + ';RIGHTS=' + rights + ';FEATURE_VERIFIED=Y'
-      ]);
-      existing[seedId] = true;
-    }
-    imgSetV2_(queens, r + 1, qi, {SEED_ID:seedId, SEED_STATUS:'SEEDED_REFERENCE_TEMPLATE_PENDING'});
-    promoted++;
-  }
-  return {ok:true, promoted:promoted, held:held};
-}
-
-function evaluateImageAssetSeedGateV2(requestId) {
-  var queens = imgPackSheetV2_(IMAGE_LEARNING_TABS.QUEENS);
-  var qData = queens.getDataRange().getValues();
-  var qi = imgIndexV2_(qData[0]);
-  var checked = 0, pass = 0, blocked = 0, reasons = [];
-  for (var r = 1; r < qData.length; r++) {
-    if (String(qData[r][qi.REQUEST_ID] || '') === 'POLICY') continue;
-    if (requestId && String(qData[r][qi.REQUEST_ID] || '') !== String(requestId)) continue;
-    checked++;
-    var misses = [];
-    if (!qData[r][qi.QUEENS_ID]) misses.push('QUEENS_ID');
-    if (!qData[r][qi.SEED_ID]) misses.push('SEED_ID');
-    if (!qData[r][qi.TEMPLATE_ID]) misses.push('TEMPLATE_ID');
-    if (String(qData[r][qi.TEMPLATE_STATUS] || '').indexOf('ACTIVE') < 0) misses.push('ACTIVE_TEMPLATE');
-    if (!qData[r][qi.RIGHTS_ROLE]) misses.push('RIGHTS');
-    if (imgIsSpatialClassV2_(String(qData[r][qi.ASSET_CLASS] || '')) && String(qData[r][qi.SPATIAL_STATUS] || '').indexOf('PASS') !== 0) misses.push('SPATIAL_QA');
-    if (misses.length) { blocked++; reasons.push({queensId:qData[r][qi.QUEENS_ID], missing:misses}); }
-    else pass++;
-  }
-  return {ok:true, checked:checked, pass:pass, blocked:blocked, generationAllowed:checked > 0 && blocked === 0, reasons:reasons};
-}
-
-function imageLearningHealthV2() {
-  var requiredPack = [IMAGE_LEARNING_TABS.QUEENS, IMAGE_LEARNING_TABS.FEATURES, IMAGE_LEARNING_TABS.ASSET_GATE, IMAGE_LEARNING_TABS.MASTER, IMAGE_LEARNING_TABS.PROMOTION];
-  var pack = SpreadsheetApp.openById(IMAGE_LEARNING_PACK_ID);
-  var missing = requiredPack.filter(function(n){ return !pack.getSheetByName(n); });
-  var feature = pack.getSheetByName(IMAGE_LEARNING_TABS.FEATURES);
-  if (feature) {
-    var h = imgIndexV2_(feature.getRange(1,1,1,feature.getLastColumn()).getValues()[0]);
-    ['HUMAN_SCALE','CLEARANCE','CIRCULATION','DEPTH'].forEach(function(k){ if (typeof h[k] !== 'number') missing.push('FEATURE_COLUMN:' + k); });
-  }
-  var triggers = ScriptApp.getProjectTriggers().map(function(t){ return t.getHandlerFunction(); });
-  var imagePhysical = triggers.filter(function(h){ return h === 'runImageLearning10mTickV2' || h === 'runImageLearningFromFactoryWakeV2'; }).length;
-  var factoryWake = triggers.filter(function(h){ return h === 'processTaskQueue'; }).length;
-  return {
-    ok:missing.length === 0 && imagePhysical === 0,
-    missing:missing,
-    factoryProcessTaskQueueCount:factoryWake,
-    duplicateImagePhysicalTriggerCount:imagePhysical,
-    physicalPolicy:'REUSE_EXISTING_FACTORY_WAKE_ONLY',
-    logicalIntervalMinutes:10,
-    version:IMAGE_LEARNING_V2_VERSION
-  };
-}
-
-function testImageLearningStaticContractV2() {
-  var health = imageLearningHealthV2();
-  var q = imgPackSheetV2_(IMAGE_LEARNING_TABS.QUEENS).getRange(1,1,1,24).getValues()[0];
-  var requiredQ = ['QUEENS_ID','PROJECT_ID','REQUEST_ID','SOURCE_URL','SOURCE_HASH','RIGHTS_ROLE','FEATURE_STATUS','SPATIAL_STATUS','SEED_STATUS','SEED_ID','TEMPLATE_STATUS','TEMPLATE_ID','STATUS','LAST_ERROR'];
-  var qi = imgIndexV2_(q);
-  var missingQ = requiredQ.filter(function(k){ return typeof qi[k] !== 'number'; });
-  return {ok:health.ok && missingQ.length === 0, health:health, missingQueensColumns:missingQ, noNewPhysicalTrigger:true, version:IMAGE_LEARNING_V2_VERSION};
-}
-
-function recordImageLearningRunV2_(out, started) {
-  try {
-    var ss = SpreadsheetApp.openById(IMAGE_LEARNING_MASTER_ID);
-    var learn = ss.getSheetByName(IMAGE_LEARNING_TABS.LEARNING_LOG);
-    var qa = ss.getSheetByName(IMAGE_LEARNING_TABS.QA_LOG);
-    var runId = 'IMGLEARN_' + Utilities.formatDate(started, 'Asia/Seoul', 'yyyyMMdd_HHmmss');
-    var status = out.ok === false ? 'FAIL' : (out.skipped ? 'SKIPPED' : 'PASS_OR_HOLD');
-    var evidence = JSON.stringify(out).substring(0, 4000);
-    if (learn) learn.appendRow([runId,new Date().toISOString(),'PINTEREST_QUEENS_INTAKE|VISUAL_FEATURE_EXTRACTOR','10분 이미지 Queens→Seed 학습','실제 증거만 승격, 공간증거 누락 시 HOLD','Queens→Feature/Spatial→Seed→Gate→History/QA','IMAGE_PACK|35|63|75|77|80',status,evidence,'YES','다음 10분 bucket 또는 bound runtime x2']);
-    if (qa) qa.appendRow(['QA_' + runId,runId,'ALL_IMAGE_WORKFLOWS','runImageLearning10mTickV2','EXISTING_PROCESS_TASK_QUEUE_5M_REUSE','IMAGE_PACK_V2',out.bucket || '','QUEENS|FEATURE|SEED|GATE',runId,started.toISOString(),new Date().toISOString(),status,'DRIVE_SHEET_READBACK_REQUIRED',out.ok === false ? 0 : 90,out.error || '',0,evidence,'same fixture x2 before runtime VERIFIED']);
-  } catch (ignored) {}
-}
-
-function recordImageLearningFailureV2_(out) {
-  try {
-    var props = PropertiesService.getScriptProperties();
-    var signature = String(out.error || JSON.stringify(out.stages || {})).substring(0, 500);
-    var sigHash = imgSha256V2_(signature).substring(0, 12);
-    if (props.getProperty('IMG_LAST_FAILURE_SIG') === sigHash) return;
-    props.setProperty('IMG_LAST_FAILURE_SIG', sigHash);
-    var ss = SpreadsheetApp.openById(IMAGE_LEARNING_MASTER_ID);
-    var ch = ss.getSheetByName(IMAGE_LEARNING_TABS.CHANGELOG);
-    if (!ch) return;
-    var id = 'CHG_IMG_LEARN_' + Utilities.formatDate(new Date(),'Asia/Seoul','yyyyMMdd_HHmmss');
-    ch.appendRow([id,new Date().toISOString(),'IMG_LEARNING_FAILURE_' + sigHash,'ALL_IMAGE_WORKFLOWS','WORKFLOW','FAILURE_PREVENTION','Unverified/missing evidence could be mistaken for learned Seed/Template','Fail-close on missing Queens/features/spatial QA/rights/template; preserve resume point','10m learning runtime failure or evidence gap',sigHash,'Prevent false Seed/Template promotion','LOW','TASK_' + id,'8friend8ship-cloud/contents-os-git','main','','','runImageLearning10mTickV2','same fixture x2',signature,'','APPLY_MIN_FIX_AND_RETEST','ACTIVE','FALSE',new Date().toISOString()]);
-  } catch (ignored) {}
-}
-
-function imgPackSheetV2_(name) {
-  var s = SpreadsheetApp.openById(IMAGE_LEARNING_PACK_ID).getSheetByName(name);
-  if (!s) throw new Error('IMAGE_PACK_TAB_MISSING:' + name);
-  return s;
-}
-function imgMasterSheetV2_(name) {
-  var s = SpreadsheetApp.openById(IMAGE_LEARNING_MASTER_ID).getSheetByName(name);
-  if (!s) throw new Error('MASTER_TAB_MISSING:' + name);
-  return s;
-}
-function imgIndexV2_(header) {
-  var out = {}; header.forEach(function(h,i){ out[String(h)] = i; }); return out;
-}
-function imgSetV2_(sheet, row, idx, patch) {
-  Object.keys(patch).forEach(function(k){ if (typeof idx[k] === 'number') sheet.getRange(row, idx[k] + 1).setValue(patch[k]); });
-}
-function imgSha256V2_(text) {
-  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(text), Utilities.Charset.UTF_8).map(function(b){ var v=(b<0?b+256:b).toString(16); return v.length===1?'0'+v:v; }).join('');
-}
-function imgIsSpatialClassV2_(assetClass) {
-  return /SPACE|FURNITURE|FIXTURE|OBJECT/i.test(String(assetClass || ''));
-}
-function imgFeatureSeedTextV2_(row, idx) {
-  var keys = ['STYLE','COMPOSITION','COLOR_TONE','LIGHTING','OBJECTS','BACKGROUND_TYPE','HUMAN_SCALE','CLEARANCE','CIRCULATION','DEPTH'];
-  return keys.map(function(k){ return k + '=' + String(typeof idx[k] === 'number' ? row[idx[k]] || '' : ''); }).join('; ');
-}
+var IMAGE_LEARNING_V2_VERSION='IMAGE_QUEENS_SEED_AUTOLEARN_V4_2_TEMPLATE_CONTINUOUS_20260902';
+var IMAGE_LEARNING_PACK_ID='1vjB64BlUFsDmblwWaVdVE8iXw-JhK8T6A3z9Hk6J_hk';
+var IMAGE_LEARNING_MASTER_ID='1C_CznU1Uo7dk-gKay3-oH8wFxutsGMlz27RSrbdVQwI';
+var IMAGE_LEARNING_TABLET_QUEUE_ID='1pZFNTeu-F0CjhYAuoKazD92UMn6A-9nkse6QyYwj2yA';
+var IMAGE_LEARNING_TABS={QUEENS:'PINTEREST_QUEENS_INTAKE',FEATURES:'VISUAL_FEATURE_EXTRACTOR',ASSET_GATE:'ASSET_QUEENS_SEED_GATE',MASTER:'IMAGE_PACK_MASTER',CANDIDATE:'PACK_CANDIDATE_BUILDER',TEST:'PACK_TEST_MATRIX',PROMOTION:'PROMOTION_GATE',SEED:'35_INTERNAL_SEED_REGISTRY',LEARNING_LOG:'31_학습실행로그',QA_LOG:'80_DATA_RUNTIME_QA_LOG',CHANGELOG:'63_EVOLUTION_CHANGELOG',TRIGGER_REGISTRY:'IMAGE_TRIGGER_REGISTRY'};
+function runImageLearning10mTickV2(){var lock=LockService.getScriptLock();if(!lock.tryLock(5000)){var busy={ok:true,skipped:true,reason:'LOCK_BUSY',version:IMAGE_LEARNING_V2_VERSION};imgSyncTriggerRegistryV3_('SKIPPED_LOCK_BUSY',busy);return busy;}var started=new Date(),bucket=Utilities.formatDate(started,'Asia/Seoul','yyyyMMddHH')+Math.floor(Number(Utilities.formatDate(started,'Asia/Seoul','mm'))/10),props=PropertiesService.getScriptProperties();try{if(props.getProperty('IMG_LEARN_LAST_BUCKET')===bucket){var same={ok:true,skipped:true,reason:'SAME_10M_BUCKET',bucket:bucket,version:IMAGE_LEARNING_V2_VERSION};imgSyncTriggerRegistryV3_('SKIPPED_SAME_10M_BUCKET',same);return same;}var out={ok:true,bucket:bucket,version:IMAGE_LEARNING_V2_VERSION,stages:{}};out.stages.collect=collectPinterestImageQueensV2();out.stages.features=extractImageQueensVisualSpatialFeaturesV2();out.stages.seed=promoteVerifiedImageQueensToSeedV2();out.stages.candidates=buildImageTemplateCandidatesV4_();out.stages.templateTests=evaluateImageTemplateTestsAndPromotionV4_();out.stages.supervision=superviseImageLearningContinuityV4_();out.stages.gate=evaluateImageAssetSeedGateV2();out.health=imageLearningHealthV2();out.ok=[out.stages.collect,out.stages.features,out.stages.seed,out.stages.candidates,out.stages.templateTests,out.stages.supervision,out.stages.gate,out.health].every(function(x){return x&&(x.ok!==false||x.skipped===true||x.hold===true);});out.finishedAt=new Date().toISOString();recordImageLearningRunV2_(out,started);imgSyncTriggerRegistryV3_(out.ok?'PASS_OR_HOLD_TEMPLATE_CONTINUOUS':'FAIL',out);if(out.ok)props.setProperty('IMG_LEARN_LAST_BUCKET',bucket);else recordImageLearningFailureV2_(out);return out;}catch(err){var failure={ok:false,bucket:bucket,error:String(err&&err.message||err),version:IMAGE_LEARNING_V2_VERSION};recordImageLearningRunV2_(failure,started);recordImageLearningFailureV2_(failure);imgSyncTriggerRegistryV3_('FAIL',failure);return failure;}finally{lock.releaseLock();}}
+function runImageLearningFromFactoryWakeV2(){return runImageLearning10mTickV2();}
+function runCentralImageLearningRecoveryV3(){var started=new Date(),wake=ensureImageLearningFactoryWakeV3_(),health=imageLearningHealthV2(false),staticCheck=testImageLearningStaticContractV2(),tick=wake.ok&&health.ok&&staticCheck.ok?runImageLearning10mTickV2():{ok:false,skipped:true,reason:'RECOVERY_PRECHECK_FAILED'},out={ok:!!(wake.ok&&health.ok&&staticCheck.ok&&tick&&tick.ok!==false),wake:wake,health:health,staticCheck:staticCheck,tick:tick,cloudPrimary:true,laptopHardDependency:false,startedAt:started.toISOString(),finishedAt:new Date().toISOString(),version:IMAGE_LEARNING_V2_VERSION};imgSyncTriggerRegistryV3_(out.ok?'RECOVERY_PASS_TEMPLATE_CONTINUOUS':'RECOVERY_FAIL',out);if(!out.ok)recordImageLearningFailureV2_(out);return out;}
+function collectPinterestImageQueensV2(){var sh=imgPackSheetV2_(IMAGE_LEARNING_TABS.QUEENS),d=sh.getDataRange().getValues();if(d.length<=2)return{ok:true,scanned:0,collected:0,skipped:0,status:'PASS_NO_INPUT'};var i=imgIndexV2_(d[0]),collected=0,skipped=0;for(var r=1;r<d.length;r++){var qid=String(d[r][i.QUEENS_ID]||'');if(!qid||String(d[r][i.REQUEST_ID]||'')==='POLICY')continue;var url=String(d[r][i.SOURCE_URL]||'');if(!url){skipped++;continue;}var pin=String(d[r][i.SOURCE_PIN_ID]||''),hash=String(d[r][i.SOURCE_HASH]||'')||imgSha256V2_(url+'|'+pin);imgSetV2_(sh,r+1,i,{SOURCE_HASH:hash,COLLECTED_AT:d[r][i.COLLECTED_AT]||new Date(),RIGHTS_ROLE:d[r][i.RIGHTS_ROLE]||'REFERENCE_ONLY',REFERENCE_ONLY:'Y',FEATURE_STATUS:d[r][i.FEATURE_STATUS]||'PENDING_FEATURE_EVIDENCE',STATUS:d[r][i.STATUS]||'QUEENS_COLLECTED'});collected++;}return{ok:true,scanned:d.length-2,collected:collected,skipped:skipped};}
+function extractImageQueensVisualSpatialFeaturesV2(){var q=imgPackSheetV2_(IMAGE_LEARNING_TABS.QUEENS),f=imgPackSheetV2_(IMAGE_LEARNING_TABS.FEATURES),qd=q.getDataRange().getValues(),fd=f.getDataRange().getValues(),qi=imgIndexV2_(qd[0]),fi=imgIndexV2_(fd[0]),req=['HUMAN_SCALE','CLEARANCE','CIRCULATION','DEPTH'],missing=req.filter(function(k){return typeof fi[k]!=='number';});if(missing.length)return{ok:false,error:'SPATIAL_FEATURE_COLUMNS_MISSING:'+missing.join(',')};var byUrl={};for(var x=1;x<fd.length;x++){var u=String(fd[x][fi.SOURCE_URL]||'');if(u&&String(fd[x][fi.VERIFIED]||'').toUpperCase()==='Y')byUrl[u]=fd[x];}var matched=0,held=0;for(var r=1;r<qd.length;r++){if(String(qd[r][qi.REQUEST_ID]||'')==='POLICY')continue;var url=String(qd[r][qi.SOURCE_URL]||'');if(!url||!byUrl[url]){if(url)held++;continue;}var fr=byUrl[url],sp=imgIsSpatialClassV2_(String(qd[r][qi.ASSET_CLASS]||'')),complete=req.every(function(k){return String(fr[fi[k]]||'').trim()!=='';}),patch={FEATURE_STATUS:'PASS_VERIFIED_FEATURE'};if(sp){patch.SPATIAL_STATUS=complete?'FEATURE_SPATIAL_EVIDENCE_READY_QA_PENDING':'WAITING_HUMAN_SCALE_CLEARANCE_CIRCULATION_DEPTH';if(!complete)patch.FEATURE_STATUS='HOLD_SPATIAL_FEATURE_INCOMPLETE';}else patch.SPATIAL_STATUS='NOT_REQUIRED';imgSetV2_(q,r+1,qi,patch);if(patch.FEATURE_STATUS==='PASS_VERIFIED_FEATURE')matched++;else held++;}return{ok:true,matched:matched,held:held,noFabrication:true};}
+function promoteVerifiedImageQueensToSeedV2(){var q=imgPackSheetV2_(IMAGE_LEARNING_TABS.QUEENS),f=imgPackSheetV2_(IMAGE_LEARNING_TABS.FEATURES),s=imgMasterSheetV2_(IMAGE_LEARNING_TABS.SEED),qd=q.getDataRange().getValues(),fd=f.getDataRange().getValues(),sd=s.getDataRange().getValues(),qi=imgIndexV2_(qd[0]),fi=imgIndexV2_(fd[0]),si=imgIndexV2_(sd[0]),byUrl={},existing={};for(var x=1;x<fd.length;x++){var u=String(fd[x][fi.SOURCE_URL]||'');if(u&&String(fd[x][fi.VERIFIED]||'').toUpperCase()==='Y')byUrl[u]=fd[x];}for(var y=1;y<sd.length;y++)existing[String(sd[y][si.SEED_ID]||'')]=true;var promoted=0,held=0;for(var r=1;r<qd.length;r++){if(String(qd[r][qi.REQUEST_ID]||'')==='POLICY')continue;var fs=String(qd[r][qi.FEATURE_STATUS]||''),rights=String(qd[r][qi.RIGHTS_ROLE]||''),url=String(qd[r][qi.SOURCE_URL]||''),fr=byUrl[url];if(fs!=='PASS_VERIFIED_FEATURE'||!rights||!fr){held++;continue;}var sp=imgIsSpatialClassV2_(String(qd[r][qi.ASSET_CLASS]||'')),ss=String(qd[r][qi.SPATIAL_STATUS]||'');if(sp&&ss.indexOf('PASS')!==0){imgSetV2_(q,r+1,qi,{SEED_STATUS:'HOLD_SPATIAL_QA_REQUIRED'});held++;continue;}var qid=String(qd[r][qi.QUEENS_ID]||''),hash=String(qd[r][qi.SOURCE_HASH]||imgSha256V2_(url)),seed='IMGSEED_'+hash.substring(0,16).toUpperCase();if(!existing[seed]){s.appendRow([seed,String(qd[r][qi.PROJECT_ID]||'ALL_IMAGE_WORKFLOWS'),'PINTEREST_REFERENCE_FEATURE_SEED',qid+'|'+hash,String(qd[r][qi.TOPIC]||'IMAGE_REFERENCE'),imgFeatureSeedTextV2_(fr,fi),'IMAGE_QUEENS_FEATURE_SEED_V2','VERIFIED_REFERENCE_FEATURE','REFERENCE_SEED_TEMPLATE_PENDING',new Date().toISOString(),new Date().toISOString(),'','','QUEENS_ID='+qid+';SOURCE_URL='+url+';RIGHTS='+rights+';FEATURE_VERIFIED=Y']);existing[seed]=true;}imgSetV2_(q,r+1,qi,{SEED_ID:seed,SEED_STATUS:'SEEDED_REFERENCE_TEMPLATE_PENDING'});promoted++;}return{ok:true,promoted:promoted,held:held};}
+function buildImageTemplateCandidatesV4_(){var q=imgPackSheetV2_(IMAGE_LEARNING_TABS.QUEENS),f=imgPackSheetV2_(IMAGE_LEARNING_TABS.FEATURES),c=imgPackSheetV2_(IMAGE_LEARNING_TABS.CANDIDATE),qd=q.getDataRange().getValues(),fd=f.getDataRange().getValues(),cd=c.getDataRange().getValues(),qi=imgIndexV2_(qd[0]),fi=imgIndexV2_(fd[0]),ci=imgIndexV2_(cd[0]),byUrl={},existing={};for(var x=1;x<fd.length;x++){var u=String(fd[x][fi.SOURCE_URL]||'');if(u&&String(fd[x][fi.VERIFIED]||'').toUpperCase()==='Y')byUrl[u]=fd[x];}for(var y=1;y<cd.length;y++)existing[String(cd[y][ci.CANDIDATE_PACK_ID]||'')]=y+1;var created=0,pending=0,held=0;for(var r=1;r<qd.length;r++){if(String(qd[r][qi.REQUEST_ID]||'')==='POLICY')continue;var seed=String(qd[r][qi.SEED_ID]||''),seedState=String(qd[r][qi.SEED_STATUS]||''),featureState=String(qd[r][qi.FEATURE_STATUS]||''),rights=String(qd[r][qi.RIGHTS_ROLE]||''),sp=imgIsSpatialClassV2_(String(qd[r][qi.ASSET_CLASS]||'')),spState=String(qd[r][qi.SPATIAL_STATUS]||''),url=String(qd[r][qi.SOURCE_URL]||''),fr=byUrl[url];if(!seed||seedState.indexOf('SEEDED')!==0||featureState!=='PASS_VERIFIED_FEATURE'||!rights||!fr||(sp&&spState.indexOf('PASS')!==0)){held++;continue;}var hash=String(qd[r][qi.SOURCE_HASH]||imgSha256V2_(url)),cid='CAND_IMG_'+hash.substring(0,16).toUpperCase()+'_V1';if(!existing[cid]){var sourcePack=imgValV4_(fr,fi,'IMAGE_PACK_ID',''),persona=imgValV4_(fr,fi,'PERSONA_ID',''),platform=imgValV4_(fr,fi,'PLATFORM_FIT','Multi'),objects=imgValV4_(fr,fi,'OBJECTS',''),background=imgValV4_(fr,fi,'BACKGROUND_TYPE',''),style=imgValV4_(fr,fi,'STYLE',''),composition=imgValV4_(fr,fi,'COMPOSITION',''),seedText=imgFeatureSeedTextV2_(fr,fi);c.appendRow([cid,'CL_SEED_'+hash.substring(0,12).toUpperCase(),sourcePack,persona,platform,'SOURCE_NATIVE_OR_REQUESTED','feature_seed_template',objects,background?'VERIFIED_BACKGROUND_TYPE='+background:'BACKGROUND_FROM_VERIFIED_FEATURE_ONLY',style?'VERIFIED_STYLE='+style:'STYLE_FROM_VERIFIED_FEATURE_ONLY',composition?'VERIFIED_COMPOSITION='+composition:'COMPOSITION_FROM_VERIFIED_FEATURE_ONLY','Use only verified Queens feature seed. Preserve rights role and spatial constraints. '+seedText,'NO_RIGHTS_ESCALATION;NO_UNVERIFIED_SPATIAL_VALUE;NO_IDENTITY_OR_OBJECT_FABRICATION;NO_PROMOTION_WITHOUT_RUNTIME_X2',String(qd[r][qi.TOPIC]||'')+'|'+String(qd[r][qi.SPACE_TYPE]||'')+'|'+String(qd[r][qi.ASSET_CLASS]||''),2,'TEMPLATE_CANDIDATE_X2_PENDING','V4.2','QUEENS_ID='+String(qd[r][qi.QUEENS_ID]||'')+';SEED_ID='+seed+';RIGHTS='+rights+';SOURCE_HASH='+hash]);existing[cid]=c.getLastRow();created++;}else pending++;imgSetV2_(q,r+1,qi,{TEMPLATE_ID:cid,TEMPLATE_STATUS:'TEMPLATE_CANDIDATE_X2_PENDING',STATUS:'QUEENS_SEEDED_TEMPLATE_X2_PENDING'});}return{ok:true,created:created,existingPending:pending,held:held,noFabricatedTests:true};}
+function evaluateImageTemplateTestsAndPromotionV4_(){var q=imgPackSheetV2_(IMAGE_LEARNING_TABS.QUEENS),c=imgPackSheetV2_(IMAGE_LEARNING_TABS.CANDIDATE),t=imgPackSheetV2_(IMAGE_LEARNING_TABS.TEST),p=imgPackSheetV2_(IMAGE_LEARNING_TABS.PROMOTION),qd=q.getDataRange().getValues(),cd=c.getDataRange().getValues(),td=t.getDataRange().getValues(),pd=p.getDataRange().getValues(),qi=imgIndexV2_(qd[0]),ci=imgIndexV2_(cd[0]),ti=imgIndexV2_(td[0]),pi=imgIndexV2_(pd[0]),qByTemplate={},testsBy={};for(var qr=1;qr<qd.length;qr++){var qt=String(qd[qr][qi.TEMPLATE_ID]||'');if(qt)qByTemplate[qt]={row:qr+1,values:qd[qr]};}for(var tr=1;tr<td.length;tr++){var cid=String(td[tr][ti.CANDIDATE_PACK_ID]||''),ver=String(td[tr][ti.VERIFIED]||'').toUpperCase();if(!cid||ver.indexOf('Y')!==0)continue;if(!testsBy[cid])testsBy[cid]=[];testsBy[cid].push(td[tr]);}var promoted=0,pending=0,rejected=0,held=0;for(var cr=1;cr<cd.length;cr++){var candidate=String(cd[cr][ci.CANDIDATE_PACK_ID]||'');if(!candidate||candidate.indexOf('EXAMPLE_')===0)continue;var qr=qByTemplate[candidate];if(!qr)continue;var rows=testsBy[candidate]||[],minTests=Math.max(2,Number(cd[cr][ci.MIN_TESTS_REQUIRED]||2));if(rows.length<minTests){imgSetV2_(c,cr+1,ci,{STATUS:'TEMPLATE_X2_RUNTIME_PENDING'});imgSetV2_(q,qr.row,qi,{TEMPLATE_STATUS:'TEMPLATE_X2_RUNTIME_PENDING',STATUS:'QUEENS_TEMPLATE_RUNTIME_TEST_PENDING'});imgEnqueueTabletImageJobV4_('TEMPLATE_X2_TEST',candidate,qr.values,qi,minTests-rows.length);pending++;continue;}var totals=[],pass=0,failures=0,critical=0,drive=true;rows.forEach(function(row){var total=Number(row[ti.TOTAL_SCORE]);if(isFinite(total))totals.push(total);var pf=String(row[ti.PASS_FAIL]||'').toUpperCase(),sig=String(row[ti.FAILURE_SIGNATURE]||'').toUpperCase();if(pf.indexOf('PASS')===0)pass++;else failures++;if(!String(row[ti.DRIVE_ID]||''))drive=false;if(pf.indexOf('PASS')!==0&&(/CRITICAL|INVALID_IMAGE_BINARY|DUPLICATE_INVALID_OUTPUT|BAD_PNG|ROUTE_MISBIND|WRONG_TARGET|CONTEXT_LOSS/.test(sig)||total<60))critical++;});if(!totals.length){held++;imgSetV2_(c,cr+1,ci,{STATUS:'TEMPLATE_TEST_SCORE_MISSING_HOLD'});continue;}var avg=totals.reduce(function(a,b){return a+b;},0)/totals.length,max=Math.max.apply(null,totals),min=Math.min.apply(null,totals),consistency=Math.max(0,Math.min(100,100-(max-min))),passRate=rows.length?pass/rows.length:0,sourceGate=String(qr.values[qi.SOURCE_HASH]||'')&&String(qr.values[qi.FEATURE_STATUS]||'')==='PASS_VERIFIED_FEATURE'?'PASS':'HOLD',rightsGate=String(qr.values[qi.RIGHTS_ROLE]||'')?'PASS_INTERNAL_REFERENCE_ROLE_SET':'HOLD',driveGate=drive?'PASS_X'+rows.length+'_DRIVE_ID':'HOLD_MISSING_DRIVE_ID',minGate=rows.length>=minTests?'PASS_X'+rows.length:'PENDING_X2',decision='HOLD',current='HOLD_TEMPLATE_QA',next='RETEST_FAILED_DIMENSION_ONLY';if(critical>0||avg<60){decision='REJECT';current='REJECT_RUNTIME_QA';next='PRESERVE_FAILURE_SIGNATURE_AND_REPAIR_FAILED_DIMENSION';rejected++;}else if(avg>=85&&passRate>=0.8&&consistency>=85&&critical===0&&sourceGate==='PASS'&&rightsGate.indexOf('PASS')===0&&drive&&rows.length>=minTests){decision='PROMOTE_INTERNAL';current='ACTIVE_INTERNAL_TEMPLATE';next='REGISTER_IMAGE_PACK_AND_RESEED';promoted++;}else held++;imgUpsertPromotionResultV4_(p,pi,candidate,rows.length,avg,passRate,consistency,failures,critical,sourceGate,rightsGate,driveGate,minGate,current,decision,next);if(decision==='PROMOTE_INTERNAL'){var pack=imgRegisterActiveTemplateV4_(cd[cr],ci,qr.values,qi,avg,consistency,rows.length);imgSetV2_(c,cr+1,ci,{STATUS:'ACTIVE_INTERNAL_TEMPLATE'});imgSetV2_(q,qr.row,qi,{TEMPLATE_ID:pack,TEMPLATE_STATUS:'ACTIVE_INTERNAL_TEMPLATE',STATUS:'QUEENS_TEMPLATE_ACTIVE_INTERNAL'});}else{imgSetV2_(c,cr+1,ci,{STATUS:current});imgSetV2_(q,qr.row,qi,{TEMPLATE_STATUS:current,STATUS:'QUEENS_TEMPLATE_'+current});}}return{ok:true,promoted:promoted,pendingX2:pending,rejected:rejected,held:held,evidenceOnly:true};}
+function imgUpsertPromotionResultV4_(sh,pi,candidate,testCount,avg,passRate,consistency,failureCount,critical,sourceGate,rightsGate,driveGate,minGate,current,decision,next){var d=sh.getDataRange().getValues(),row=0;for(var r=1;r<d.length;r++)if(String(d[r][pi.RECORD_TYPE]||'')==='RESULT'&&String(d[r][pi.PACK_ID]||'')===candidate)row=r+1;var vals=['RESULT',candidate,testCount,Math.round(avg*1000)/1000,passRate,Math.round(consistency*1000)/1000,failureCount,critical,sourceGate,rightsGate,driveGate,minGate,current,decision,next,Utilities.formatDate(new Date(),'Asia/Seoul','yyyy-MM-dd HH:mm:ss KST'),'V4.2','DERIVED_ONLY_FROM_VERIFIED_PACK_TEST_MATRIX;AVG>=85;TESTS>=2;PASS_RATE>=0.8;CONSISTENCY>=85;CRITICAL=0;SOURCE/RIGHTS/DRIVE=PASS'];if(!row)sh.appendRow(vals);else sh.getRange(row,1,1,vals.length).setValues([vals]);}
+function imgRegisterActiveTemplateV4_(candidateRow,ci,qRow,qi,avg,consistency,testCount){var master=imgPackSheetV2_(IMAGE_LEARNING_TABS.MASTER),d=master.getDataRange().getValues(),mi=imgIndexV2_(d[0]),candidate=String(candidateRow[ci.CANDIDATE_PACK_ID]||''),pack='IMGPK-'+candidate.replace(/^CAND_/,'').replace(/_/g,'-');for(var r=1;r<d.length;r++)if(String(d[r][mi.IMAGE_PACK_ID]||'')===pack)return pack;var row=new Array(d[0].length);for(var x=0;x<row.length;x++)row[x]='';imgAssignV4_(row,mi,'IMAGE_PACK_ID',pack);imgAssignV4_(row,mi,'PACK_NAME',String(qRow[qi.TOPIC]||'Image')+'_verified_template');imgAssignV4_(row,mi,'PACK_VERSION','v4.2');imgAssignV4_(row,mi,'STATUS','ACTIVE_INTERNAL_TEMPLATE');imgAssignV4_(row,mi,'CATEGORY',String(qRow[qi.SPACE_TYPE]||'IMAGE'));imgAssignV4_(row,mi,'SUBCATEGORY',String(qRow[qi.ASSET_CLASS]||'VERIFIED_FEATURE_TEMPLATE'));imgAssignV4_(row,mi,'SOURCE_TYPE','PINTEREST_REFERENCE_FEATURE_SEED+VERIFIED_RUNTIME_DERIVED');imgAssignV4_(row,mi,'USAGE_ROLE','INTERNAL_TEMPLATE');imgAssignV4_(row,mi,'LICENSE_STATUS','REFERENCE_ONLY_FEATURES_ONLY;PUBLIC_FINAL_GATE_SEPARATE');imgAssignV4_(row,mi,'RISK_LEVEL','MEDIUM');imgAssignV4_(row,mi,'QUEENS_TOPIC',String(qRow[qi.TOPIC]||''));imgAssignV4_(row,mi,'SEED_THEME',String(qRow[qi.TOPIC]||''));imgAssignV4_(row,mi,'SUMMARY',String(candidateRow[ci.PROMPT_BASE]||'')+'; x'+testCount+' avg='+avg.toFixed(2)+' consistency='+consistency.toFixed(2));imgAssignV4_(row,mi,'KEYWORDS',String(qRow[qi.PINTEREST_QUERY]||''));imgAssignV4_(row,mi,'SUBJECT_TYPE',String(qRow[qi.ASSET_CLASS]||''));imgAssignV4_(row,mi,'PERSONA_ID',String(candidateRow[ci.PERSONA_ID]||''));imgAssignV4_(row,mi,'STYLE',String(candidateRow[ci.STYLE_RULE]||''));imgAssignV4_(row,mi,'BACKGROUND_TYPE',String(candidateRow[ci.BACKGROUND_RULE]||''));imgAssignV4_(row,mi,'OBJECTS',String(candidateRow[ci.REQUIRED_OBJECTS]||''));imgAssignV4_(row,mi,'PLATFORM',String(candidateRow[ci.PLATFORM]||'Multi'));imgAssignV4_(row,mi,'ASPECT_RATIO',String(candidateRow[ci.ASPECT_RATIO]||'SOURCE_NATIVE_OR_REQUESTED'));imgAssignV4_(row,mi,'EDIT_MODE',String(candidateRow[ci.EDIT_MODE]||'feature_seed_template'));imgAssignV4_(row,mi,'VERIFIED','Y');master.appendRow(row);return pack;}
+function superviseImageLearningContinuityV4_(){var q=imgPackSheetV2_(IMAGE_LEARNING_TABS.QUEENS),d=q.getDataRange().getValues(),qi=imgIndexV2_(d[0]),visualPending=0,spatialPending=0,seedPending=0,templatePending=0,queued=0;for(var r=1;r<d.length;r++){if(String(d[r][qi.REQUEST_ID]||'')==='POLICY')continue;var qid=String(d[r][qi.QUEENS_ID]||'');if(!qid)continue;var visual=String(d[r][qi.VISUAL_EVIDENCE_STATUS]||''),feature=String(d[r][qi.FEATURE_STATUS]||''),spatial=String(d[r][qi.SPATIAL_STATUS]||''),seed=String(d[r][qi.SEED_STATUS]||''),template=String(d[r][qi.TEMPLATE_STATUS]||''),visualReady=/PASS|VERIFIED|READY/i.test(visual)&&!/PENDING|REQUIRED|WAIT/i.test(visual);if(/PENDING|REQUIRED|WAIT/i.test(visual)||/PENDING_PIN_VISUAL|PENDING_VISUAL/i.test(feature)){visualPending++;if(imgEnqueueTabletImageJobV4_('QUEENS_VISUAL_CAPTURE',qid,d[r],qi,1))queued++;}if(imgIsSpatialClassV2_(String(d[r][qi.ASSET_CLASS]||''))&&spatial.indexOf('PASS')!==0){spatialPending++;if(feature==='PASS_VERIFIED_FEATURE'&&visualReady&&imgEnqueueTabletImageJobV4_('SPATIAL_QA',qid,d[r],qi,1))queued++;}if(!seed||/HOLD|BLOCKED|PENDING/i.test(seed))seedPending++;if(!template||/PENDING|HOLD|BLOCKED|CANDIDATE/i.test(template))templatePending++;}var hold=visualPending+spatialPending+seedPending+templatePending>0;return{ok:true,hold:hold,visualPending:visualPending,spatialPending:spatialPending,seedPending:seedPending,templatePending:templatePending,tabletJobsQueued:queued,laptopHardDependency:false,cloudGovernanceContinues:true};}
+function imgEnqueueTabletImageJobV4_(kind,ref,qRow,qi,needed){try{var ss=SpreadsheetApp.openById(IMAGE_LEARNING_TABLET_QUEUE_ID),sh=ss.getSheetByName('QUEUE');if(!sh)return false;var suffix=imgSha256V2_(kind+'|'+ref).substring(0,12).toUpperCase(),task='TASK_IMG_'+kind+'_'+suffix,last=sh.getLastRow();if(last>1){var start=Math.max(2,last-600),ids=sh.getRange(start,1,last-start+1,1).getDisplayValues();for(var i=0;i<ids.length;i++)if(String(ids[i][0])===task)return false;}var header=sh.getRange(1,1,1,sh.getLastColumn()).getDisplayValues()[0],idx=imgIndexV2_(header),row=new Array(header.length);for(var z=0;z<row.length;z++)row[z]='';var now=new Date().toISOString(),source=typeof qi.SOURCE_URL==='number'?String(qRow[qi.SOURCE_URL]||''):'',capture=typeof qi.CAPTURE_DRIVE_URL==='number'?String(qRow[qi.CAPTURE_DRIVE_URL]||''):'',action='';if(kind==='QUEENS_VISUAL_CAPTURE')action='Use verified tablet background bridge when available to obtain non-destructive visual evidence/capture for reference-only Queens item. Preserve source rights; upload evidence to Drive; no unauthorized bulk scraping. If bridge permission/secret is not bound, remain WAIT_DEVICE_BIND without stopping cloud pipeline.';else if(kind==='SPATIAL_QA')action='Using verified visual evidence, measure/verify HUMAN_SCALE, CLEARANCE, CIRCULATION and DEPTH without guessing. Write spatial evidence and PASS/HOLD back to Queens/feature QA. No generation until spatial PASS.';else action='Run only the missing runtime image test for candidate '+ref+'. Produce '+Number(needed||1)+' independent evidence output(s), Drive upload/readback, then append actual scores to PACK_TEST_MATRIX. Do not fabricate score or promote before x2.';imgSetAnyV4_(row,idx,['JOB_ID'],task);imgSetAnyV4_(row,idx,['TEMPLATE_VERSION','JOB_TEMPLATE_ID'],'IMAGE_PACK_RUNTIME_'+kind);imgSetAnyV4_(row,idx,['WORKER','WORKER_ID'],'TABLET_ANDROID_01');imgSetAnyV4_(row,idx,['TASK_TYPE','JOB_TYPE'],kind);imgSetAnyV4_(row,idx,['PROMPT_REF'],ref);imgSetAnyV4_(row,idx,['APPROVAL_STATE','APPROVAL_ID'],'APPROVED_EXISTING_IMAGE_WORKFLOW');imgSetAnyV4_(row,idx,['CLAIM','CLAIM_STATE'],'UNCLAIMED');imgSetAnyV4_(row,idx,['STATUS'],'READY_BACKGROUND_BRIDGE_OR_WAIT_DEVICE_BIND');imgSetAnyV4_(row,idx,['LAST_GOOD','LAST_GOOD_STATE'],'CLOUD_IMAGE_SUPERVISOR_CREATED;LAPTOP_NOT_REQUIRED');imgSetAnyV4_(row,idx,['RESUME_POINT'],action+'; SOURCE_URL='+source+'; CAPTURE_DRIVE_URL='+capture);imgSetAnyV4_(row,idx,['RETRY_COUNT'],0);imgSetAnyV4_(row,idx,['DRIVE_TARGET'],'20_TABLET_WORKER/02_RESULTS');imgSetAnyV4_(row,idx,['DRIVE_SYNCED'],'FALSE');imgSetAnyV4_(row,idx,['VERIFIED'],'FALSE');imgSetAnyV4_(row,idx,['CREATED_AT'],now);imgSetAnyV4_(row,idx,['UPDATED_AT'],now);sh.appendRow(row);return true;}catch(ignored){return false;}}
+function evaluateImageAssetSeedGateV2(requestId){var q=imgPackSheetV2_(IMAGE_LEARNING_TABS.QUEENS),d=q.getDataRange().getValues(),i=imgIndexV2_(d[0]),checked=0,pass=0,blocked=0,reasons=[];for(var r=1;r<d.length;r++){if(String(d[r][i.REQUEST_ID]||'')==='POLICY')continue;if(requestId&&String(d[r][i.REQUEST_ID]||'')!==String(requestId))continue;checked++;var miss=[];if(!d[r][i.QUEENS_ID])miss.push('QUEENS_ID');if(!d[r][i.SEED_ID])miss.push('SEED_ID');if(!d[r][i.TEMPLATE_ID])miss.push('TEMPLATE_ID');if(String(d[r][i.TEMPLATE_STATUS]||'').indexOf('ACTIVE')<0)miss.push('ACTIVE_TEMPLATE');if(!d[r][i.RIGHTS_ROLE])miss.push('RIGHTS');if(imgIsSpatialClassV2_(String(d[r][i.ASSET_CLASS]||''))&&String(d[r][i.SPATIAL_STATUS]||'').indexOf('PASS')!==0)miss.push('SPATIAL_QA');if(miss.length){blocked++;reasons.push({queensId:d[r][i.QUEENS_ID],missing:miss});}else pass++;}return{ok:true,checked:checked,pass:pass,blocked:blocked,generationAllowed:checked>0&&blocked===0,reasons:reasons};}
+function imageLearningHealthV2(repairMissingWake){var required=[IMAGE_LEARNING_TABS.QUEENS,IMAGE_LEARNING_TABS.FEATURES,IMAGE_LEARNING_TABS.ASSET_GATE,IMAGE_LEARNING_TABS.MASTER,IMAGE_LEARNING_TABS.CANDIDATE,IMAGE_LEARNING_TABS.TEST,IMAGE_LEARNING_TABS.PROMOTION,IMAGE_LEARNING_TABS.TRIGGER_REGISTRY],pack=SpreadsheetApp.openById(IMAGE_LEARNING_PACK_ID),missing=required.filter(function(n){return !pack.getSheetByName(n);}),feature=pack.getSheetByName(IMAGE_LEARNING_TABS.FEATURES);if(feature){var h=imgIndexV2_(feature.getRange(1,1,1,feature.getLastColumn()).getValues()[0]);['HUMAN_SCALE','CLEARANCE','CIRCULATION','DEPTH'].forEach(function(k){if(typeof h[k]!=='number')missing.push('FEATURE_COLUMN:'+k);});}var wake=repairMissingWake===false?imgFactoryWakeStateV3_():ensureImageLearningFactoryWakeV3_(),triggers=ScriptApp.getProjectTriggers().map(function(t){return t.getHandlerFunction();}),imagePhysical=triggers.filter(function(h){return h==='runImageLearning10mTickV2'||h==='runImageLearningFromFactoryWakeV2';}).length,factory=triggers.filter(function(h){return h==='processTaskQueue';}).length;return{ok:missing.length===0&&imagePhysical===0&&wake.ok&&factory===1,missing:missing,factoryProcessTaskQueueCount:factory,duplicateImagePhysicalTriggerCount:imagePhysical,wakeRecovery:wake,physicalPolicy:'EXACTLY_ONE_PROCESS_TASK_QUEUE_5M;CREATE_ONLY_IF_MISSING;NO_DIRECT_IMAGE_TRIGGER;NO_LAPTOP_HARD_DEPENDENCY',logicalIntervalMinutes:10,templateContinuous:true,version:IMAGE_LEARNING_V2_VERSION};}
+function testImageLearningStaticContractV2(){var health=imageLearningHealthV2(false),q=imgPackSheetV2_(IMAGE_LEARNING_TABS.QUEENS).getRange(1,1,1,28).getValues()[0],qi=imgIndexV2_(q),missingQ=['QUEENS_ID','PROJECT_ID','REQUEST_ID','SOURCE_URL','SOURCE_HASH','RIGHTS_ROLE','FEATURE_STATUS','SPATIAL_STATUS','SEED_STATUS','SEED_ID','TEMPLATE_STATUS','TEMPLATE_ID','STATUS','LAST_ERROR','VISUAL_EVIDENCE_STATUS'].filter(function(k){return typeof qi[k]!=='number';}),c=imgPackSheetV2_(IMAGE_LEARNING_TABS.CANDIDATE).getRange(1,1,1,18).getValues()[0],ci=imgIndexV2_(c),missingC=['CANDIDATE_PACK_ID','MIN_TESTS_REQUIRED','STATUS','PROMPT_BASE'].filter(function(k){return typeof ci[k]!=='number';}),t=imgPackSheetV2_(IMAGE_LEARNING_TABS.TEST).getRange(1,1,1,20).getValues()[0],ti=imgIndexV2_(t),missingT=['CANDIDATE_PACK_ID','TOTAL_SCORE','PASS_FAIL','FAILURE_SIGNATURE','DRIVE_ID','VERIFIED'].filter(function(k){return typeof ti[k]!=='number';});return{ok:health.ok&&missingQ.length===0&&missingC.length===0&&missingT.length===0,health:health,missingQueensColumns:missingQ,missingCandidateColumns:missingC,missingTestColumns:missingT,physicalTriggerRepairPolicy:'CREATE_ONLY_IF_FACTORY_WAKE_MISSING',templatePipeline:'CANDIDATE→ACTUAL_X2_TEST→PROMOTION→MASTER→RESEED',version:IMAGE_LEARNING_V2_VERSION};}
+function imgFactoryWakeStateV3_(){var triggers=ScriptApp.getProjectTriggers(),factory=triggers.filter(function(t){return t.getHandlerFunction()==='processTaskQueue';});return{ok:factory.length===1,factoryProcessTaskQueueCount:factory.length,action:factory.length===1?'KEEP_EXISTING':(factory.length===0?'MISSING':'DUPLICATE_HOLD'),version:IMAGE_LEARNING_V2_VERSION};}
+function ensureImageLearningFactoryWakeV3_(){var s=imgFactoryWakeStateV3_();if(s.factoryProcessTaskQueueCount===1)return s;if(s.factoryProcessTaskQueueCount>1){s.ok=false;s.error='DUPLICATE_PROCESS_TASK_QUEUE_TRIGGER';return s;}try{ScriptApp.newTrigger('processTaskQueue').timeBased().everyMinutes(5).create();}catch(err){return{ok:false,factoryProcessTaskQueueCount:0,action:'CREATE_FAILED',error:String(err&&err.message||err),version:IMAGE_LEARNING_V2_VERSION};}var v=imgFactoryWakeStateV3_();v.action=v.ok?'CREATED_MISSING_FACTORY_WAKE':'CREATE_VERIFY_FAILED';return v;}
+function imgSyncTriggerRegistryV3_(status,evidence){try{var sh=imgPackSheetV2_(IMAGE_LEARNING_TABS.TRIGGER_REGISTRY),d=sh.getDataRange().getValues(),i=imgIndexV2_(d[0]),id='TRG_IMAGE_LEARNING_10M_REUSE_V2',row=0;for(var r=1;r<d.length;r++)if(String(d[r][i.TRIGGER_ID]||'')===id){row=r+1;break;}var now=Utilities.formatDate(new Date(),'Asia/Seoul','yyyy-MM-dd HH:mm:ss KST'),note='CENTRAL_TEMPLATE_CONTINUOUS_V4_2; cloud processTaskQueue exactly-one guard; no direct image physical trigger; laptopHardDependency=false; '+JSON.stringify(evidence||{}).substring(0,1200);if(!row){sh.appendRow([id,'runImageLearning10mTickV2|runCentralImageLearningRecoveryV3',5,10,'processTaskQueue','REFERENCE_CAPTURE_QUEENS→FEATURE/SPATIAL_LEARN→SEED→CANDIDATE→ACTUAL_X2_TEST→PROMOTION→TEMPLATE→RUNTIME_GATE→HISTORY/LIBRARY','ALL_IMAGE_WORKFLOWS','KST_10M_BUCKET+PROJECT_ID','Y','CENTRAL_TEMPLATE_CONTINUOUS_V4_2_MANAGED',now,status,IMAGE_LEARNING_V2_VERSION,note]);return;}imgSetV2_(sh,row,i,{HANDLER:'runImageLearning10mTickV2|runCentralImageLearningRecoveryV3',SCHEDULER_INTERVAL_MIN:5,LOGICAL_INTERVAL_MIN:10,PHYSICAL_WAKE:'processTaskQueue',ACTIVE_YN:'Y',INSTALL_STATE:'CENTRAL_TEMPLATE_CONTINUOUS_V4_2_MANAGED',LAST_RUN:now,LAST_STATUS:status,VERSION:IMAGE_LEARNING_V2_VERSION,NOTES:note});}catch(ignored){}}
+function recordImageLearningRunV2_(out,started){try{var ss=SpreadsheetApp.openById(IMAGE_LEARNING_MASTER_ID),learn=ss.getSheetByName(IMAGE_LEARNING_TABS.LEARNING_LOG),qa=ss.getSheetByName(IMAGE_LEARNING_TABS.QA_LOG),run='IMGLEARN_'+Utilities.formatDate(started,'Asia/Seoul','yyyyMMdd_HHmmss'),status=out.ok===false?'FAIL':(out.skipped?'SKIPPED':'PASS_OR_HOLD'),evidence=JSON.stringify(out).substring(0,4000);if(learn)learn.appendRow([run,new Date().toISOString(),'PINTEREST_QUEENS_INTAKE|VISUAL_FEATURE_EXTRACTOR|PACK_CANDIDATE_BUILDER|PACK_TEST_MATRIX|PROMOTION_GATE','10분 이미지 Queens→Seed→Template 연속학습','실제 증거만 승격, 공간/권리/x2 누락 시 HOLD, 태블릿은 필요한 UI 단계만 큐잉','Queens→Feature/Spatial→Seed→Candidate→actual x2→Promotion→Template→Gate→History/QA','IMAGE_PACK|35|63|75|77|80|TABLET_QUEUE',status,evidence,'YES','다음 10분 bucket; cloud continues even if tablet/laptop unavailable']);if(qa)qa.appendRow(['QA_'+run,run,'ALL_IMAGE_WORKFLOWS','runImageLearning10mTickV2','EXACTLY_ONE_PROCESS_TASK_QUEUE_5M_REUSE','IMAGE_PACK_V4_2',out.bucket||'','QUEENS|FEATURE|SPATIAL|SEED|CANDIDATE|TEST|PROMOTION|TEMPLATE|GATE',run,started.toISOString(),new Date().toISOString(),status,'DRIVE_SHEET_READBACK_REQUIRED',out.ok===false?0:90,out.error||'',0,evidence,'same fixture x2 before runtime VERIFIED; no fabricated tests']);}catch(ignored){}}
+function recordImageLearningFailureV2_(out){try{var props=PropertiesService.getScriptProperties(),signature=String(out.error||JSON.stringify(out.stages||out||{})).substring(0,500),hash=imgSha256V2_(signature).substring(0,12);if(props.getProperty('IMG_LAST_FAILURE_SIG')===hash)return;props.setProperty('IMG_LAST_FAILURE_SIG',hash);var ss=SpreadsheetApp.openById(IMAGE_LEARNING_MASTER_ID),ch=ss.getSheetByName(IMAGE_LEARNING_TABS.CHANGELOG);if(!ch)return;var id='CHG_IMG_LEARN_'+Utilities.formatDate(new Date(),'Asia/Seoul','yyyyMMdd_HHmmss');ch.appendRow([id,new Date().toISOString(),'IMG_LEARNING_FAILURE_'+hash,'ALL_IMAGE_WORKFLOWS','WORKFLOW','FAILURE_PREVENTION','Unverified/missing evidence, template-stage stall or missing factory wake could be mistaken for healthy learning','Fail-close on missing/duplicate processTaskQueue and missing Queens/features/spatial QA/rights/actual x2/template; preserve resume point and queue only missing UI evidence','10m learning runtime failure or evidence gap',hash,'Prevent false Seed/Template promotion and silent stage stall','LOW','TASK_'+id,'8friend8ship-cloud/contents-os-git','main','','','runCentralImageLearningRecoveryV3','same fixture x2',signature,'','APPLY_MIN_FIX_AND_RETEST','ACTIVE','FALSE',new Date().toISOString()]);}catch(ignored){}}
+function imgPackSheetV2_(name){var s=SpreadsheetApp.openById(IMAGE_LEARNING_PACK_ID).getSheetByName(name);if(!s)throw new Error('IMAGE_PACK_TAB_MISSING:'+name);return s;}
+function imgMasterSheetV2_(name){var s=SpreadsheetApp.openById(IMAGE_LEARNING_MASTER_ID).getSheetByName(name);if(!s)throw new Error('MASTER_TAB_MISSING:'+name);return s;}
+function imgIndexV2_(header){var out={};header.forEach(function(h,i){out[String(h)]=i;});return out;}
+function imgSetV2_(sheet,row,idx,patch){Object.keys(patch).forEach(function(k){if(typeof idx[k]==='number')sheet.getRange(row,idx[k]+1).setValue(patch[k]);});}
+function imgAssignV4_(row,idx,key,value){if(typeof idx[key]==='number')row[idx[key]]=value;}
+function imgSetAnyV4_(row,idx,keys,value){for(var i=0;i<keys.length;i++)if(typeof idx[keys[i]]==='number'){row[idx[keys[i]]]=value;return true;}return false;}
+function imgValV4_(row,idx,key,fallback){return typeof idx[key]==='number'?String(row[idx[key]]||fallback||''):String(fallback||'');}
+function imgSha256V2_(text){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(text),Utilities.Charset.UTF_8).map(function(b){var v=(b<0?b+256:b).toString(16);return v.length===1?'0'+v:v;}).join('');}
+function imgIsSpatialClassV2_(assetClass){return /SPACE|FURNITURE|FIXTURE|OBJECT|HUMAN_SCALE|ACCESSIBILITY/i.test(String(assetClass||''));}
+function imgFeatureSeedTextV2_(row,idx){var keys=['STYLE','COMPOSITION','COLOR_TONE','LIGHTING','OBJECTS','BACKGROUND_TYPE','HUMAN_SCALE','CLEARANCE','CIRCULATION','DEPTH'];return keys.map(function(k){return k+'='+String(typeof idx[k]==='number'?row[idx[k]]||'':'');}).join('; ');}
