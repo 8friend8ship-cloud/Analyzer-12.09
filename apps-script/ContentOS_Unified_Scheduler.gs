@@ -1,9 +1,14 @@
-const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V7_API_CREDENTIAL_AUDIT_20260902';
+const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V8_CENTRAL_SHEET_RUNTIME_AUDIT_20260902';
 
 /**
  * Single logical entrypoint intended to be called by the already-installed
  * factory scheduler (for example processTaskQueue) after source sync.
- * It NEVER creates another physical trigger.
+ * It NEVER creates another physical trigger for pipeline stages.
+ *
+ * Central Sheet runtime auditor is included as a logical stage, while its own
+ * independent watchdog trigger may be installed exactly once by
+ * installOrRepairCentralSheetRuntimeAuditTrigger(). This is intentional: the
+ * primary factory wake must not be its only watchdog.
  */
 function contentOsUnifiedSchedulerTick() {
   const out = {
@@ -24,6 +29,7 @@ function contentOsUnifiedSchedulerTick() {
   out.stages.allAppApiAb = runOptionalContentOsStage_('runAllAppApiAbQaRequestWindow');
   out.stages.imageLearning = runOptionalContentOsStage_('runImageLearning10mTickV2');
   out.stages.apiCredentialUsage = runOptionalContentOsStage_('runCentralApiCredentialUsageAuditHourly');
+  out.stages.centralSheetRuntimeAudit = runOptionalContentOsStage_('runCentralSheetRuntimeAuditAutofix10m');
 
   out.ok = Object.keys(out.stages).every(function(k) {
     const r = out.stages[k];
@@ -71,6 +77,9 @@ function runOptionalContentOsStage_(handlerName) {
     if (handlerName === 'runCentralApiCredentialUsageAuditHourly' && typeof runCentralApiCredentialUsageAuditHourly === 'function') {
       return runCentralApiCredentialUsageAuditHourly();
     }
+    if (handlerName === 'runCentralSheetRuntimeAuditAutofix10m' && typeof runCentralSheetRuntimeAuditAutofix10m === 'function') {
+      return runCentralSheetRuntimeAuditAutofix10m();
+    }
     return {ok:true, skipped:true, reason:'HANDLER_NOT_SYNCED', handler:handlerName};
   } catch (err) {
     return {ok:false, handler:handlerName, error:String(err && err.message || err)};
@@ -87,7 +96,7 @@ function runContentOsScheduledStagesFromFactory() {
 }
 
 /**
- * Trigger audit only. It does not create/delete physical triggers.
+ * Trigger audit only. It does not create/delete pipeline physical triggers.
  */
 function auditContentOsTriggerContract() {
   const triggers = ScriptApp.getProjectTriggers();
@@ -98,15 +107,18 @@ function auditContentOsTriggerContract() {
   const duplicateAllApp = rows.filter(function(r) { return r.handler === 'runAllAppBackdataFactoryControl10m'; }).length;
   const duplicateImage = rows.filter(function(r) { return r.handler === 'runImageLearning10mTickV2' || r.handler === 'runImageLearningFromFactoryWakeV2'; }).length;
   const duplicateApiAudit = rows.filter(function(r) { return r.handler === 'runCentralApiCredentialUsageAuditHourly'; }).length;
+  const centralSheetAudit = rows.filter(function(r) { return r.handler === 'runCentralSheetRuntimeAuditAutofix10m'; }).length;
   return {
-    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateApiAudit === 0,
-    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE',
+    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateApiAudit === 0 && centralSheetAudit <= 1,
+    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
     unifiedTriggerCount: duplicateOwn,
     allAppPhysicalTriggerCount: duplicateAllApp,
     imageLearningPhysicalTriggerCount: duplicateImage,
     apiCredentialAuditPhysicalTriggerCount: duplicateApiAudit,
+    centralSheetAuditTriggerCount: centralSheetAudit,
     imageLearningLogicalMinutes: 10,
     apiCredentialAuditLogicalMinutes: 60,
+    centralSheetAuditLogicalMinutes: 10,
     triggers: rows,
     version: CONTENTOS_UNIFIED_SCHEDULER_VERSION
   };
