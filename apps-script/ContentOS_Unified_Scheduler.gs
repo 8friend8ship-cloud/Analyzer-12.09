@@ -1,4 +1,4 @@
-const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V12_IMAGE_PREPOST_CWBX_20260902';
+const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V13_OPENAI5_20260902';
 
 /**
  * Single logical entrypoint intended to be called by the already-installed
@@ -10,10 +10,11 @@ const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V12_IMA
  * installOrRepairCentralSheetRuntimeAuditTrigger(). This is intentional: the
  * primary factory wake must not be its only watchdog.
  *
- * Central workflow/bridge crosscheck is logical-only and MUST reuse the existing
- * processTaskQueue physical wake. Image supply uses PRE→LEARNING→POST order so
- * an already verified spatial PASS is consumed before legacy feature extraction
- * can downgrade its status, then seeded rows are repaired after the legacy tick.
+ * Central workflow/bridge crosscheck and OpenAI W1-W5 are logical-only and MUST
+ * reuse the existing processTaskQueue physical wake. Image supply uses
+ * PRE→LEARNING→POST order so an already verified spatial PASS is consumed before
+ * legacy feature extraction can downgrade its status, then seeded rows are
+ * repaired after the legacy tick.
  */
 function contentOsUnifiedSchedulerTick() {
   const out = {
@@ -38,6 +39,7 @@ function contentOsUnifiedSchedulerTick() {
   out.stages.apiCredentialUsage = runOptionalContentOsStage_('runCentralApiCredentialUsageAuditHourly');
   out.stages.centralSheetRuntimeAudit = runOptionalContentOsStage_('runCentralSheetRuntimeAuditAutofix10m');
   out.stages.centralWorkflowBridgeCrosscheck = runOptionalContentOsStage_('runCentralWorkflowBridgeCrosscheck10m');
+  out.stages.openAi5Workers = runOptionalContentOsStage_('runOpenAi5WorkerControlCycleFromFactory');
 
   out.ok = Object.keys(out.stages).every(function(k) {
     const r = out.stages[k];
@@ -65,6 +67,7 @@ function runOptionalContentOsStage_(handlerName) {
     if (handlerName === 'runCentralApiCredentialUsageAuditHourly' && typeof runCentralApiCredentialUsageAuditHourly === 'function') return runCentralApiCredentialUsageAuditHourly();
     if (handlerName === 'runCentralSheetRuntimeAuditAutofix10m' && typeof runCentralSheetRuntimeAuditAutofix10m === 'function') return runCentralSheetRuntimeAuditAutofix10m();
     if (handlerName === 'runCentralWorkflowBridgeCrosscheck10m' && typeof runCentralWorkflowBridgeCrosscheck10m === 'function') return runCentralWorkflowBridgeCrosscheck10m();
+    if (handlerName === 'runOpenAi5WorkerControlCycleFromFactory' && typeof runOpenAi5WorkerControlCycleFromFactory === 'function') return runOpenAi5WorkerControlCycleFromFactory();
     return {ok:true, skipped:true, reason:'HANDLER_NOT_SYNCED', handler:handlerName};
   } catch (err) {
     return {ok:false, handler:handlerName, error:String(err && err.message || err)};
@@ -90,9 +93,10 @@ function auditContentOsTriggerContract() {
   const duplicateApiAudit = rows.filter(function(r) { return r.handler === 'runCentralApiCredentialUsageAuditHourly'; }).length;
   const centralSheetAudit = rows.filter(function(r) { return r.handler === 'runCentralSheetRuntimeAuditAutofix10m'; }).length;
   const workflowBridgeCrosscheck = rows.filter(function(r) { return r.handler === 'runCentralWorkflowBridgeCrosscheck10m'; }).length;
+  const openAi5Physical = rows.filter(function(r) { return /^runOpenAi(5|Worker)/.test(r.handler); }).length;
   return {
-    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && centralSheetAudit <= 1 && workflowBridgeCrosscheck === 0,
-    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE_AND_CWBX;IMAGE_SUPPLY_PREPOST_LOGICAL_ONLY;NO_IMAGE_SUPPLY_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
+    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && centralSheetAudit <= 1 && workflowBridgeCrosscheck === 0 && openAi5Physical === 0,
+    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE_CWBX_OPENAI5;IMAGE_SUPPLY_PREPOST_LOGICAL_ONLY;NO_IMAGE_SUPPLY_OR_OPENAI5_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
     unifiedTriggerCount: duplicateOwn,
     allAppPhysicalTriggerCount: duplicateAllApp,
     imageLearningPhysicalTriggerCount: duplicateImage,
@@ -100,11 +104,13 @@ function auditContentOsTriggerContract() {
     apiCredentialAuditPhysicalTriggerCount: duplicateApiAudit,
     centralSheetAuditTriggerCount: centralSheetAudit,
     workflowBridgeCrosscheckPhysicalTriggerCount: workflowBridgeCrosscheck,
+    openAi5PhysicalTriggerCount: openAi5Physical,
     imageLearningLogicalMinutes: 10,
     imageSupplyLogicalMinutes: 10,
     apiCredentialAuditLogicalMinutes: 60,
     centralSheetAuditLogicalMinutes: 10,
     workflowBridgeCrosscheckLogicalMinutes: 10,
+    openAi5LogicalMinutes: 5,
     triggers: rows,
     version: CONTENTOS_UNIFIED_SCHEDULER_VERSION
   };
