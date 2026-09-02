@@ -1,0 +1,35 @@
+name: Central Learning Queens Drive Flywheel CI
+
+on:
+  push:
+    branches:
+      - fix/central-learning-queens-drive-flywheel-20260902
+    paths:
+      - 'apps-script/Central_Learning_Queens_Drive_Flywheel_20260902.gs'
+      - 'apps-script/ContentOS_Unified_Scheduler.gs'
+      - 'tests/central-learning-queens-drive-flywheel.test.mjs'
+      - '.github/workflows/central-learning-queens-drive-flywheel-ci.yml'
+  pull_request:
+    paths:
+      - 'apps-script/Central_Learning_Queens_Drive_Flywheel_20260902.gs'
+      - 'apps-script/ContentOS_Unified_Scheduler.gs'
+      - 'tests/central-learning-queens-drive-flywheel.test.mjs'
+      - '.github/workflows/central-learning-queens-drive-flywheel-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Contract test x2
+        run: |
+          node tests/central-learning-queens-drive-flywheel.test.mjs
+          node tests/central-learning-queens-drive-flywheel.test.mjs
