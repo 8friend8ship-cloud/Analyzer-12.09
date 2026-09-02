@@ -32,4 +32,5 @@ assert.match(scheduler, /centralLearningFlywheel\s*=\s*runOptionalContentOsStage
 assert.match(scheduler, /centralLearningPhysicalTriggerCount/);
 assert.match(scheduler, /ZERO_DEDICATED_LEARNING_CLOCKS/);
 
+// CI is intentionally executed twice by the workflow to catch non-deterministic contract drift.
 console.log('CENTRAL_LEARNING_FLYWHEEL_CONTRACT_PASS');
