@@ -21,6 +21,8 @@ jobs:
           URL='https://script.google.com/macros/s/AKfycbzz247_Mwl9c6N1WxmpHAttwHQJB6RCFtaY08XlHgxysz1iEzg7HWDXa3i5oXhDS1jo/exec'
           mkdir -p probe-results
           : > probe-results/all.txt
+
+          # Existing image runtime actions.
           for ACTION in \
             contentos.image.audit.v2 \
             contentos.image.health.v2 \
@@ -28,7 +30,7 @@ jobs:
             contentos.image.tick.v2
           do
             SAFE_NAME="${ACTION//./_}"
-            echo "=== ${ACTION} ===" | tee -a probe-results/all.txt
+            echo "=== POST ${ACTION} ===" | tee -a probe-results/all.txt
             HTTP_CODE=$(curl -sS -L \
               -H 'Content-Type: application/json' \
               --data "{\"action\":\"${ACTION}\"}" \
@@ -39,6 +41,36 @@ jobs:
             cat "probe-results/${SAFE_NAME}.txt" | tee -a probe-results/all.txt
             echo | tee -a probe-results/all.txt
           done
+
+          # P0 central runtime recovery probes. These do not create a project,
+          # deployment, OAuth grant, paid call, or physical trigger.
+          for ACTION in \
+            contentos.runtime.identity.v3 \
+            contentos.runtime.register.v3
+          do
+            SAFE_NAME="${ACTION//./_}"
+            echo "=== POST ${ACTION} ===" | tee -a probe-results/all.txt
+            HTTP_CODE=$(curl -sS -L \
+              -H 'Content-Type: application/json' \
+              --data "{\"action\":\"${ACTION}\"}" \
+              -o "probe-results/${SAFE_NAME}.txt" \
+              -w '%{http_code}' \
+              "$URL" || true)
+            echo "HTTP_CODE=${HTTP_CODE}" | tee -a probe-results/all.txt
+            cat "probe-results/${SAFE_NAME}.txt" | tee -a probe-results/all.txt
+            echo | tee -a probe-results/all.txt
+          done
+
+          echo '=== GET contentos.runtime.identity.v3 ===' | tee -a probe-results/all.txt
+          HTTP_CODE=$(curl -sS -L \
+            -H 'Accept: application/json' \
+            -o probe-results/contentos_runtime_identity_v3_get.txt \
+            -w '%{http_code}' \
+            "$URL?action=contentos.runtime.identity.v3" || true)
+          echo "HTTP_CODE=${HTTP_CODE}" | tee -a probe-results/all.txt
+          cat probe-results/contentos_runtime_identity_v3_get.txt | tee -a probe-results/all.txt
+          echo | tee -a probe-results/all.txt
+
       - name: Upload probe evidence
         uses: actions/upload-artifact@v4
         with:
