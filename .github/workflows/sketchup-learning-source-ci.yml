@@ -1,0 +1,107 @@
+name: SketchUp Learning Source CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'sketchup/**'
+      - 'python/central_skp_seed_builder.py'
+      - 'apps-script/Central_SketchUp_Learning_Orchestrator_20260903.gs'
+      - 'apps-script/ContentOS_Unified_Scheduler.gs'
+      - '.github/workflows/sketchup-learning-source-ci.yml'
+  pull_request:
+    paths:
+      - 'sketchup/**'
+      - 'python/central_skp_seed_builder.py'
+      - 'apps-script/Central_SketchUp_Learning_Orchestrator_20260903.gs'
+      - 'apps-script/ContentOS_Unified_Scheduler.gs'
+      - '.github/workflows/sketchup-learning-source-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  source-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ruby syntax check
+        run: ruby -c sketchup/ruby/central_skp_manifest_exporter.rb
+
+      - name: Python syntax check
+        run: python -m py_compile python/central_skp_seed_builder.py
+
+      - name: Python deterministic smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          cat > "$tmp/model_manifest.json" <<'JSON'
+          {
+            "schema_version": "SKP_MODEL_MANIFEST_V1",
+            "qa": {"content_extracted": true},
+            "model": {
+              "file_name": "테스트아파트32평.skp",
+              "local_signature": "STATIC_TEST_SIGNATURE",
+              "unit": {"length_unit_code": 2, "length_unit_label": "MM"},
+              "bounds_mm": {"width": 10000, "depth": 8000, "height": 2600}
+            },
+            "components": [
+              {"definition_name": "Kitchen_Island", "instance_count": 1, "bounds_mm": {"width": 2200, "depth": 900, "height": 900}}
+            ],
+            "materials": [
+              {"name": "Oak", "color_rgb": [180, 150, 110], "texture_filename": null}
+            ],
+            "tags": [{"name": "FURNITURE", "visible": true}],
+            "scenes": [{"name": "Kitchen", "camera": {"perspective": true}}],
+            "bom": [{"item": "Kitchen_Island", "quantity": 1}]
+          }
+          JSON
+          python python/central_skp_seed_builder.py "$tmp/model_manifest.json" --out "$tmp/out"
+          test -s "$tmp/out/seed_bundle.json"
+          test -s "$tmp/out/prompt_bundle.json"
+          test -s "$tmp/out/template_payload.json"
+          test -s "$tmp/out/seed_builder_receipt.json"
+          python - <<'PY' "$tmp/out/seed_builder_receipt.json" "$tmp/out/seed_bundle.json"
+          import json, sys
+          receipt=json.load(open(sys.argv[1], encoding='utf-8'))
+          bundle=json.load(open(sys.argv[2], encoding='utf-8'))
+          assert receipt['ok'] is True
+          assert receipt['seed_count'] >= 4
+          assert bundle['promotion_gate']['metadata_only_promotion_forbidden'] is True
+          assert bundle['estimate_rules']['no_price_guess'] is True
+          assert bundle['estimate_rules']['pricing_policy'] == 'VERIFIED_PRICE_BOOK_ONLY'
+          assert len(bundle['output_templates']) == 10
+          print('PY_SMOKE_PASS', receipt['model_id'], receipt['seed_count'])
+          PY
+
+      - name: Apps Script source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          orch='apps-script/Central_SketchUp_Learning_Orchestrator_20260903.gs'
+          sched='apps-script/ContentOS_Unified_Scheduler.gs'
+          grep -q 'runCentralSketchupLearningOrchestratorFromFactory' "$orch"
+          grep -q 'ingestCentralSketchupLearningResult' "$orch"
+          grep -q 'testCentralSketchupLearningQueueForceX2' "$orch"
+          grep -q 'runCentralSketchupLearningOrchestratorFromFactory' "$sched"
+          grep -q 'CONTENTOS_UNIFIED_SCHEDULER_V20_SKETCHUP_LEARNING_20260903' "$sched"
+          if grep -Eq 'ScriptApp\.newTrigger|newTrigger\(' "$orch"; then
+            echo 'Dedicated physical trigger creation is forbidden in SketchUp orchestrator' >&2
+            exit 1
+          fi
+          grep -q 'metadataOnlyPromotionForbidden' "$orch"
+          echo 'APPS_SCRIPT_SOURCE_CONTRACT_PASS'
+
+      - name: Security contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby_file='sketchup/ruby/central_skp_manifest_exporter.rb'
+          if grep -Eq 'Net::HTTP|OpenURI|URI\.open|system\(|exec\(|spawn\(|`[^`]+`' "$ruby_file"; then
+            echo 'Ruby bridge must remain network/shell free' >&2
+            exit 1
+          fi
+          echo 'RUBY_SECURITY_CONTRACT_PASS'
