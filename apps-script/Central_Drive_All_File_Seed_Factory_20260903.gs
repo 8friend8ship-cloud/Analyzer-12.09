@@ -1,4 +1,4 @@
-const CENTRAL_DRIVE_ALL_FILE_SEED_VERSION = 'CENTRAL_DRIVE_ALL_FILE_SEED_V3_QUEENS_FIRST_QA_20260903';
+const CENTRAL_DRIVE_ALL_FILE_SEED_VERSION = 'CENTRAL_DRIVE_ALL_FILE_SEED_V3_1_QUEENS_FIRST_QA_MIGRATION_20260903';
 const CENTRAL_DRIVE_ALL_FILE_SEED_MASTER_ID = '1C_CznU1Uo7dk-gKay3-oH8wFxutsGMlz27RSrbdVQwI';
 const CENTRAL_DRIVE_ALL_FILE_SEED_RUNTIME_SHEET = 'DRIVE_ALL_FILE_SEED_RUNTIME';
 const CENTRAL_DRIVE_ALL_FILE_QUEENS = '37_QUEENS_RESEARCH_RESULTS';
@@ -14,6 +14,8 @@ const CENTRAL_DRIVE_ALL_FILE_BUDGET_MS = 110000;
  * - filename/MIME/Drive metadata may create or refresh a Queens candidate only.
  * - metadata alone must never create/promote 35_INTERNAL_SEED_REGISTRY or T1/T2.
  * - actual content readback + route-specific QA/provenance is required before Seed.
+ * - legacy V1 SEED_REGISTERED runtime rows are not complete under this contract;
+ *   they are re-intaken into the Queens/content-evidence gate on the next safe scan.
  */
 function runCentralDriveAllFileSeedFactoryFromFactory() {
   const lock = LockService.getScriptLock();
@@ -45,6 +47,7 @@ function runCentralDriveAllFileSeedFactoryFromFactory() {
     let processed = 0;
     let unchanged = 0;
     let failed = 0;
+    let legacyMetadataRequeued = 0;
     const runId = 'DRIVEINTAKE_' + Utilities.formatDate(new Date(),'Asia/Seoul','yyyyMMdd_HHmmss');
 
     while (
@@ -63,14 +66,16 @@ function runCentralDriveAllFileSeedFactoryFromFactory() {
         const updated = f.getLastUpdated();
         const dedupKey = fileId + '|' + updated.getTime();
         const existing = findRuntimeByFileId_(runtime, fileId);
+        const sameVersion = existing && String(existing.dedupKey) === dedupKey;
+        const legacyMetadataSeed = sameVersion && String(existing.result) === 'SEED_REGISTERED';
         if (
-          existing &&
-          String(existing.dedupKey) === dedupKey &&
+          sameVersion &&
           isDriveAllFileIntakeCompleteResult_(existing.result)
         ) {
           unchanged++;
           continue;
         }
+        if (legacyMetadataSeed) legacyMetadataRequeued++;
 
         const mime = String(f.getMimeType() || 'application/octet-stream');
         const name = String(f.getName() || '');
@@ -125,7 +130,7 @@ function runCentralDriveAllFileSeedFactoryFromFactory() {
           sourceUrl:sourceUrl,
           workflowId:'ORCH_DRIVE_ALL_FILE_SEED_V1',
           runtimeState:intakeOk ? 'FACTORY_LOGICAL_QA_GATE' : 'DEGRADED',
-          notes:'Queens-first metadata intake only. Actual content evidence + QA required before 35 Seed/T1/T2.'
+          notes:(legacyMetadataSeed ? 'MIGRATED_FROM_LEGACY_METADATA_SEED. ' : '') + 'Queens-first metadata intake only. Actual content evidence + QA required before 35 Seed/T1/T2.'
         });
 
         if (intakeOk && typeof centralPublishDataEvent === 'function') {
@@ -197,6 +202,7 @@ function runCentralDriveAllFileSeedFactoryFromFactory() {
       failed:failed,
       more:it.hasNext(),
       seedPromoted:0,
+      legacyMetadataRequeued:legacyMetadataRequeued,
       seedGate:'CONTENT_EVIDENCE_AND_QA_REQUIRED',
       version:CENTRAL_DRIVE_ALL_FILE_SEED_VERSION
     };
@@ -231,7 +237,7 @@ function findRuntimeByFileId_(sh, fileId) {
 }
 
 function isDriveAllFileIntakeCompleteResult_(result) {
-  return ['QUEENS_REGISTERED_PENDING_SEED_QA','SEED_REGISTERED'].indexOf(String(result || '')) >= 0;
+  return String(result || '') === 'QUEENS_REGISTERED_PENDING_SEED_QA';
 }
 
 function upsertRuntimeRow_(sh, x) {
@@ -331,14 +337,17 @@ function safeFn_(fn,fallback) {
 }
 
 function testCentralDriveAllFileSeedFactoryForceX2() {
+  const legacyGuard = !isDriveAllFileIntakeCompleteResult_('SEED_REGISTERED') &&
+    isDriveAllFileIntakeCompleteResult_('QUEENS_REGISTERED_PENDING_SEED_QA');
   const a=runCentralDriveAllFileSeedFactoryFromFactory();
   Utilities.sleep(100);
   const b=runCentralDriveAllFileSeedFactoryFromFactory();
-  const ok=a && a.ok !== false && b && b.ok !== false && Number(a.seedPromoted || 0) === 0 && Number(b.seedPromoted || 0) === 0;
+  const ok=legacyGuard && a && a.ok !== false && b && b.ok !== false && Number(a.seedPromoted || 0) === 0 && Number(b.seedPromoted || 0) === 0;
   return {
     ok:ok,
     first:a,
     second:b,
+    legacyMigrationGuard:legacyGuard,
     policy:'QUEENS_FIRST_CONTENT_EVIDENCE_REQUIRED_NO_METADATA_ONLY_SEED',
     version:CENTRAL_DRIVE_ALL_FILE_SEED_VERSION
   };
