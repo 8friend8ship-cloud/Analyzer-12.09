@@ -1,9 +1,14 @@
-const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V16_YOUTUBE_SEED_20260903';
+const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V17_DRYWRITER_SELF_HEAL_20260903';
 
 /**
  * Single logical entrypoint intended to be called by the already-installed
  * factory scheduler (for example processTaskQueue) after source sync.
  * It NEVER creates another physical trigger for pipeline stages.
+ *
+ * DryWriter runtime config self-heal is logical-only. It reuses the existing
+ * processTaskQueue wake, resolves the canonical Writer /exec URL from CONFIG
+ * when the Script Property is missing/stale, writes the property back with
+ * readback, and retries at most one exact missing-URL request per request id.
  *
  * Central Sheet runtime auditor is included as a logical stage, while its own
  * independent watchdog trigger may be installed exactly once by
@@ -36,6 +41,7 @@ function contentOsUnifiedSchedulerTick() {
   };
 
   out.stages.daily800W1W5Audit = runOptionalContentOsStage_('runCentralDaily800W1W5AuditFromFactory_');
+  out.stages.dryWriterRuntimeConfig = runOptionalContentOsStage_('runContentOsDryWriterRuntimeConfigAutoHealFromFactory_');
   out.stages.pipeline = runOptionalContentOsStage_('contentOsPipelineTick');
   out.stages.queensBridge = runOptionalContentOsStage_('contentOsQueensBridgeTick');
   out.stages.youtubeSeedFactory = runOptionalContentOsStage_('youtubeSeedFactoryTick');
@@ -66,6 +72,7 @@ function contentOsUnifiedSchedulerTick() {
 function runOptionalContentOsStage_(handlerName) {
   try {
     if (handlerName === 'runCentralDaily800W1W5AuditFromFactory_' && typeof runCentralDaily800W1W5AuditFromFactory_ === 'function') return runCentralDaily800W1W5AuditFromFactory_();
+    if (handlerName === 'runContentOsDryWriterRuntimeConfigAutoHealFromFactory_' && typeof runContentOsDryWriterRuntimeConfigAutoHealFromFactory_ === 'function') return runContentOsDryWriterRuntimeConfigAutoHealFromFactory_();
     if (handlerName === 'contentOsPipelineTick' && typeof contentOsPipelineTick === 'function') return contentOsPipelineTick();
     if (handlerName === 'contentOsQueensBridgeTick' && typeof contentOsQueensBridgeTick === 'function') return contentOsQueensBridgeTick();
     if (handlerName === 'youtubeSeedFactoryTick' && typeof youtubeSeedFactoryTick === 'function') return youtubeSeedFactoryTick();
@@ -114,9 +121,10 @@ function auditContentOsTriggerContract() {
   const tabletRemotePhysical = rows.filter(function(r) { return r.handler === 'runCentralTabletRemoteDispatcherFromFactory'; }).length;
   const openAi5Physical = rows.filter(function(r) { return /^runOpenAi(5|Worker)/.test(r.handler); }).length;
   const daily800Physical = rows.filter(function(r) { return r.handler === 'runCentralDaily800W1W5AuditFromFactory_' || r.handler === 'runCentralDaily800W1W5AuditNow'; }).length;
+  const dryWriterConfigPhysical = rows.filter(function(r) { return r.handler === 'runContentOsDryWriterRuntimeConfigAutoHealFromFactory_'; }).length;
   return {
-    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && duplicateYouTubeSeed === 0 && centralSheetAudit <= 1 && workflowBridgeCrosscheck === 0 && tabletRemotePhysical === 0 && openAi5Physical === 0 && daily800Physical === 0,
-    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE_YOUTUBE_SEED_DAILY800_CWBX_TABLET_REMOTE_OPENAI5;NO_YOUTUBE_SEED_DAILY800_TABLET_REMOTE_OR_OPENAI5_DEDICATED_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
+    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && duplicateYouTubeSeed === 0 && centralSheetAudit <= 1 && workflowBridgeCrosscheck === 0 && tabletRemotePhysical === 0 && openAi5Physical === 0 && daily800Physical === 0 && dryWriterConfigPhysical === 0,
+    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE_DRYWRITER_CONFIG_YOUTUBE_SEED_DAILY800_CWBX_TABLET_REMOTE_OPENAI5;NO_DRYWRITER_CONFIG_YOUTUBE_SEED_DAILY800_TABLET_REMOTE_OR_OPENAI5_DEDICATED_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
     unifiedTriggerCount: duplicateOwn,
     allAppPhysicalTriggerCount: duplicateAllApp,
     imageLearningPhysicalTriggerCount: duplicateImage,
@@ -128,6 +136,8 @@ function auditContentOsTriggerContract() {
     tabletRemotePhysicalTriggerCount: tabletRemotePhysical,
     openAi5PhysicalTriggerCount: openAi5Physical,
     daily800W1W5PhysicalTriggerCount: daily800Physical,
+    dryWriterConfigPhysicalTriggerCount: dryWriterConfigPhysical,
+    dryWriterConfigLogicalMinutes: 10,
     youtubeSeedLogicalMinutes: 10,
     imageLearningLogicalMinutes: 10,
     imageSupplyLogicalMinutes: 10,
