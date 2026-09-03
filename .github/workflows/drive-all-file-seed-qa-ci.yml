@@ -27,14 +27,20 @@ jobs:
         run: |
           set -euo pipefail
           f='apps-script/Central_Drive_All_File_Seed_Factory_20260903.gs'
-          grep -q "CENTRAL_DRIVE_ALL_FILE_SEED_V3_QUEENS_FIRST_QA_20260903" "$f"
+          grep -q "CENTRAL_DRIVE_ALL_FILE_SEED_V3_1_QUEENS_FIRST_QA_MIGRATION_20260903" "$f"
           grep -q "37_QUEENS_RESEARCH_RESULTS" "$f"
           grep -q "QUEENS_TASK_ID" "$f"
           grep -q "QA_PENDING_CONTENT_EXTRACTION" "$f"
           grep -q "data_stage:'QUEENS'" "$f"
           grep -q "seedPromoted:0" "$f"
+          grep -q "legacyMetadataRequeued" "$f"
+          grep -q "MIGRATED_FROM_LEGACY_METADATA_SEED" "$f"
           grep -q "CONTENT_EVIDENCE_AND_QA_REQUIRED" "$f"
           grep -q "NO_NEW_PHYSICAL_TRIGGER_REUSE_PROCESS_TASK_QUEUE" "$f"
+          if grep -q "QUEENS_REGISTERED_PENDING_SEED_QA','SEED_REGISTERED" "$f"; then
+            echo 'Legacy metadata-only SEED_REGISTERED must not be treated as intake-complete'
+            exit 1
+          fi
           if grep -q "getSheetByName(['\"]35_INTERNAL_SEED_REGISTRY['\"]" "$f"; then
             echo 'Direct Seed registry sheet binding regression detected'
             exit 1
