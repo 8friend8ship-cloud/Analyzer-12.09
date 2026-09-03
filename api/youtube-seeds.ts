@@ -6,7 +6,9 @@ const CONTRACT_VERSION = 'YOUTUBE_SEED_BRIDGE_V1';
 const one = (v:any) => Array.isArray(v) ? v[0] : v;
 const text = (v:any) => String(v ?? '').trim();
 const numberOrNull = (v:any) => {
-  const n = Number(v);
+  const raw = text(v);
+  if (!raw) return null;
+  const n = Number(raw);
   return Number.isFinite(n) ? n : null;
 };
 const pick = (row:any, ...keys:string[]) => {
@@ -88,7 +90,7 @@ async function backend(payload:any) {
   const t = await r.text();
   let j:any = null;
   try { j = JSON.parse(t); } catch {}
-  return {ok:r.ok,status:r.status,json:j};
+  return {ok:r.ok,status:r.status,json:j,text:t.slice(0,500)};
 }
 
 async function storedSearch(query:string, limit:number) {
@@ -110,16 +112,38 @@ async function youtubeGet(path:string, params:Record<string,string>) {
   return j;
 }
 
-async function autoEnqueue(item:any, query:string) {
+function sameOriginBackendUrl(req:any) {
+  const host = text(req?.headers?.['x-forwarded-host'] || req?.headers?.host);
+  const proto = text(req?.headers?.['x-forwarded-proto']) || 'https';
+  return host ? `${proto}://${host}/api/backend` : '';
+}
+
+async function autoEnqueue(req:any,item:any,query:string) {
+  const payload = {
+    action:'enqueue', asset_type:'VIDEO', url:item.videoUrl, source_page_url:item.videoUrl,
+    platform:'YOUTUBE', title:item.title, primary_code:'YOUTUBE_API_GAP_FILL',
+    keywords:[query,'youtube','seed'].filter(Boolean).join(','),
+    target_apps:'APP_CONTENT_OS|APP_VTUBE_1011B', use_case:'YOUTUBE_SEED_AUTO_COLLECT',
+    official_source:'YOUTUBE_PUBLIC_METADATA', rights_usage:'REFERENCE_ONLY',
+    notes:JSON.stringify({contractVersion:CONTRACT_VERSION,videoId:item.videoId,thumbnailUrl:item.thumbnailUrl,viewCount:item.viewCount,likeCount:item.likeCount,commentCount:item.commentCount,durationIso8601:item.durationIso8601,descriptionBrief:item.descriptionBrief,lastSync:item.lastSync}).slice(0,3500),
+  };
   try {
-    await backend({
-      action:'enqueue', asset_type:'VIDEO', url:item.videoUrl, source_page_url:item.videoUrl,
-      platform:'YOUTUBE', title:item.title, primary_code:'YOUTUBE_API_GAP_FILL',
-      keywords:[query,'youtube','seed'].filter(Boolean).join(','),
-      target_apps:'APP_CONTENT_OS|APP_VTUBE_1011B', use_case:'YOUTUBE_SEED_AUTO_COLLECT',
-      notes:JSON.stringify({contractVersion:CONTRACT_VERSION,videoId:item.videoId,thumbnailUrl:item.thumbnailUrl,viewCount:item.viewCount,likeCount:item.likeCount,commentCount:item.commentCount,durationIso8601:item.durationIso8601,descriptionBrief:item.descriptionBrief,lastSync:item.lastSync}).slice(0,1500),
-    });
-  } catch (e) { console.error('[youtube-seeds enqueue]',e); }
+    const route = sameOriginBackendUrl(req);
+    if (!route) {
+      const direct = await backend(payload);
+      return {videoId:item.videoId,route:'DIRECT_BACKEND_FALLBACK',accepted:direct.ok && direct.json?.ok !== false,status:direct.status,upstreamOk:direct.json?.ok ?? null,reason:direct.json?.reason || direct.json?.error || ''};
+    }
+    const r = await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),redirect:'follow'});
+    const t = await r.text();
+    let j:any = null;
+    try { j = JSON.parse(t); } catch {}
+    const accepted = r.ok && j?.ok !== false;
+    if (!accepted) console.error('[youtube-seeds writeback rejected]',item.videoId,r.status,t.slice(0,300));
+    return {videoId:item.videoId,route:'CONTENT_OS_API_BACKEND',accepted,status:r.status,upstreamOk:j?.ok ?? null,reason:j?.reason || j?.error || ''};
+  } catch (e:any) {
+    console.error('[youtube-seeds enqueue]',item.videoId,e);
+    return {videoId:item.videoId,route:'CONTENT_OS_API_BACKEND',accepted:false,status:0,upstreamOk:null,reason:text(e?.message || e)};
+  }
 }
 
 export default async function handler(req:any,res:any) {
@@ -135,7 +159,7 @@ export default async function handler(req:any,res:any) {
     if (!ids.length && query) {
       const cached:any[] = await storedSearch(query,limit);
       if (cached.length >= Math.min(limit,20)) {
-        return res.status(200).json({contractVersion:CONTRACT_VERSION,source:'SHEET_CACHE',quotaUnits:0,items:cached.slice(0,limit)});
+        return res.status(200).json({contractVersion:CONTRACT_VERSION,source:'SHEET_CACHE',quotaUnits:0,writeback:{attempted:0,accepted:0,results:[]},items:cached.slice(0,limit)});
       }
     }
 
@@ -158,9 +182,10 @@ export default async function handler(req:any,res:any) {
       quotaUnits += 1;
       (v.items || []).forEach((x:any)=>items.push(cardFromYoutube(x)));
     }
-    await Promise.all(items.map(x=>autoEnqueue(x,query)));
-    return res.status(200).json({contractVersion:CONTRACT_VERSION,source:'SERVER_API_GAP_FILL',quotaUnits,items:items.slice(0,limit),...(nextPageToken?{nextPageToken}:{})});
+    const writebackResults = await Promise.all(items.map(x=>autoEnqueue(req,x,query)));
+    const accepted = writebackResults.filter(x=>x.accepted).length;
+    return res.status(200).json({contractVersion:CONTRACT_VERSION,source:'SERVER_API_GAP_FILL',quotaUnits,writeback:{attempted:writebackResults.length,accepted,results:writebackResults},items:items.slice(0,limit),...(nextPageToken?{nextPageToken}:{})});
   } catch (error:any) {
-    return res.status(502).json({contractVersion:CONTRACT_VERSION,error:text(error?.message || error),quotaUnits:0,items:[]});
+    return res.status(502).json({contractVersion:CONTRACT_VERSION,error:text(error?.message || error),quotaUnits:0,writeback:{attempted:0,accepted:0,results:[]},items:[]});
   }
 }
