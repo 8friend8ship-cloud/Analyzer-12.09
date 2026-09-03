@@ -1,8 +1,8 @@
-const CENTRAL_DRIVE_ALL_FILE_SEED_VERSION = 'CENTRAL_DRIVE_ALL_FILE_SEED_V1_20260903';
+const CENTRAL_DRIVE_ALL_FILE_SEED_VERSION = 'CENTRAL_DRIVE_ALL_FILE_SEED_V2_SCHEMA_SAFE_20260903';
 const CENTRAL_DRIVE_ALL_FILE_SEED_MASTER_ID = '1C_CznU1Uo7dk-gKay3-oH8wFxutsGMlz27RSrbdVQwI';
 const CENTRAL_DRIVE_ALL_FILE_SEED_RUNTIME_SHEET = 'DRIVE_ALL_FILE_SEED_RUNTIME';
 const CENTRAL_DRIVE_ALL_FILE_SEED_REGISTRY = '35_INTERNAL_SEED_REGISTRY';
-const CENTRAL_DRIVE_ALL_FILE_QUEENS = '14_QUEENS_RESEARCH_QUEUE';
+const CENTRAL_DRIVE_ALL_FILE_QUEENS = '37_QUEENS_RESEARCH_RESULTS';
 const CENTRAL_DRIVE_ALL_FILE_BATCH = 60;
 const CENTRAL_DRIVE_ALL_FILE_BUDGET_MS = 110000;
 
@@ -47,32 +47,64 @@ function runCentralDriveAllFileSeedFactoryFromFactory() {
         const name = String(f.getName() || '');
         const dataClass = classifyDriveFileForSeed_(mime, name);
         const seedId = 'SEED_DRIVE_' + shortHashDriveSeed_(dedupKey + '|' + name);
+        const queensResultId = 'QRES_DRIVE_' + shortHashDriveSeed_(dedupKey + '|QUEENS|' + name);
         const sourceUrl = 'https://drive.google.com/open?id=' + encodeURIComponent(fileId);
         const projectId = inferDriveProjectId_(name, mime);
         const route = routeDriveFileForLearning_(dataClass, mime, name);
+        const nowIso = new Date().toISOString();
+
         const queensStatus = upsertQueensCandidateBestEffort_(queensSheet, {
-          SOURCE_ID:'DRIVE_' + fileId, FILE_ID:fileId, PROJECT_ID:projectId, TITLE:name, SOURCE_URL:sourceUrl,
-          SOURCE_TYPE:dataClass, MIME_TYPE:mime, STATUS:'QUEENS_CANDIDATE_AUTO', UPDATED_AT:new Date().toISOString(),
-          EVIDENCE:'Drive file metadata; content extraction/QA follows route ' + route.template
+          RESULT_ID:queensResultId,
+          QUEENS_TASK_ID:'Q_DRIVE_ALL_FILE_AUTO',
+          APP_ID:projectId,
+          RESEARCH_TYPE:'DRIVE_FILE_SEED_METADATA',
+          QUERY:name,
+          SOURCE_PROVIDER:'GOOGLE_DRIVE',
+          SOURCE_TITLE:name,
+          SOURCE_URL:sourceUrl,
+          SOURCE_PUBLISHED_AT:'',
+          COLLECTED_AT:nowIso,
+          MARKET_ID:'INTERNAL',
+          LOCALE_ID:'und',
+          EVIDENCE_STATUS:'DRIVE_METADATA_READBACK_PASS',
+          SEED_STATUS:'SEED_REGISTERED',
+          SOURCE_HASH:shortHashDriveSeed_(dedupKey),
+          NOTES:'SOURCE_ID=DRIVE_' + fileId + ';FILE_ID=' + fileId + ';MIME=' + mime + ';DATA_CLASS=' + dataClass + ';TEMPLATE_ROUTE=' + route.template + ';BRIDGE_ROUTE=' + route.bridge + ';PUBLIC_YN=N'
         });
         const seedStatus = upsertSeedBestEffort_(seedSheet, {
-          SEED_ID:seedId, SOURCE_ID:'DRIVE_' + fileId, FILE_ID:fileId, PROJECT_ID:projectId, APP_ID:'ALL_APPS',
-          TOPIC_ID:'DRIVE_ALL_FILE', SEED_TEXT:name, EVIDENCE:sourceUrl, STATUS:'AUTO_ROUTE_T1', UPDATED_AT:new Date().toISOString(),
-          DATA_CLASS:dataClass, MIME_TYPE:mime, TEMPLATE_ROUTE:route.template, BRIDGE_ROUTE:route.bridge
+          SEED_ID:seedId,
+          APP_ID:projectId,
+          SOURCE_TYPE:'DRIVE_' + dataClass,
+          SOURCE_IDS:'DRIVE_' + fileId + '|' + queensResultId,
+          TOPIC_ID:'DRIVE_ALL_FILE',
+          SEED_TEXT:name,
+          INPUT_SCHEMA_VERSION:CENTRAL_DRIVE_ALL_FILE_SEED_VERSION,
+          QUEENS_STATUS:queensStatus,
+          STATUS:'AUTO_ROUTE_T1',
+          CREATED_AT:nowIso,
+          UPDATED_AT:nowIso,
+          EVIDENCE:'SOURCE_URL=' + sourceUrl + ';FILE_ID=' + fileId + ';MIME=' + mime + ';TEMPLATE_ROUTE=' + route.template + ';BRIDGE_ROUTE=' + route.bridge + ';PUBLIC_YN=N'
         });
+        const registrationOk = queensStatus === 'QUEENS_REGISTERED' && seedStatus === 'SEED_REGISTERED';
 
         upsertRuntimeRow_(runtime, {
-          runId:runId, checkedAt:new Date().toISOString(), fileId:fileId, fileName:name, mimeType:mime,
+          runId:runId, checkedAt:nowIso, fileId:fileId, fileName:name, mimeType:mime,
           lastUpdated:updated.toISOString(), sizeBytes:safeDriveFileSize_(f), dataClass:dataClass, projectId:projectId,
           queensStatus:queensStatus, seedStatus:seedStatus, seedId:seedId, templateRoute:route.template,
-          bridgeRoute:route.bridge, dedupKey:dedupKey, result:'SEED_REGISTERED', ack:'ACK', driveReadback:'PASS',
-          retryState:'READY', error:'', sourceUrl:sourceUrl, workflowId:'ORCH_DRIVE_ALL_FILE_SEED_V1',
-          runtimeState:'FACTORY_LOGICAL', notes:'All-file ingestion; existing physical processTaskQueue wake only.'
+          bridgeRoute:route.bridge, dedupKey:dedupKey,
+          result:registrationOk ? 'SEED_REGISTERED' : 'PARTIAL_REGISTERED',
+          ack:registrationOk ? 'ACK' : 'NO_ACK',
+          driveReadback:registrationOk ? 'PASS' : 'PARTIAL',
+          retryState:registrationOk ? 'READY' : 'RETRY_NEXT_WAKE',
+          error:registrationOk ? '' : ('QUEENS=' + queensStatus + ';SEED=' + seedStatus),
+          sourceUrl:sourceUrl, workflowId:'ORCH_DRIVE_ALL_FILE_SEED_V1',
+          runtimeState:registrationOk ? 'FACTORY_LOGICAL' : 'DEGRADED',
+          notes:'All-file ingestion; existing physical processTaskQueue wake only.'
         });
-        if (typeof centralPublishDataEvent === 'function') {
-          try { centralPublishDataEvent({producer_app_id:'APP_AGENT_CORE',data_stage:'SEED',entity_type:dataClass,entity_id:seedId,summary:name,source_url:sourceUrl,lineage_ids:[fileId,seedId],consumer_scope:['ALL_APPS'],status:'READY',readback_status:'PASS',memo:route.template}); } catch (_) {}
+        if (registrationOk && typeof centralPublishDataEvent === 'function') {
+          try { centralPublishDataEvent({producer_app_id:'APP_AGENT_CORE',data_stage:'SEED',entity_type:dataClass,entity_id:seedId,summary:name,source_url:sourceUrl,lineage_ids:[fileId,queensResultId,seedId],consumer_scope:['ALL_APPS'],status:'READY',readback_status:'PASS',memo:route.template}); } catch (_) {}
         }
-        processed++;
+        if (registrationOk) processed++; else failed++;
       } catch (err) {
         failed++;
         try { upsertRuntimeRow_(runtime,{runId:runId,checkedAt:new Date().toISOString(),fileId:safeFn_(()=>f.getId(),''),fileName:safeFn_(()=>f.getName(),''),mimeType:safeFn_(()=>f.getMimeType(),''),lastUpdated:'',sizeBytes:'',dataClass:'ERROR',projectId:'AUTO',queensStatus:'FAILED',seedStatus:'FAILED',seedId:'',templateRoute:'',bridgeRoute:'',dedupKey:'',result:'FAILED',ack:'NO_ACK',driveReadback:'FAIL',retryState:'RETRY_NEXT_WAKE',error:String(err && err.message || err),sourceUrl:'',workflowId:'ORCH_DRIVE_ALL_FILE_SEED_V1',runtimeState:'DEGRADED',notes:'Preserve failure evidence; next existing wake retries.'}); } catch (_) {}
@@ -113,7 +145,7 @@ function upsertRuntimeRow_(sh, x) {
 }
 
 function upsertSeedBestEffort_(sh, obj) { return upsertByHeaderBestEffort_(sh,'SEED_ID',obj.SEED_ID,obj,'SEED_REGISTERED'); }
-function upsertQueensCandidateBestEffort_(sh, obj) { return upsertByHeaderBestEffort_(sh,'SOURCE_ID',obj.SOURCE_ID,obj,'QUEENS_REGISTERED'); }
+function upsertQueensCandidateBestEffort_(sh, obj) { return upsertByHeaderBestEffort_(sh,'RESULT_ID',obj.RESULT_ID,obj,'QUEENS_REGISTERED'); }
 
 function upsertByHeaderBestEffort_(sh, keyHeader, keyValue, obj, successLabel) {
   if (!sh) return 'TARGET_SHEET_MISSING';
