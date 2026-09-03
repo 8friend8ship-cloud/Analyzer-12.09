@@ -1,4 +1,4 @@
-const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V14_TABLET_FACTORY_20260902';
+const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V15_DAILY_800_W1W5_20260903';
 
 /**
  * Single logical entrypoint intended to be called by the already-installed
@@ -10,10 +10,14 @@ const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V14_TAB
  * installOrRepairCentralSheetRuntimeAuditTrigger(). This is intentional: the
  * primary factory wake must not be its only watchdog.
  *
+ * Central daily 001-800/STEP800 + W1-W5 operating audit is Apps Script-owned,
+ * logical-only, and MUST reuse the existing processTaskQueue physical wake.
+ * OpenAI Work is not a dependency for this daily governance automation.
+ *
  * Central workflow/bridge crosscheck, central tablet remote dispatch, and
- * OpenAI W1-W5 are logical-only and MUST reuse the existing processTaskQueue
- * physical wake. OpenAI Work is supervision/audit only and is never a required
- * scheduler for application automation.
+ * OpenAI W1-W5 supervision are logical-only and MUST reuse the existing
+ * processTaskQueue physical wake. OpenAI Work is supervision/audit only and is
+ * never a required scheduler for application automation.
  *
  * Image supply uses PRE→LEARNING→POST order so an already verified spatial PASS
  * is consumed before legacy feature extraction can downgrade its status, then
@@ -27,6 +31,7 @@ function contentOsUnifiedSchedulerTick() {
     stages: {}
   };
 
+  out.stages.daily800W1W5Audit = runOptionalContentOsStage_('runCentralDaily800W1W5AuditFromFactory_');
   out.stages.pipeline = runOptionalContentOsStage_('contentOsPipelineTick');
   out.stages.queensBridge = runOptionalContentOsStage_('contentOsQueensBridgeTick');
   out.stages.seedQualification = runOptionalContentOsStage_('contentOsSeedQualification10mTick');
@@ -55,6 +60,7 @@ function contentOsUnifiedSchedulerTick() {
 
 function runOptionalContentOsStage_(handlerName) {
   try {
+    if (handlerName === 'runCentralDaily800W1W5AuditFromFactory_' && typeof runCentralDaily800W1W5AuditFromFactory_ === 'function') return runCentralDaily800W1W5AuditFromFactory_();
     if (handlerName === 'contentOsPipelineTick' && typeof contentOsPipelineTick === 'function') return contentOsPipelineTick();
     if (handlerName === 'contentOsQueensBridgeTick' && typeof contentOsQueensBridgeTick === 'function') return contentOsQueensBridgeTick();
     if (handlerName === 'contentOsSeedQualification10mTick' && typeof contentOsSeedQualification10mTick === 'function') return contentOsSeedQualification10mTick();
@@ -100,9 +106,10 @@ function auditContentOsTriggerContract() {
   const workflowBridgeCrosscheck = rows.filter(function(r) { return r.handler === 'runCentralWorkflowBridgeCrosscheck10m'; }).length;
   const tabletRemotePhysical = rows.filter(function(r) { return r.handler === 'runCentralTabletRemoteDispatcherFromFactory'; }).length;
   const openAi5Physical = rows.filter(function(r) { return /^runOpenAi(5|Worker)/.test(r.handler); }).length;
+  const daily800Physical = rows.filter(function(r) { return r.handler === 'runCentralDaily800W1W5AuditFromFactory_' || r.handler === 'runCentralDaily800W1W5AuditNow'; }).length;
   return {
-    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && centralSheetAudit <= 1 && workflowBridgeCrosscheck === 0 && tabletRemotePhysical === 0 && openAi5Physical === 0,
-    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE_CWBX_TABLET_REMOTE_OPENAI5;NO_TABLET_REMOTE_OR_OPENAI5_DEDICATED_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
+    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && centralSheetAudit <= 1 && workflowBridgeCrosscheck === 0 && tabletRemotePhysical === 0 && openAi5Physical === 0 && daily800Physical === 0,
+    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE_DAILY800_CWBX_TABLET_REMOTE_OPENAI5;NO_DAILY800_TABLET_REMOTE_OR_OPENAI5_DEDICATED_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
     unifiedTriggerCount: duplicateOwn,
     allAppPhysicalTriggerCount: duplicateAllApp,
     imageLearningPhysicalTriggerCount: duplicateImage,
@@ -112,6 +119,7 @@ function auditContentOsTriggerContract() {
     workflowBridgeCrosscheckPhysicalTriggerCount: workflowBridgeCrosscheck,
     tabletRemotePhysicalTriggerCount: tabletRemotePhysical,
     openAi5PhysicalTriggerCount: openAi5Physical,
+    daily800W1W5PhysicalTriggerCount: daily800Physical,
     imageLearningLogicalMinutes: 10,
     imageSupplyLogicalMinutes: 10,
     apiCredentialAuditLogicalMinutes: 60,
@@ -119,6 +127,7 @@ function auditContentOsTriggerContract() {
     workflowBridgeCrosscheckLogicalMinutes: 10,
     tabletRemoteLogicalMinutes: 5,
     openAi5LogicalMinutes: 5,
+    daily800W1W5LogicalMinutes: 1440,
     openAiWorkDependency: false,
     triggers: rows,
     version: CONTENTOS_UNIFIED_SCHEDULER_VERSION
