@@ -1,0 +1,57 @@
+name: Drive All File Seed QA Gate
+
+on:
+  pull_request:
+    paths:
+      - 'apps-script/Central_Drive_All_File_Seed_Factory_20260903.gs'
+      - '.github/workflows/drive-all-file-seed-qa-ci.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apps Script syntax check
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp apps-script/Central_Drive_All_File_Seed_Factory_20260903.gs /tmp/drive-all-file-seed-qa.js
+          node --check /tmp/drive-all-file-seed-qa.js
+
+      - name: Verify Queens-first fail-closed policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          f='apps-script/Central_Drive_All_File_Seed_Factory_20260903.gs'
+          grep -q "CENTRAL_DRIVE_ALL_FILE_SEED_V2_QA_GATE_20260903" "$f"
+          grep -q "QUEENS_TASK_ID" "$f"
+          grep -q "QA_PENDING_CONTENT_EXTRACTION" "$f"
+          grep -q "data_stage:'QUEENS'" "$f"
+          grep -q "seedPromoted: 0" "$f"
+          grep -q "CONTENT_EVIDENCE_AND_QA_REQUIRED" "$f"
+          grep -q "NO_NEW_PHYSICAL_TRIGGER_REUSE_PROCESS_TASK_QUEUE" "$f"
+          if grep -q "35_INTERNAL_SEED_REGISTRY" "$f"; then
+            echo 'Direct Seed registry write regression detected'
+            exit 1
+          fi
+          if grep -q "AUTO_ROUTE_T1" "$f"; then
+            echo 'Metadata-only T1 promotion regression detected'
+            exit 1
+          fi
+          if grep -q "ScriptApp.newTrigger" "$f"; then
+            echo 'Duplicate physical trigger creation detected'
+            exit 1
+          fi
+
+      - name: Reject literal Google API secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -nE 'AIza[0-9A-Za-z_-]{30,}' -- ':!*.md' ':!*.txt'; then
+            echo 'Literal Google API key-like value found in tracked source'
+            exit 1
+          fi
