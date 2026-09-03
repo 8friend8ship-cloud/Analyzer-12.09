@@ -8,7 +8,11 @@ const FORCE_ALLOWED = new Set([
   'contentos.intelligence.selftest.v3',
   'contentos.pipeline.recovery.v3',
   'drywriter.writer.probe.a',
-  'drywriter.writer.probe.b'
+  'drywriter.writer.probe.b',
+  'drywriter.writer.health.a',
+  'drywriter.writer.health.b',
+  'drywriter.writer.generate.a',
+  'drywriter.writer.generate.b'
 ]);
 const parseJson = (text:string) => { try { return JSON.parse(text); } catch { return null; } };
 
@@ -28,6 +32,49 @@ const WRITER_FIXTURES:any = {
     rules:{regeneration:false,closing:'question',prayer:false,admonition:false},
     probe_request_id:'DRY_eac8bce4-de95-479f-8640-a5109cac25ab',
     source:'central_immediate_writer_probe_20260903'
+  }
+};
+
+const WRITER_GENERATE:any = {
+  'drywriter.writer.generate.a': {
+    action:'GENERATE_DRY_WRITER_MASTER',
+    input:{
+      inputId:'DRY_af359c03-fd27-41c2-aefa-92ed9c55fe71',
+      appId:'APP_ANALYZER',
+      personaId:'PERSONA_CONTENTOS_ANALYZER',
+      sourceId:'SRC_YT_AI_INTERIOR_WT6_20260903_1132',
+      seedId:'SEED_078df7c3-89d6-4601-8727-aa18f85a8daf',
+      topic:'Full AI Workflow for Interior Designers – From Brief to Pro Render (2026)',
+      queensRawIds:['SRC_YT_AI_INTERIOR_WT6_20260903_1132'],
+      queensClusterIds:['CONTENTOS_20260903_INTERIOR_AI'],
+      sourceIds:['SRC_YT_AI_INTERIOR_WT6_20260903_1132'],
+      primarySourceIds:['SRC_YT_AI_INTERIOR_WT6_20260903_1132'],
+      factClaims:[{claim:'Source is a current 2026 YouTube interior AI workflow reference.',sourceId:'SRC_YT_AI_INTERIOR_WT6_20260903_1132',sourceDate:'2026-09-03'}],
+      dataUsageContract:{dataUsageStatus:'PASS',dataUsagePolicyVersion:'CENTRAL_API_FREE_REFERENCE_ONLY'},
+      writingSpecId:'SPEC_REALITY_ESSAY',
+      locale:'ko-KR'
+    },
+    probe_request_id:'DRY_af359c03-fd27-41c2-aefa-92ed9c55fe71'
+  },
+  'drywriter.writer.generate.b': {
+    action:'GENERATE_DRY_WRITER_MASTER',
+    input:{
+      inputId:'DRY_eac8bce4-de95-479f-8640-a5109cac25ab',
+      appId:'APP_ANALYZER',
+      personaId:'PERSONA_CONTENTOS_ANALYZER',
+      sourceId:'SRC_YT_AI_INTERIOR_M1P_20260903_1132',
+      seedId:'SEED_CONTENTOS_AI_INTERIOR_B_20260903',
+      topic:'BEST AI TOOLS Interior Designer MUST USE in 2026',
+      queensRawIds:['SRC_YT_AI_INTERIOR_M1P_20260903_1132'],
+      queensClusterIds:['CONTENTOS_20260903_INTERIOR_AI_B'],
+      sourceIds:['SRC_YT_AI_INTERIOR_M1P_20260903_1132'],
+      primarySourceIds:['SRC_YT_AI_INTERIOR_M1P_20260903_1132'],
+      factClaims:[{claim:'Source is a current 2026 YouTube interior AI tools reference.',sourceId:'SRC_YT_AI_INTERIOR_M1P_20260903_1132',sourceDate:'2026-09-03'}],
+      dataUsageContract:{dataUsageStatus:'PASS',dataUsagePolicyVersion:'CENTRAL_API_FREE_REFERENCE_ONLY'},
+      writingSpecId:'SPEC_REALITY_ESSAY',
+      locale:'ko-KR'
+    },
+    probe_request_id:'DRY_eac8bce4-de95-479f-8640-a5109cac25ab'
   }
 };
 
@@ -57,6 +104,15 @@ export default async function handler(req: any, res: any) {
     res.setHeader('X-Content-OS-Diagnostic','IMMEDIATE_RUNTIME_FORCE_20260903');
     if (!FORCE_ALLOWED.has(forceAction)) return res.status(400).json({ok:false,error:'ACTION_NOT_ALLOWED',forceAction});
     try {
+      if (forceAction === 'drywriter.writer.health.a' || forceAction === 'drywriter.writer.health.b') {
+        const result = await postJson(WRITER_URL, {action:'HEALTH',probe:forceAction,source:'central_immediate_writer_health_20260903'});
+        return res.status(200).json({ok:result.ok,action:forceAction,target:'WRITER_CONTENT_FACTORY_V001',...result,at:new Date().toISOString()});
+      }
+      if (WRITER_GENERATE[forceAction]) {
+        const body = WRITER_GENERATE[forceAction];
+        const result = await postJson(WRITER_URL, body);
+        return res.status(200).json({ok:result.ok,action:forceAction,target:'WRITER_CONTENT_FACTORY_V001',requestId:body.probe_request_id,...result,at:new Date().toISOString()});
+      }
       if (WRITER_FIXTURES[forceAction]) {
         const result = await postJson(WRITER_URL, WRITER_FIXTURES[forceAction]);
         return res.status(200).json({
@@ -73,12 +129,7 @@ export default async function handler(req: any, res: any) {
       const token = process.env.CONTENT_OS_BACKEND_TOKEN;
       if (token) headers['X-Content-OS-Token'] = token;
       const result = await postJson(APPS_SCRIPT_URL, {action:forceAction,source:'protected-vercel-preview-health-force-20260903'}, headers);
-      return res.status(200).json({
-        ok:result.ok,
-        action:forceAction,
-        ...result,
-        at:new Date().toISOString()
-      });
+      return res.status(200).json({ok:result.ok,action:forceAction,...result,at:new Date().toISOString()});
     } catch (e:any) {
       return res.status(502).json({ok:false,action:forceAction,error:String(e?.message || e),at:new Date().toISOString()});
     }
