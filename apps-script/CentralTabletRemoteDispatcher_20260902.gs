@@ -1,4 +1,4 @@
-const CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION = 'CENTRAL_TABLET_REMOTE_DISPATCHER_V3_PROVIDER_PERMISSION_DEDUP_20260903';
+const CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION = 'CENTRAL_TABLET_REMOTE_DISPATCHER_V4_STRICT_BEGINNING_URI_PRIVILEGE_GUARD_20260903';
 const CENTRAL_TABLET_REMOTE = Object.freeze({
   tabletQueueSheetId: '1pZFNTeu-F0CjhYAuoKazD92UMn6A-9nkse6QyYwj2yA',
   workerStatusFileId: '1cH1q2h5qZQh7e4Mvgj1xYqbOflhBTMdw',
@@ -28,9 +28,11 @@ const CENTRAL_TABLET_REMOTE = Object.freeze({
  * - One physical tablet UI mutation at a time.
  * - Screen-off continuity is a background-only gate; it does not block foreground remote work.
  * - INPUT_CANARY is deprecated and must never be emitted.
- * - OPEN_FLOW is allowed before Automate Interact proof so Flow can be warm while the UI controller
- *   is validated; click/type/generate still requires a valid installation-specific Automate URI
- *   and runtime proof.
+ * - OPEN_FLOW is transport-only and may warm Flow before UI-controller proof.
+ * - A legacy automate:* URI or STARTED ACK is APP_OPEN/URI_DISPATCH evidence only. It MUST NOT be
+ *   treated as an Automate Flow-beginning execution or positive UI proof.
+ * - Click/type/generate requires the installation-specific Automate Flow beginning URI returned by
+ *   Automate itself: content://com.llamalab.automate.provider/flows/<id>/statements/<id>.
  * - If Android has already denied external Automate provider inspection and runtime hint discovery
  *   found no beginning URI, do not blindly repeat the same discovery. Reopen only on changed
  *   permission state or a newly registered/discovered installation-specific beginning URI.
@@ -77,6 +79,10 @@ function runCentralTabletRemoteDispatcherFromFactory(context) {
     const scriptProps = PropertiesService.getScriptProperties();
     const canaryUri = String(scriptProps.getProperty('TABLET_AUTOMATE_CANARY_URI') || '').trim();
     const flowE2eUri = String(scriptProps.getProperty('TABLET_AUTOMATE_FLOW_E2E_URI') || '').trim();
+    const canaryUriValid = tabletAutomateBeginningUriValid_(canaryUri);
+    const flowE2eUriValid = tabletAutomateBeginningUriValid_(flowE2eUri);
+    const canaryUriKind = tabletAutomateUriKind_(canaryUri);
+    const flowE2eUriKind = tabletAutomateUriKind_(flowE2eUri);
 
     // Warm Flow immediately whenever a live Flow job exists. OPEN_FLOW is transport-only and is
     // allowed before Automate Interact proof. Do not repeat it when the current command or latest
@@ -86,19 +92,19 @@ function runCentralTabletRemoteDispatcherFromFactory(context) {
       if (!sameTabletCommand_(currentAction, 'OPEN_FLOW', '') && !openAck) {
         const id = 'FLOWOPEN_' + Utilities.formatDate(now, cfg.timeZone, 'yyyyMMdd_HHmmss');
         writeTabletTextFile_(cfg.actionFileId, id + '|OPEN_FLOW|https://labs.google/fx/tools/flow\n');
-        tabletPatchQueueStatus_(queue, flowRow.__sheetRow, idx, 'WAITING_FLOW_OPEN_ACK', 'IMMEDIATE_CENTRAL_FUNCTION→OPEN_FLOW→ACTION_ACK; UI proof may continue in parallel after Flow is warm');
+        tabletPatchQueueStatus_(queue, flowRow.__sheetRow, idx, 'WAITING_FLOW_OPEN_ACK', 'IMMEDIATE_CENTRAL_FUNCTION→OPEN_FLOW→ACTION_ACK; OPEN_STARTED is transport/app-open evidence only; UI proof remains separate');
         return {ok:true, hold:true, status:'FLOW_WARM_OPEN_PUBLISHED', actionId:id, heartbeatAgeSec:heartbeatAgeSec, proofPass:proofPass, source:String(context && context.source || 'factory'), version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION};
       }
     }
 
     if (!proofPass && proofRow && !tabletTerminalRow_(proofRow, idx)) {
-      if (tabletAutomateBeginningUriValid_(canaryUri)) {
+      if (canaryUriValid) {
         const id = 'TABPROOF_' + Utilities.formatDate(now, cfg.timeZone, 'yyyyMMdd_HHmmss');
         const desired = id + '|RUN_AUTOMATE_CANARY|' + canaryUri;
         if (!sameTabletCommand_(currentAction, 'RUN_AUTOMATE_CANARY', canaryUri) && String(actionStatus.action_id || '') !== id) {
           writeTabletTextFile_(cfg.actionFileId, desired + '\n');
-          tabletPatchQueueStatus_(queue, proofRow.__sheetRow, idx, 'WAITING_AUTOMATE_CANARY_ACK', 'CENTRAL_FUNCTION→RUN_AUTOMATE_CANARY→TABLET_RUNTIME_UI_PROOF.json→readback');
-          return {ok:true, hold:true, status:'AUTOMATE_CANARY_PUBLISHED', actionId:id, heartbeatAgeSec:heartbeatAgeSec, version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION};
+          tabletPatchQueueStatus_(queue, proofRow.__sheetRow, idx, 'WAITING_AUTOMATE_CANARY_ACK', 'CENTRAL_FUNCTION→STRICT_FLOW_BEGINNING_URI→RUN_AUTOMATE_CANARY→TABLET_RUNTIME_UI_PROOF.json→readback');
+          return {ok:true, hold:true, status:'AUTOMATE_CANARY_PUBLISHED', actionId:id, heartbeatAgeSec:heartbeatAgeSec, uriKind:canaryUriKind, version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION};
         }
       }
 
@@ -107,45 +113,53 @@ function runCentralTabletRemoteDispatcherFromFactory(context) {
       const providerPermissionDenied = tabletAutomateProviderPermissionDenied_(providerDiag);
       const discoveredBeginningUri = tabletExtractAutomateBeginningUri_(runtimeHints);
 
-      if (!canaryUri && providerPermissionDenied && !discoveredBeginningUri) {
-        tabletPatchQueueStatus_(queue, proofRow.__sheetRow, idx, 'HOLD_AUTOMATE_PROVIDER_PERMISSION_NO_URI', 'Android provider inspection is permission-denied and current runtime hints contain no installation-specific Flow beginning URI. Do not repeat identical discovery; require valid beginning URI or changed device permission state.');
+      // A stored legacy automate:* value is not a Flow beginning URI. Under the already-proven
+      // provider permission barrier, treat it the same as no valid URI and do not loop discovery.
+      if (!canaryUriValid && providerPermissionDenied && !discoveredBeginningUri) {
+        tabletPatchQueueStatus_(queue, proofRow.__sheetRow, idx, 'HOLD_VALID_AUTOMATE_BEGINNING_URI_REQUIRED', 'Android provider inspection is permission-denied and no valid installation-specific Flow beginning URI is available. Legacy automate:* STARTED means app-open/URI-dispatch only. Do not repeat identical discovery; require valid content://.../flows/<id>/statements/<id> URI or changed device permission state.');
         return {
           ok:true,
           hold:true,
-          status:'AUTOMATE_PROVIDER_PERMISSION_NO_URI_DEDUP',
+          status:'VALID_AUTOMATE_BEGINNING_URI_REQUIRED_DEDUP',
           heartbeatAgeSec:heartbeatAgeSec,
           providerPermissionDenied:true,
           discoveredBeginningUri:false,
-          fixSignature:'AUTOMATE_PROVIDER_PERMISSION_DENIED_NO_FLOW_URI_V1',
+          configuredUriKind:canaryUriKind,
+          fixSignature:'TERMUX_UI_PRIVILEGE_BARRIER_LEGACY_AUTOMATE_URI_FALSE_START_V1',
           version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION
         };
+      }
+
+      if (discoveredBeginningUri && !canaryUriValid) {
+        tabletPatchQueueStatus_(queue, proofRow.__sheetRow, idx, 'HOLD_AUTOMATE_BEGINNING_URI_DISCOVERED_REGISTRATION_REQUIRED', 'A valid installed Automate Flow beginning URI was discovered. Register the exact discovered content:// URI into the existing TABLET_AUTOMATE_CANARY_URI property before mutation; do not substitute automate:* aliases.');
+        return {ok:true, hold:true, status:'AUTOMATE_BEGINNING_URI_DISCOVERED_REGISTER_ONCE', heartbeatAgeSec:heartbeatAgeSec, discoveredBeginningUri:discoveredBeginningUri, configuredUriKind:canaryUriKind, version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION};
       }
 
       if (!sameTabletCommand_(currentAction, 'DISCOVER_AUTOMATE_RUNTIME_HINTS', '')) {
         const id = 'TABHINT_' + Utilities.formatDate(now, cfg.timeZone, 'yyyyMMdd_HHmmss');
         writeTabletTextFile_(cfg.actionFileId, id + '|DISCOVER_AUTOMATE_RUNTIME_HINTS\n');
-        tabletPatchQueueStatus_(queue, proofRow.__sheetRow, idx, 'WAITING_AUTOMATE_URI_DISCOVERY_ACK', 'CENTRAL_FUNCTION→DISCOVER_AUTOMATE_RUNTIME_HINTS; if no installation URI is found, preserve task and require one-time Automate flow URI setup');
-        return {ok:true, hold:true, status:'AUTOMATE_HINT_DISCOVERY_PUBLISHED', actionId:id, heartbeatAgeSec:heartbeatAgeSec, version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION};
+        tabletPatchQueueStatus_(queue, proofRow.__sheetRow, idx, 'WAITING_AUTOMATE_URI_DISCOVERY_ACK', 'CENTRAL_FUNCTION→DISCOVER_AUTOMATE_RUNTIME_HINTS; accept only content://com.llamalab.automate.provider/flows/<id>/statements/<id>; if unavailable preserve task and require one-time device setup');
+        return {ok:true, hold:true, status:'AUTOMATE_HINT_DISCOVERY_PUBLISHED', actionId:id, heartbeatAgeSec:heartbeatAgeSec, configuredUriKind:canaryUriKind, version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION};
       }
 
-      tabletPatchQueueStatus_(queue, proofRow.__sheetRow, idx, 'HOLD_AUTOMATE_INTERACT_URI_NOT_REGISTERED', 'Set TABLET_AUTOMATE_CANARY_URI once from the installed Automate flow beginning; OpenAI Work is not a dependency');
-      return {ok:true, hold:true, status:'AUTOMATE_URI_REQUIRED_ONCE', heartbeatAgeSec:heartbeatAgeSec, lastActionResult:String(actionStatus.result || ''), version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION};
+      tabletPatchQueueStatus_(queue, proofRow.__sheetRow, idx, 'HOLD_AUTOMATE_INTERACT_BEGINNING_URI_NOT_REGISTERED', 'Set TABLET_AUTOMATE_CANARY_URI once from the installed Automate Flow beginning. automate:* app-open aliases do not satisfy the gate. OpenAI Work is not a dependency.');
+      return {ok:true, hold:true, status:'AUTOMATE_BEGINNING_URI_REQUIRED_ONCE', heartbeatAgeSec:heartbeatAgeSec, configuredUriKind:canaryUriKind, lastActionResult:String(actionStatus.result || ''), version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION};
     }
 
     if (proofPass && flowRow && !tabletTerminalRow_(flowRow, idx)) {
-      if (tabletAutomateBeginningUriValid_(flowE2eUri)) {
+      if (flowE2eUriValid) {
         const id = 'FLOWE2E_' + Utilities.formatDate(now, cfg.timeZone, 'yyyyMMdd_HHmmss');
         if (!sameTabletCommand_(currentAction, 'RUN_AUTOMATE_URI', flowE2eUri)) {
           writeTabletTextFile_(cfg.actionFileId, id + '|RUN_AUTOMATE_URI|' + flowE2eUri + '\n');
-          tabletPatchQueueStatus_(queue, flowRow.__sheetRow, idx, 'WAITING_FLOW_E2E_ACK_AND_DRIVE_RESULT', 'IMMEDIATE_CENTRAL_FUNCTION→RUN_AUTOMATE_URI→Flow generate exactly 1→Drive file metadata→ACK');
-          return {ok:true, hold:true, status:'FLOW_E2E_AUTOMATE_PUBLISHED', actionId:id, heartbeatAgeSec:heartbeatAgeSec, version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION};
+          tabletPatchQueueStatus_(queue, flowRow.__sheetRow, idx, 'WAITING_FLOW_E2E_ACK_AND_DRIVE_RESULT', 'IMMEDIATE_CENTRAL_FUNCTION→STRICT_FLOW_BEGINNING_URI→RUN_AUTOMATE_URI→Flow generate exactly 1→Drive file metadata→ACK');
+          return {ok:true, hold:true, status:'FLOW_E2E_AUTOMATE_PUBLISHED', actionId:id, heartbeatAgeSec:heartbeatAgeSec, uriKind:flowE2eUriKind, version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION};
         }
       }
-      tabletPatchQueueStatus_(queue, flowRow.__sheetRow, idx, 'HOLD_FLOW_E2E_URI_NOT_REGISTERED', 'OPEN_FLOW transport is proven; register one valid installation-specific Flow beginning URI for click/type/generate. Do not use OpenAI Work as scheduler.');
-      return {ok:true, hold:true, status:'FLOW_E2E_URI_REQUIRED_ONCE', heartbeatAgeSec:heartbeatAgeSec, version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION};
+      tabletPatchQueueStatus_(queue, flowRow.__sheetRow, idx, 'HOLD_FLOW_E2E_VALID_BEGINNING_URI_NOT_REGISTERED', 'OPEN_FLOW transport is proven; register one valid installation-specific content:// Flow beginning URI for click/type/generate. automate:* aliases are APP_OPEN_ONLY. Do not use OpenAI Work as scheduler.');
+      return {ok:true, hold:true, status:'FLOW_E2E_VALID_BEGINNING_URI_REQUIRED_ONCE', heartbeatAgeSec:heartbeatAgeSec, configuredUriKind:flowE2eUriKind, version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION};
     }
 
-    return {ok:true, status:'NO_SAFE_TABLET_MUTATION_DUE', heartbeatAgeSec:heartbeatAgeSec, proofPass:proofPass, actionResult:String(actionStatus.result || ''), version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION};
+    return {ok:true, status:'NO_SAFE_TABLET_MUTATION_DUE', heartbeatAgeSec:heartbeatAgeSec, proofPass:proofPass, actionResult:String(actionStatus.result || ''), canaryUriKind:canaryUriKind, flowE2eUriKind:flowE2eUriKind, version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION};
   } catch (err) {
     return {ok:false, hold:true, status:'CENTRAL_TABLET_DISPATCH_ERROR', error:String(err && err.message || err), version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION};
   } finally {
@@ -215,14 +229,18 @@ function readLatestTabletRuntimeProof_(folderId) {
     const f = it.next();
     const obj = JSON.parse(f.getBlob().getDataAsString('UTF-8') || '{}');
     const result = String(obj.result || obj.status || '').toUpperCase();
-    return {valid:/PASS|VERIFIED|INTERACT/.test(result) && !/FAIL|ERROR|NOT_RETURNED/.test(result), fileId:f.getId(), result:result, raw:obj};
+    return {valid:/PASS|VERIFIED|INTERACT/.test(result) && !/FAIL|ERROR|NOT_RETURNED|ABSENT/.test(result), fileId:f.getId(), result:result, raw:obj};
   } catch (e) { return {valid:false, reason:String(e)}; }
 }
 function tabletAutomateBeginningUriValid_(uri) {
+  return tabletAutomateUriKind_(uri) === 'NATIVE_FLOW_BEGINNING_URI';
+}
+function tabletAutomateUriKind_(uri) {
   const v = String(uri || '').trim();
-  if (!v || v === 'automate:central-agent') return false;
-  if (/^automate:/i.test(v)) return true;
-  return /^content:\/\/com\.llamalab\.automate\.provider\/flows\/\d+\/statements\/\d+(?:[?#].*)?$/i.test(v);
+  if (!v) return 'NONE';
+  if (/^content:\/\/com\.llamalab\.automate\.provider\/flows\/\d+\/statements\/\d+(?:[?#].*)?$/i.test(v)) return 'NATIVE_FLOW_BEGINNING_URI';
+  if (/^automate:/i.test(v)) return 'LEGACY_AUTOMATE_SCHEME_APP_OPEN_ONLY';
+  return 'INVALID';
 }
 function tabletAutomateProviderPermissionDenied_(diagText) {
   return /ACCESS_CONTENT_PROVIDERS_EXTERNALLY|android\.permission\.DUMP|Permission Denial:\s*can't dump ActivityManager/i.test(String(diagText || ''));
@@ -243,7 +261,8 @@ function auditCentralTabletRemoteTriggerContract() {
     openAiWorkDependency:false,
     workerStatusFileId:CENTRAL_TABLET_REMOTE.workerStatusFileId,
     providerPermissionRetryDedup:true,
-    beginningUriValidation:'automate: OR content://com.llamalab.automate.provider/flows/<id>/statements/<id>',
+    beginningUriValidation:'STRICT content://com.llamalab.automate.provider/flows/<id>/statements/<id> ONLY; automate:* = APP_OPEN_ONLY',
+    legacyAutomateSchemeCountsAsFlowStart:false,
     version:CENTRAL_TABLET_REMOTE_DISPATCHER_VERSION
   };
 }
