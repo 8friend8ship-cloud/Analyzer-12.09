@@ -1,4 +1,4 @@
-const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V17_DRYWRITER_SELF_HEAL_20260903';
+const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V18_OPENAI5_SECURITY_GATE_20260903';
 
 /**
  * Single logical entrypoint intended to be called by the already-installed
@@ -25,8 +25,10 @@ const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V17_DRY
  *
  * Central workflow/bridge crosscheck, central tablet remote dispatch, and
  * OpenAI W1-W5 supervision are logical-only and MUST reuse the existing
- * processTaskQueue physical wake. OpenAI Work is supervision/audit only and is
- * never a required scheduler for application automation.
+ * processTaskQueue physical wake. OpenAI W1-W5 is routed through a fail-closed
+ * security/observability wrapper that verifies canonical Script identity,
+ * expected trigger policy, handler presence, and redacted audit logging before
+ * any W1-W5 control cycle can execute.
  *
  * Image supply uses PRE→LEARNING→POST order so an already verified spatial PASS
  * is consumed before legacy feature extraction can downgrade its status, then
@@ -59,7 +61,7 @@ function contentOsUnifiedSchedulerTick() {
   out.stages.centralSheetRuntimeAudit = runOptionalContentOsStage_('runCentralSheetRuntimeAuditAutofix10m');
   out.stages.centralWorkflowBridgeCrosscheck = runOptionalContentOsStage_('runCentralWorkflowBridgeCrosscheck10m');
   out.stages.tabletRemoteDispatcher = runOptionalContentOsStage_('runCentralTabletRemoteDispatcherFromFactory');
-  out.stages.openAi5Workers = runOptionalContentOsStage_('runOpenAi5WorkerControlCycleFromFactory');
+  out.stages.openAi5Workers = runOptionalContentOsStage_('runOpenAi5WorkerControlCycleSecureFromFactory');
 
   out.ok = Object.keys(out.stages).every(function(k) {
     const r = out.stages[k];
@@ -91,7 +93,8 @@ function runOptionalContentOsStage_(handlerName) {
     if (handlerName === 'runCentralSheetRuntimeAuditAutofix10m' && typeof runCentralSheetRuntimeAuditAutofix10m === 'function') return runCentralSheetRuntimeAuditAutofix10m();
     if (handlerName === 'runCentralWorkflowBridgeCrosscheck10m' && typeof runCentralWorkflowBridgeCrosscheck10m === 'function') return runCentralWorkflowBridgeCrosscheck10m();
     if (handlerName === 'runCentralTabletRemoteDispatcherFromFactory' && typeof runCentralTabletRemoteDispatcherFromFactory === 'function') return runCentralTabletRemoteDispatcherFromFactory({source:'contentOsUnifiedSchedulerTick'});
-    if (handlerName === 'runOpenAi5WorkerControlCycleFromFactory' && typeof runOpenAi5WorkerControlCycleFromFactory === 'function') return runOpenAi5WorkerControlCycleFromFactory();
+    if (handlerName === 'runOpenAi5WorkerControlCycleSecureFromFactory' && typeof runOpenAi5WorkerControlCycleSecureFromFactory === 'function') return runOpenAi5WorkerControlCycleSecureFromFactory();
+    if (handlerName === 'runOpenAi5WorkerControlCycleFromFactory' && typeof runOpenAi5WorkerControlCycleFromFactory === 'function') return {ok:true, hold:true, reason:'SECURITY_WRAPPER_REQUIRED', handler:handlerName};
     return {ok:true, skipped:true, reason:'HANDLER_NOT_SYNCED', handler:handlerName};
   } catch (err) {
     return {ok:false, handler:handlerName, error:String(err && err.message || err)};
@@ -148,6 +151,7 @@ function auditContentOsTriggerContract() {
     openAi5LogicalMinutes: 5,
     daily800W1W5LogicalMinutes: 1440,
     openAiWorkDependency: false,
+    openAi5SecurityWrapper: 'runOpenAi5WorkerControlCycleSecureFromFactory',
     triggers: rows,
     version: CONTENTOS_UNIFIED_SCHEDULER_VERSION
   };
