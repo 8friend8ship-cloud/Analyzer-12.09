@@ -17,6 +17,7 @@ const pick = (row:any, ...keys:string[]) => {
   return '';
 };
 const brief = (s:string, max=600) => text(s).replace(/\s+/g,' ').slice(0,max);
+const boolQuery = (v:any) => ['1','true','yes','y'].includes(text(one(v)).toLowerCase());
 
 function parseChapters(description:string) {
   const out:Array<{start:string,title:string}> = [];
@@ -144,6 +145,14 @@ async function autoEnqueue(req:any,item:any,query:string) {
   }
 }
 
+function logUsage(event:any) {
+  console.info('[YOUTUBE_SEED_USAGE]', JSON.stringify({
+    contractVersion: CONTRACT_VERSION,
+    ...event,
+    loggedAt: new Date().toISOString(),
+  }));
+}
+
 export default async function handler(req:any,res:any) {
   res.setHeader('Cache-Control','no-store');
   res.setHeader('X-Content-OS-Bridge',CONTRACT_VERSION);
@@ -152,12 +161,16 @@ export default async function handler(req:any,res:any) {
     const query = text(one(req.query?.query));
     const rawIds = text(one(req.query?.videoIds));
     const limit = Math.max(1,Math.min(Number(one(req.query?.limit) || 20),100));
+    const verifyOnly = boolQuery(req.query?.verifyOnly);
     const ids = rawIds.split(',').map((x:string)=>x.trim()).filter((x:string)=>/^[\w-]{11}$/.test(x)).slice(0,100);
 
     if (!ids.length && query) {
       const cached:any[] = await storedSearch(query,limit);
       if (cached.length >= Math.min(limit,20)) {
-        return res.status(200).json({contractVersion:CONTRACT_VERSION,source:'SHEET_CACHE',quotaUnits:0,writeback:{attempted:0,accepted:0,results:[]},items:cached.slice(0,limit)});
+        const usage = {source:'SHEET_CACHE',quotaUnits:0,itemCount:Math.min(cached.length,limit),writebackAttempted:0,writebackAccepted:0,verifyOnly};
+        logUsage(usage);
+        res.setHeader('X-Content-OS-Quota-Units','0');
+        return res.status(200).json({contractVersion:CONTRACT_VERSION,source:'SHEET_CACHE',quotaUnits:0,usage,writeback:{attempted:0,accepted:0,results:[]},items:cached.slice(0,limit)});
       }
     }
 
@@ -180,10 +193,23 @@ export default async function handler(req:any,res:any) {
       quotaUnits += 1;
       (v.items || []).forEach((x:any)=>items.push(cardFromYoutube(x)));
     }
-    const writebackResults = await Promise.all(items.map(x=>autoEnqueue(req,x,query)));
+
+    const writebackResults = verifyOnly ? [] : await Promise.all(items.map(x=>autoEnqueue(req,x,query)));
     const accepted = writebackResults.filter(x=>x.accepted).length;
-    return res.status(200).json({contractVersion:CONTRACT_VERSION,source:'SERVER_API_GAP_FILL',quotaUnits,writeback:{attempted:writebackResults.length,accepted,results:writebackResults},items:items.slice(0,limit),...(nextPageToken?{nextPageToken}:{})});
+    const usage = {
+      source:'SERVER_API_GAP_FILL',
+      quotaUnits,
+      itemCount:items.length,
+      requestedVideoIds:targetIds.length,
+      writebackAttempted:writebackResults.length,
+      writebackAccepted:accepted,
+      verifyOnly,
+    };
+    logUsage(usage);
+    res.setHeader('X-Content-OS-Quota-Units',String(quotaUnits));
+    return res.status(200).json({contractVersion:CONTRACT_VERSION,source:'SERVER_API_GAP_FILL',quotaUnits,usage,writeback:{attempted:writebackResults.length,accepted,results:writebackResults},items:items.slice(0,limit),...(nextPageToken?{nextPageToken}:{})});
   } catch (error:any) {
+    logUsage({source:'ERROR',quotaUnits:0,itemCount:0,writebackAttempted:0,writebackAccepted:0,error:text(error?.message || error)});
     return res.status(502).json({contractVersion:CONTRACT_VERSION,error:text(error?.message || error),quotaUnits:0,writeback:{attempted:0,accepted:0,results:[]},items:[]});
   }
 }
