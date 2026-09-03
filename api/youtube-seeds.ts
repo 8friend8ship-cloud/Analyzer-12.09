@@ -2,6 +2,7 @@ const YOUTUBE_BASE = 'https://www.googleapis.com/youtube/v3';
 const BACKEND_URL = process.env.CONTENT_OS_BACKEND_URL || 'https://script.google.com/macros/s/AKfycbx5WTegTKUnyvFZC_qOaGBPlmKANLwXyNue19jLkFhdFwHnnp1E6_trZeVGdIg7B3GA/exec';
 const APP_ID = 'APP_CONTENT_OS';
 const CONTRACT_VERSION = 'YOUTUBE_SEED_BRIDGE_V1';
+const PUBLIC_ORIGIN = process.env.CONTENT_OS_PUBLIC_ORIGIN || 'https://contents-os.com';
 
 const one = (v:any) => Array.isArray(v) ? v[0] : v;
 const text = (v:any) => String(v ?? '').trim();
@@ -115,24 +116,21 @@ async function youtubeGet(path:string, params:Record<string,string>) {
 function sameOriginBackendUrl(req:any) {
   const host = text(req?.headers?.['x-forwarded-host'] || req?.headers?.host);
   const proto = text(req?.headers?.['x-forwarded-proto']) || 'https';
-  return host ? `${proto}://${host}/api/backend` : '';
+  if (!host || host.endsWith('.vercel.app')) return `${PUBLIC_ORIGIN}/api/backend`;
+  return `${proto}://${host}/api/backend`;
 }
 
 async function autoEnqueue(req:any,item:any,query:string) {
   const payload = {
-    action:'enqueue', asset_type:'VIDEO', url:item.videoUrl, source_page_url:item.videoUrl,
+    action:'enqueue', asset_type:'TEXT', url:item.videoUrl, source_page_url:item.videoUrl,
     platform:'YOUTUBE', title:item.title, primary_code:'YOUTUBE_API_GAP_FILL',
     keywords:[query,'youtube','seed'].filter(Boolean).join(','),
     target_apps:'APP_CONTENT_OS|APP_VTUBE_1011B', use_case:'YOUTUBE_SEED_AUTO_COLLECT',
     official_source:'YOUTUBE_PUBLIC_METADATA', rights_usage:'REFERENCE_ONLY',
-    notes:JSON.stringify({contractVersion:CONTRACT_VERSION,videoId:item.videoId,thumbnailUrl:item.thumbnailUrl,viewCount:item.viewCount,likeCount:item.likeCount,commentCount:item.commentCount,durationIso8601:item.durationIso8601,descriptionBrief:item.descriptionBrief,lastSync:item.lastSync}).slice(0,3500),
+    notes:JSON.stringify({contractVersion:CONTRACT_VERSION,sourceKind:'YOUTUBE_VIDEO_METADATA',videoId:item.videoId,thumbnailUrl:item.thumbnailUrl,viewCount:item.viewCount,likeCount:item.likeCount,commentCount:item.commentCount,durationIso8601:item.durationIso8601,descriptionBrief:item.descriptionBrief,lastSync:item.lastSync}).slice(0,3500),
   };
   try {
     const route = sameOriginBackendUrl(req);
-    if (!route) {
-      const direct = await backend(payload);
-      return {videoId:item.videoId,route:'DIRECT_BACKEND_FALLBACK',accepted:direct.ok && direct.json?.ok !== false,status:direct.status,upstreamOk:direct.json?.ok ?? null,reason:direct.json?.reason || direct.json?.error || ''};
-    }
     const r = await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),redirect:'follow'});
     const t = await r.text();
     let j:any = null;
