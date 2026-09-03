@@ -1,4 +1,4 @@
-const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V15_DAILY_800_W1W5_20260903';
+const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V16_YOUTUBE_SEED_20260903';
 
 /**
  * Single logical entrypoint intended to be called by the already-installed
@@ -13,6 +13,10 @@ const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V15_DAI
  * Central daily 001-800/STEP800 + W1-W5 operating audit is Apps Script-owned,
  * logical-only, and MUST reuse the existing processTaskQueue physical wake.
  * OpenAI Work is not a dependency for this daily governance automation.
+ *
+ * YouTube Seed is logical-only: youtubeSeedFactoryTick is called here and must
+ * not receive its own time trigger. It reuses processTaskQueue through this
+ * unified scheduler and writes Drive seed/VTube bridge data with deduplication.
  *
  * Central workflow/bridge crosscheck, central tablet remote dispatch, and
  * OpenAI W1-W5 supervision are logical-only and MUST reuse the existing
@@ -34,6 +38,7 @@ function contentOsUnifiedSchedulerTick() {
   out.stages.daily800W1W5Audit = runOptionalContentOsStage_('runCentralDaily800W1W5AuditFromFactory_');
   out.stages.pipeline = runOptionalContentOsStage_('contentOsPipelineTick');
   out.stages.queensBridge = runOptionalContentOsStage_('contentOsQueensBridgeTick');
+  out.stages.youtubeSeedFactory = runOptionalContentOsStage_('youtubeSeedFactoryTick');
   out.stages.seedQualification = runOptionalContentOsStage_('contentOsSeedQualification10mTick');
   out.stages.frontLineage = runOptionalContentOsStage_('contentOsFrontLineage10mTick');
   out.stages.virtualFront = runOptionalContentOsStage_('contentOsVirtualFront10mTick');
@@ -63,6 +68,7 @@ function runOptionalContentOsStage_(handlerName) {
     if (handlerName === 'runCentralDaily800W1W5AuditFromFactory_' && typeof runCentralDaily800W1W5AuditFromFactory_ === 'function') return runCentralDaily800W1W5AuditFromFactory_();
     if (handlerName === 'contentOsPipelineTick' && typeof contentOsPipelineTick === 'function') return contentOsPipelineTick();
     if (handlerName === 'contentOsQueensBridgeTick' && typeof contentOsQueensBridgeTick === 'function') return contentOsQueensBridgeTick();
+    if (handlerName === 'youtubeSeedFactoryTick' && typeof youtubeSeedFactoryTick === 'function') return youtubeSeedFactoryTick();
     if (handlerName === 'contentOsSeedQualification10mTick' && typeof contentOsSeedQualification10mTick === 'function') return contentOsSeedQualification10mTick();
     if (handlerName === 'contentOsFrontLineage10mTick' && typeof contentOsFrontLineage10mTick === 'function') return contentOsFrontLineage10mTick();
     if (handlerName === 'contentOsVirtualFront10mTick' && typeof contentOsVirtualFront10mTick === 'function') return contentOsVirtualFront10mTick();
@@ -102,24 +108,27 @@ function auditContentOsTriggerContract() {
       r.handler === 'runImageSupplyPriorityGovernorV1_' || r.handler === 'runGeneratedImageReingestV1_' || r.handler === 'runImageDailyTargetAutoScaleV1_';
   }).length;
   const duplicateApiAudit = rows.filter(function(r) { return r.handler === 'runCentralApiCredentialUsageAuditHourly'; }).length;
+  const duplicateYouTubeSeed = rows.filter(function(r) { return r.handler === 'youtubeSeedFactoryTick' || r.handler === 'runYouTubeSeedFactoryFromFactoryWake'; }).length;
   const centralSheetAudit = rows.filter(function(r) { return r.handler === 'runCentralSheetRuntimeAuditAutofix10m'; }).length;
   const workflowBridgeCrosscheck = rows.filter(function(r) { return r.handler === 'runCentralWorkflowBridgeCrosscheck10m'; }).length;
   const tabletRemotePhysical = rows.filter(function(r) { return r.handler === 'runCentralTabletRemoteDispatcherFromFactory'; }).length;
   const openAi5Physical = rows.filter(function(r) { return /^runOpenAi(5|Worker)/.test(r.handler); }).length;
   const daily800Physical = rows.filter(function(r) { return r.handler === 'runCentralDaily800W1W5AuditFromFactory_' || r.handler === 'runCentralDaily800W1W5AuditNow'; }).length;
   return {
-    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && centralSheetAudit <= 1 && workflowBridgeCrosscheck === 0 && tabletRemotePhysical === 0 && openAi5Physical === 0 && daily800Physical === 0,
-    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE_DAILY800_CWBX_TABLET_REMOTE_OPENAI5;NO_DAILY800_TABLET_REMOTE_OR_OPENAI5_DEDICATED_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
+    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && duplicateYouTubeSeed === 0 && centralSheetAudit <= 1 && workflowBridgeCrosscheck === 0 && tabletRemotePhysical === 0 && openAi5Physical === 0 && daily800Physical === 0,
+    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE_YOUTUBE_SEED_DAILY800_CWBX_TABLET_REMOTE_OPENAI5;NO_YOUTUBE_SEED_DAILY800_TABLET_REMOTE_OR_OPENAI5_DEDICATED_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
     unifiedTriggerCount: duplicateOwn,
     allAppPhysicalTriggerCount: duplicateAllApp,
     imageLearningPhysicalTriggerCount: duplicateImage,
     imageSupplyPhysicalTriggerCount: duplicateImageSupply,
     apiCredentialAuditPhysicalTriggerCount: duplicateApiAudit,
+    youtubeSeedPhysicalTriggerCount: duplicateYouTubeSeed,
     centralSheetAuditTriggerCount: centralSheetAudit,
     workflowBridgeCrosscheckPhysicalTriggerCount: workflowBridgeCrosscheck,
     tabletRemotePhysicalTriggerCount: tabletRemotePhysical,
     openAi5PhysicalTriggerCount: openAi5Physical,
     daily800W1W5PhysicalTriggerCount: daily800Physical,
+    youtubeSeedLogicalMinutes: 10,
     imageLearningLogicalMinutes: 10,
     imageSupplyLogicalMinutes: 10,
     apiCredentialAuditLogicalMinutes: 60,
