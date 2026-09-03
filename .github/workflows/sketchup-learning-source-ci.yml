@@ -84,10 +84,15 @@ jobs:
           orch='apps-script/Central_SketchUp_Learning_Orchestrator_20260903.gs'
           sched='apps-script/ContentOS_Unified_Scheduler.gs'
           grep -q 'runCentralSketchupLearningOrchestratorFromFactory' "$orch"
+          grep -q 'consumeCentralSketchupLearningReceiptsFromFactory' "$orch"
           grep -q 'ingestCentralSketchupLearningResult' "$orch"
           grep -q 'testCentralSketchupLearningQueueForceX2' "$orch"
+          grep -q 'CENTRAL_SKP_TASK_INBOX_FOLDER_ID' "$orch"
+          grep -q 'CENTRAL_SKP_RECEIPT_FOLDER_ID' "$orch"
+          grep -q 'SKP_LOCAL_TASK_V1' "$orch"
+          grep -q 'SKP_LOCAL_RESULT_RECEIPT_V1' "$orch"
           grep -q 'runCentralSketchupLearningOrchestratorFromFactory' "$sched"
-          grep -q 'CONTENTOS_UNIFIED_SCHEDULER_V20_SKETCHUP_LEARNING_20260903' "$sched"
+          grep -Eq 'CONTENTOS_UNIFIED_SCHEDULER_V2[0-9]_SKETCHUP_.*20260903' "$sched"
           if grep -Eq 'ScriptApp\.newTrigger|newTrigger\(' "$orch"; then
             echo 'Dedicated physical trigger creation is forbidden in SketchUp orchestrator' >&2
             exit 1
