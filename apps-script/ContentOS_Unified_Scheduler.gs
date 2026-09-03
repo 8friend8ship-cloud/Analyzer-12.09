@@ -1,14 +1,17 @@
-const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V18_DRIVE_ALL_FILE_SEED_20260903';
+const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V19_DRIVE_ALL_FILE_V4_CONTENT_QA_20260903';
 
 /**
  * Single logical entrypoint intended to be called by the already-installed
  * factory scheduler (for example processTaskQueue) after source sync.
  * It NEVER creates another physical trigger for pipeline stages.
  *
- * Drive all-file Seed ingestion is logical-only. It incrementally scans every
- * accessible Drive file in bounded batches, dedupes by FILE_ID+LAST_UPDATED,
- * classifies to Queens/Seed/template/bridge routes, writes canonical Drive
- * runtime evidence, and reuses the existing processTaskQueue wake only.
+ * Drive all-file processing is logical-only and two-stage:
+ * 1) V4 intake indexes every accessible Drive file/folder through 81/85/86 and
+ *    writes Queens evidence to 37 without metadata-only Seed promotion.
+ * 2) Content-QA promoter reads actual safe content where supported and promotes
+ *    only evidence/rights-passing rows to 35 Seed. Specialized binaries remain
+ *    route-pending instead of being silently dropped or misclassified.
+ * Both stages reuse the existing processTaskQueue wake and create no timer.
  *
  * DryWriter runtime config self-heal is logical-only. It reuses the existing
  * processTaskQueue wake, resolves the canonical Writer /exec URL from CONFIG
@@ -46,7 +49,8 @@ function contentOsUnifiedSchedulerTick() {
   };
 
   out.stages.daily800W1W5Audit = runOptionalContentOsStage_('runCentralDaily800W1W5AuditFromFactory_');
-  out.stages.driveAllFileSeedFactory = runOptionalContentOsStage_('runCentralDriveAllFileSeedFactoryFromFactory');
+  out.stages.driveAllFileIntakeV4 = runOptionalContentOsStage_('runCentralDriveAllFileIntakeV4FromFactory');
+  out.stages.driveAllFileContentQaSeed = runOptionalContentOsStage_('runCentralDriveAllFileContentQaSeedFromFactory');
   out.stages.dryWriterRuntimeConfig = runOptionalContentOsStage_('runContentOsDryWriterRuntimeConfigAutoHealFromFactory_');
   out.stages.pipeline = runOptionalContentOsStage_('contentOsPipelineTick');
   out.stages.queensBridge = runOptionalContentOsStage_('contentOsQueensBridgeTick');
@@ -78,7 +82,8 @@ function contentOsUnifiedSchedulerTick() {
 function runOptionalContentOsStage_(handlerName) {
   try {
     if (handlerName === 'runCentralDaily800W1W5AuditFromFactory_' && typeof runCentralDaily800W1W5AuditFromFactory_ === 'function') return runCentralDaily800W1W5AuditFromFactory_();
-    if (handlerName === 'runCentralDriveAllFileSeedFactoryFromFactory' && typeof runCentralDriveAllFileSeedFactoryFromFactory === 'function') return runCentralDriveAllFileSeedFactoryFromFactory();
+    if (handlerName === 'runCentralDriveAllFileIntakeV4FromFactory' && typeof runCentralDriveAllFileIntakeV4FromFactory === 'function') return runCentralDriveAllFileIntakeV4FromFactory();
+    if (handlerName === 'runCentralDriveAllFileContentQaSeedFromFactory' && typeof runCentralDriveAllFileContentQaSeedFromFactory === 'function') return runCentralDriveAllFileContentQaSeedFromFactory();
     if (handlerName === 'runContentOsDryWriterRuntimeConfigAutoHealFromFactory_' && typeof runContentOsDryWriterRuntimeConfigAutoHealFromFactory_ === 'function') return runContentOsDryWriterRuntimeConfigAutoHealFromFactory_();
     if (handlerName === 'contentOsPipelineTick' && typeof contentOsPipelineTick === 'function') return contentOsPipelineTick();
     if (handlerName === 'contentOsQueensBridgeTick' && typeof contentOsQueensBridgeTick === 'function') return contentOsQueensBridgeTick();
@@ -123,7 +128,12 @@ function auditContentOsTriggerContract() {
   }).length;
   const duplicateApiAudit = rows.filter(function(r) { return r.handler === 'runCentralApiCredentialUsageAuditHourly'; }).length;
   const duplicateYouTubeSeed = rows.filter(function(r) { return r.handler === 'youtubeSeedFactoryTick' || r.handler === 'runYouTubeSeedFactoryFromFactoryWake'; }).length;
-  const duplicateDriveAllFileSeed = rows.filter(function(r) { return r.handler === 'runCentralDriveAllFileSeedFactoryFromFactory' || r.handler === 'installCentralDriveAllFileSeedTrigger'; }).length;
+  const duplicateDriveAllFileSeed = rows.filter(function(r) {
+    return r.handler === 'runCentralDriveAllFileSeedFactoryFromFactory' ||
+      r.handler === 'runCentralDriveAllFileIntakeV4FromFactory' ||
+      r.handler === 'runCentralDriveAllFileContentQaSeedFromFactory' ||
+      r.handler === 'installCentralDriveAllFileSeedTrigger';
+  }).length;
   const centralSheetAudit = rows.filter(function(r) { return r.handler === 'runCentralSheetRuntimeAuditAutofix10m'; }).length;
   const workflowBridgeCrosscheck = rows.filter(function(r) { return r.handler === 'runCentralWorkflowBridgeCrosscheck10m'; }).length;
   const tabletRemotePhysical = rows.filter(function(r) { return r.handler === 'runCentralTabletRemoteDispatcherFromFactory'; }).length;
@@ -132,21 +142,22 @@ function auditContentOsTriggerContract() {
   const dryWriterConfigPhysical = rows.filter(function(r) { return r.handler === 'runContentOsDryWriterRuntimeConfigAutoHealFromFactory_'; }).length;
   return {
     ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && duplicateYouTubeSeed === 0 && duplicateDriveAllFileSeed === 0 && centralSheetAudit <= 1 && workflowBridgeCrosscheck === 0 && tabletRemotePhysical === 0 && openAi5Physical === 0 && daily800Physical === 0 && dryWriterConfigPhysical === 0,
-    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE_DRIVE_ALL_FILE_SEED_DRYWRITER_CONFIG_YOUTUBE_SEED_DAILY800_CWBX_TABLET_REMOTE_OPENAI5;NO_DRIVE_ALL_FILE_SEED_DRYWRITER_CONFIG_YOUTUBE_SEED_DAILY800_TABLET_REMOTE_OR_OPENAI5_DEDICATED_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
+    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE_DRIVE_ALL_FILE_V4_CONTENT_QA_DRYWRITER_CONFIG_YOUTUBE_SEED_DAILY800_CWBX_TABLET_REMOTE_OPENAI5;NO_DRIVE_ALL_FILE_DEDICATED_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
     unifiedTriggerCount: duplicateOwn,
     allAppPhysicalTriggerCount: duplicateAllApp,
     imageLearningPhysicalTriggerCount: duplicateImage,
     imageSupplyPhysicalTriggerCount: duplicateImageSupply,
     apiCredentialAuditPhysicalTriggerCount: duplicateApiAudit,
     youtubeSeedPhysicalTriggerCount: duplicateYouTubeSeed,
-    driveAllFileSeedPhysicalTriggerCount: duplicateDriveAllFileSeed,
+    driveAllFilePhysicalTriggerCount: duplicateDriveAllFileSeed,
     centralSheetAuditTriggerCount: centralSheetAudit,
     workflowBridgeCrosscheckPhysicalTriggerCount: workflowBridgeCrosscheck,
     tabletRemotePhysicalTriggerCount: tabletRemotePhysical,
     openAi5PhysicalTriggerCount: openAi5Physical,
     daily800W1W5PhysicalTriggerCount: daily800Physical,
     dryWriterConfigPhysicalTriggerCount: dryWriterConfigPhysical,
-    driveAllFileSeedLogicalMinutes: 5,
+    driveAllFileIntakeLogicalMinutes: 10,
+    driveAllFileContentQaLogicalMinutes: 10,
     dryWriterConfigLogicalMinutes: 10,
     youtubeSeedLogicalMinutes: 10,
     imageLearningLogicalMinutes: 10,
