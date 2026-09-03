@@ -1,4 +1,4 @@
-const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V19_DRIVE_ALL_FILE_V4_CONTENT_QA_20260903';
+const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V20_SKETCHUP_LEARNING_20260903';
 
 /**
  * Single logical entrypoint intended to be called by the already-installed
@@ -12,6 +12,12 @@ const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V19_DRI
  *    only evidence/rights-passing rows to 35 Seed. Specialized binaries remain
  *    route-pending instead of being silently dropped or misclassified.
  * Both stages reuse the existing processTaskQueue wake and create no timer.
+ *
+ * SketchUp learning is also logical-only. It consumes verified Drive/Queens SKP
+ * file IDs, queues the existing RUN-SKETCHUP-ASSET-001 local runner, and waits
+ * for native Ruby manifest + Python Seed/template receipts. It creates no timer,
+ * does not parse raw SKP bytes in Apps Script, and never promotes metadata-only
+ * rows to production Seeds.
  *
  * DryWriter runtime config self-heal is logical-only. It reuses the existing
  * processTaskQueue wake, resolves the canonical Writer /exec URL from CONFIG
@@ -51,6 +57,7 @@ function contentOsUnifiedSchedulerTick() {
   out.stages.daily800W1W5Audit = runOptionalContentOsStage_('runCentralDaily800W1W5AuditFromFactory_');
   out.stages.driveAllFileIntakeV4 = runOptionalContentOsStage_('runCentralDriveAllFileIntakeV4FromFactory');
   out.stages.driveAllFileContentQaSeed = runOptionalContentOsStage_('runCentralDriveAllFileContentQaSeedFromFactory');
+  out.stages.sketchupLearning = runOptionalContentOsStage_('runCentralSketchupLearningOrchestratorFromFactory');
   out.stages.dryWriterRuntimeConfig = runOptionalContentOsStage_('runContentOsDryWriterRuntimeConfigAutoHealFromFactory_');
   out.stages.pipeline = runOptionalContentOsStage_('contentOsPipelineTick');
   out.stages.queensBridge = runOptionalContentOsStage_('contentOsQueensBridgeTick');
@@ -84,6 +91,7 @@ function runOptionalContentOsStage_(handlerName) {
     if (handlerName === 'runCentralDaily800W1W5AuditFromFactory_' && typeof runCentralDaily800W1W5AuditFromFactory_ === 'function') return runCentralDaily800W1W5AuditFromFactory_();
     if (handlerName === 'runCentralDriveAllFileIntakeV4FromFactory' && typeof runCentralDriveAllFileIntakeV4FromFactory === 'function') return runCentralDriveAllFileIntakeV4FromFactory();
     if (handlerName === 'runCentralDriveAllFileContentQaSeedFromFactory' && typeof runCentralDriveAllFileContentQaSeedFromFactory === 'function') return runCentralDriveAllFileContentQaSeedFromFactory();
+    if (handlerName === 'runCentralSketchupLearningOrchestratorFromFactory' && typeof runCentralSketchupLearningOrchestratorFromFactory === 'function') return runCentralSketchupLearningOrchestratorFromFactory();
     if (handlerName === 'runContentOsDryWriterRuntimeConfigAutoHealFromFactory_' && typeof runContentOsDryWriterRuntimeConfigAutoHealFromFactory_ === 'function') return runContentOsDryWriterRuntimeConfigAutoHealFromFactory_();
     if (handlerName === 'contentOsPipelineTick' && typeof contentOsPipelineTick === 'function') return contentOsPipelineTick();
     if (handlerName === 'contentOsQueensBridgeTick' && typeof contentOsQueensBridgeTick === 'function') return contentOsQueensBridgeTick();
@@ -134,6 +142,10 @@ function auditContentOsTriggerContract() {
       r.handler === 'runCentralDriveAllFileContentQaSeedFromFactory' ||
       r.handler === 'installCentralDriveAllFileSeedTrigger';
   }).length;
+  const duplicateSketchupLearning = rows.filter(function(r) {
+    return r.handler === 'runCentralSketchupLearningOrchestratorFromFactory' ||
+      r.handler === 'ingestCentralSketchupLearningResult';
+  }).length;
   const centralSheetAudit = rows.filter(function(r) { return r.handler === 'runCentralSheetRuntimeAuditAutofix10m'; }).length;
   const workflowBridgeCrosscheck = rows.filter(function(r) { return r.handler === 'runCentralWorkflowBridgeCrosscheck10m'; }).length;
   const tabletRemotePhysical = rows.filter(function(r) { return r.handler === 'runCentralTabletRemoteDispatcherFromFactory'; }).length;
@@ -141,8 +153,8 @@ function auditContentOsTriggerContract() {
   const daily800Physical = rows.filter(function(r) { return r.handler === 'runCentralDaily800W1W5AuditFromFactory_' || r.handler === 'runCentralDaily800W1W5AuditNow'; }).length;
   const dryWriterConfigPhysical = rows.filter(function(r) { return r.handler === 'runContentOsDryWriterRuntimeConfigAutoHealFromFactory_'; }).length;
   return {
-    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && duplicateYouTubeSeed === 0 && duplicateDriveAllFileSeed === 0 && centralSheetAudit <= 1 && workflowBridgeCrosscheck === 0 && tabletRemotePhysical === 0 && openAi5Physical === 0 && daily800Physical === 0 && dryWriterConfigPhysical === 0,
-    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE_DRIVE_ALL_FILE_V4_CONTENT_QA_DRYWRITER_CONFIG_YOUTUBE_SEED_DAILY800_CWBX_TABLET_REMOTE_OPENAI5;NO_DRIVE_ALL_FILE_DEDICATED_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
+    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && duplicateYouTubeSeed === 0 && duplicateDriveAllFileSeed === 0 && duplicateSketchupLearning === 0 && centralSheetAudit <= 1 && workflowBridgeCrosscheck === 0 && tabletRemotePhysical === 0 && openAi5Physical === 0 && daily800Physical === 0 && dryWriterConfigPhysical === 0,
+    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE_DRIVE_ALL_FILE_V4_CONTENT_QA_SKETCHUP_LEARNING_DRYWRITER_CONFIG_YOUTUBE_SEED_DAILY800_CWBX_TABLET_REMOTE_OPENAI5;NO_SKETCHUP_DEDICATED_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
     unifiedTriggerCount: duplicateOwn,
     allAppPhysicalTriggerCount: duplicateAllApp,
     imageLearningPhysicalTriggerCount: duplicateImage,
@@ -150,6 +162,7 @@ function auditContentOsTriggerContract() {
     apiCredentialAuditPhysicalTriggerCount: duplicateApiAudit,
     youtubeSeedPhysicalTriggerCount: duplicateYouTubeSeed,
     driveAllFilePhysicalTriggerCount: duplicateDriveAllFileSeed,
+    sketchupLearningPhysicalTriggerCount: duplicateSketchupLearning,
     centralSheetAuditTriggerCount: centralSheetAudit,
     workflowBridgeCrosscheckPhysicalTriggerCount: workflowBridgeCrosscheck,
     tabletRemotePhysicalTriggerCount: tabletRemotePhysical,
@@ -158,6 +171,7 @@ function auditContentOsTriggerContract() {
     dryWriterConfigPhysicalTriggerCount: dryWriterConfigPhysical,
     driveAllFileIntakeLogicalMinutes: 10,
     driveAllFileContentQaLogicalMinutes: 10,
+    sketchupLearningLogicalMinutes: 10,
     dryWriterConfigLogicalMinutes: 10,
     youtubeSeedLogicalMinutes: 10,
     imageLearningLogicalMinutes: 10,
