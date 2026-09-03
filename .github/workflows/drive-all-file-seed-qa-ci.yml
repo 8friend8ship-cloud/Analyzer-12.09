@@ -27,15 +27,24 @@ jobs:
         run: |
           set -euo pipefail
           f='apps-script/Central_Drive_All_File_Seed_Factory_20260903.gs'
-          grep -q "CENTRAL_DRIVE_ALL_FILE_SEED_V2_QA_GATE_20260903" "$f"
+          grep -q "CENTRAL_DRIVE_ALL_FILE_SEED_V3_QUEENS_FIRST_QA_20260903" "$f"
+          grep -q "37_QUEENS_RESEARCH_RESULTS" "$f"
           grep -q "QUEENS_TASK_ID" "$f"
           grep -q "QA_PENDING_CONTENT_EXTRACTION" "$f"
           grep -q "data_stage:'QUEENS'" "$f"
-          grep -q "seedPromoted: 0" "$f"
+          grep -q "seedPromoted:0" "$f"
           grep -q "CONTENT_EVIDENCE_AND_QA_REQUIRED" "$f"
           grep -q "NO_NEW_PHYSICAL_TRIGGER_REUSE_PROCESS_TASK_QUEUE" "$f"
-          if grep -q "35_INTERNAL_SEED_REGISTRY" "$f"; then
-            echo 'Direct Seed registry write regression detected'
+          if grep -q "getSheetByName(['\"]35_INTERNAL_SEED_REGISTRY['\"]" "$f"; then
+            echo 'Direct Seed registry sheet binding regression detected'
+            exit 1
+          fi
+          if grep -q "upsertSeedBestEffort_" "$f"; then
+            echo 'Direct Seed upsert regression detected'
+            exit 1
+          fi
+          if grep -q "data_stage:'SEED'" "$f"; then
+            echo 'Metadata-only Seed event regression detected'
             exit 1
           fi
           if grep -q "AUTO_ROUTE_T1" "$f"; then
