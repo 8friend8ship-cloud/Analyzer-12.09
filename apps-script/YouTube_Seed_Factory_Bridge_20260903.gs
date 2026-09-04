@@ -9,7 +9,7 @@ const YT_SEED_FACTORY_MAX_PROMOTIONS_PER_RUN = 10;
  * Called by ContentOS_Unified_Scheduler from the existing processTaskQueue wake.
  * Never creates a trigger, project, deployment, or OAuth grant.
  */
-function youtubeSeedFactoryTick() {
+function youtubeSeedToAnalyzerBridgeTick() {
   const scriptId = String(ScriptApp.getScriptId() || '');
   if (scriptId !== YT_SEED_FACTORY_EXPECTED_SCRIPT_ID) {
     return {
@@ -216,7 +216,7 @@ function ytSeedFactoryPromoteFreshVideoSeeds_(source, factory, maxPromotions) {
     if (!existingTaskKeys[idempotencyKey]) {
       const taskId = 'TASK_YTSEED_' + Utilities.getUuid();
       const payload = {
-        source: 'youtubeSeedFactoryTick',
+        source: 'youtubeSeedToAnalyzerBridgeTick',
         source_id: sourceId,
         video_seed_id: videoSeedId,
         upstream_source_id: upstreamSourceId,
@@ -246,7 +246,7 @@ function ytSeedFactoryQueueRepairCycle_(factory, reason) {
     }
   }
   const taskId = 'TASK_YTSEED_REPAIR_' + Utilities.getUuid();
-  const payload = {source: 'youtubeSeedFactoryTick', repair_reason: reason || 'repair', bridge_version: YT_SEED_FACTORY_BRIDGE_VERSION};
+  const payload = {source: 'youtubeSeedToAnalyzerBridgeTick', repair_reason: reason || 'repair', bridge_version: YT_SEED_FACTORY_BRIDGE_VERSION};
   tasks.appendRow([taskId, 'APP_ANALYZER', 'FACTORY_CYCLE', JSON.stringify(payload), 'QUEUED', 1, now.toISOString(), '', '', 0, '', '', key]);
   return {ok: true, taskId: taskId, idempotencyKey: key, status: 'QUEUED'};
 }
@@ -261,7 +261,7 @@ function inspectYoutubeSeedFactoryBridge() {
     expectedScriptId: YT_SEED_FACTORY_EXPECTED_SCRIPT_ID,
     guard: guard,
     processTaskQueueTriggerCount: ScriptApp.getProjectTriggers().filter(function(t) { return t.getHandlerFunction() === 'processTaskQueue'; }).length,
-    youtubeSeedPhysicalTriggerCount: ScriptApp.getProjectTriggers().filter(function(t) { return t.getHandlerFunction() === 'youtubeSeedFactoryTick'; }).length,
+    youtubeSeedBridgePhysicalTriggerCount: ScriptApp.getProjectTriggers().filter(function(t) { return t.getHandlerFunction() === 'youtubeSeedToAnalyzerBridgeTick'; }).length,
     at: new Date().toISOString()
   };
 }
