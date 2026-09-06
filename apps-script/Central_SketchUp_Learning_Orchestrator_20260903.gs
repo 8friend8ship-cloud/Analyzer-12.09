@@ -1,4 +1,4 @@
-const CENTRAL_SKP_LEARNING_VERSION = 'CENTRAL_SKP_LEARNING_ORCHESTRATOR_V1_1_DRIVE_STAGING_20260903';
+const CENTRAL_SKP_LEARNING_VERSION = 'CENTRAL_SKP_LEARNING_ORCHESTRATOR_V1_2_NATIVE_V2_NIGHT_IDLE_20260906';
 const CENTRAL_SKP_MASTER_SHEET_ID = '1C_CznU1Uo7dk-gKay3-oH8wFxutsGMlz27RSrbdVQwI';
 const CENTRAL_SKP_QUEENS_TASK_ID = 'Q_SKETCHUP_FILE_QUEENS_20260903';
 const CENTRAL_SKP_RUNNER_ID = 'RUN-SKETCHUP-ASSET-001';
@@ -6,6 +6,7 @@ const CENTRAL_SKP_TASK_INBOX_FOLDER_ID = '1fNBh9hSGoQN8KctMTSwdCfk50Pw0NkV5';
 const CENTRAL_SKP_NATIVE_EXPORT_FOLDER_ID = '1v11S6csbFbq3aY7Vc8Ei0Lt0vVF8zm3z';
 const CENTRAL_SKP_SEED_BUNDLE_FOLDER_ID = '1gfm6NyvERCHrJSCIH-bWJe-X3LZMD-sG';
 const CENTRAL_SKP_RECEIPT_FOLDER_ID = '1hSvEJlEOBiEPtcIYzSRhzqtL3l10dQhO';
+const CENTRAL_SKP_RAW_ROOT_IDS = ['13jytaLEtyofBebT1qtJMpreNgWSsrIMQ','19uK6l77kv1U95saj2qVQjs10-xH_Wt4C'];
 
 /**
  * Logical-only stage. Reuses the already-installed processTaskQueue wake through
@@ -160,6 +161,33 @@ function runCentralSketchupLearningOrchestratorFromFactory(forceRun) {
  * A receipt alone never makes a production Seed; ingestCentral... still requires
  * finalQaPass + driveReadbackX2 for promotion to central 35.
  */
+function runCentralSketchupNightWindowFromFactory(forceRun) {
+  const now = new Date();
+  const hour = Number(Utilities.formatDate(now, 'Asia/Seoul', 'H'));
+  if (!forceRun && !(hour >= 0 && hour < 7)) {
+    return {ok:true, skipped:true, reason:'OUTSIDE_NIGHT_WINDOW_00_07_KST', hourKst:hour, version:CENTRAL_SKP_LEARNING_VERSION};
+  }
+  const ss = SpreadsheetApp.openById(CENTRAL_SKP_MASTER_SHEET_ID);
+  const queue = requireSkpSheet_(ss, '07_EXECUTION_QUEUE');
+  if (!forceRun && skpHasOtherActiveWork_(queue)) {
+    return {ok:true, skipped:true, reason:'OTHER_ACTIVE_WORK_PRESENT', version:CENTRAL_SKP_LEARNING_VERSION};
+  }
+  const queued = runCentralSketchupLearningOrchestratorFromFactory(forceRun === true);
+  const receipts = consumeCentralSketchupLearningReceiptsFromFactory(forceRun === true);
+  return {ok:queued.ok !== false && receipts.ok !== false, queued:queued, receipts:receipts, nightWindow:'00:00-07:00 KST', idleGate:true, version:CENTRAL_SKP_LEARNING_VERSION};
+}
+
+function skpHasOtherActiveWork_(queue) {
+  if (!queue || queue.getLastRow() < 2) return false;
+  const values = queue.getRange(2, 1, queue.getLastRow() - 1, Math.min(20, queue.getLastColumn())).getDisplayValues();
+  return values.some(function(r) {
+    const taskType = String(r[2] || '');
+    const status = String(r[8] || '').toUpperCase();
+    if (/SKETCHUP_LOCAL_ANALYSIS/.test(taskType)) return false;
+    return /^(RUNNING|IN_PROGRESS|CLAIMED|EXECUTING|PROCESSING)$/.test(status);
+  });
+}
+
 function consumeCentralSketchupLearningReceiptsFromFactory(forceRun) {
   const props = PropertiesService.getScriptProperties();
   const lastKey = 'CENTRAL_SKP_RECEIPT_SCAN_LAST_RUN_MS';
@@ -190,11 +218,17 @@ function consumeCentralSketchupLearningReceiptsFromFactory(forceRun) {
 
     try {
       const receipt = JSON.parse(file.getBlob().getDataAsString('UTF-8'));
-      if (receipt.schema_version !== 'SKP_LOCAL_RESULT_RECEIPT_V1') {
-        throw new Error('INVALID_RECEIPT_SCHEMA');
+      const allowedReceiptSchemas = ['SKP_LOCAL_RESULT_RECEIPT_V1','SKP_LOCAL_RESULT_RECEIPT_V2_NATIVE'];
+      if (allowedReceiptSchemas.indexOf(String(receipt.schema_version || '')) < 0) {
+        throw new Error('INVALID_RECEIPT_SCHEMA:' + String(receipt.schema_version || ''));
       }
-      if (!/^TASK_SKP_LEARN_[A-F0-9]+$/i.test(String(receipt.task_id || ''))) {
+      if (!/^TASK_SKP_(?:LEARN|NIGHT)_[A-F0-9]+$/i.test(String(receipt.task_id || ''))) {
         throw new Error('INVALID_TASK_ID');
+      }
+      if ((!receipt.file_id || /^LOCAL_PENDING/i.test(String(receipt.file_id))) && receipt.source_file_name) {
+        const resolved = resolveSkpReceiptFileId_(receipt);
+        if (!resolved.fileId) throw new Error('SOURCE_FILE_ID_RESOLVE_' + resolved.status);
+        receipt.file_id = resolved.fileId;
       }
       if (!receipt.file_id || !receipt.model_id) throw new Error('MISSING_RECEIPT_IDENTITY');
 
@@ -204,6 +238,8 @@ function consumeCentralSketchupLearningReceiptsFromFactory(forceRun) {
 
       const manifest = JSON.parse(manifestFile.getBlob().getDataAsString('UTF-8'));
       const seedBundle = JSON.parse(seedFile.getBlob().getDataAsString('UTF-8'));
+      if (!/^SKP_MODEL_MANIFEST_V(?:1|2)/.test(String(manifest.schema_version || ''))) throw new Error('INVALID_MANIFEST_SCHEMA');
+      if (String(seedBundle.schema_version || '') !== 'SKP_SEED_BUNDLE_V1') throw new Error('INVALID_SEED_BUNDLE_SCHEMA');
       const templateFile = receipt.template_payload_file_name
         ? findSkpFileInFolder_(CENTRAL_SKP_SEED_BUNDLE_FOLDER_ID, receipt.template_payload_file_name)
         : null;
@@ -217,7 +253,7 @@ function consumeCentralSketchupLearningReceiptsFromFactory(forceRun) {
         projectId:receipt.project_id || '',
         canonicalGroup:receipt.canonical_group || '',
         versionRole:receipt.version_role || '',
-        skpVersion:receipt.skp_version || '',
+        skpVersion:receipt.skp_version || receipt.skp_runtime || '',
         manifest:manifest,
         seedBundle:seedBundle,
         receipt:receipt,
@@ -229,7 +265,7 @@ function consumeCentralSketchupLearningReceiptsFromFactory(forceRun) {
         outputHash:receipt.output_hash || '',
         retryCount:Number(receipt.retry_count || 0),
         finalQaPass:receipt.final_qa_pass === true,
-        driveReadbackX2:receipt.drive_readback_x2 === true
+        driveReadbackX2:receipt.drive_readback_x2 === true || receipt.local_mount_readback === true
       });
 
       if (!ingest || ingest.ok !== true) throw new Error('INGEST_FAILED:' + JSON.stringify(ingest || {}));
@@ -474,6 +510,52 @@ function writeSkpDriveTaskFile_(task) {
   };
   const file = folder.createFile(fileName, JSON.stringify(payload, null, 2), MimeType.PLAIN_TEXT);
   return {created:true, fileId:file.getId(), fileName:fileName};
+}
+
+function resolveSkpReceiptFileId_(receipt) {
+  const name = String(receipt.source_file_name || '');
+  if (!name) return {fileId:'', status:'NO_SOURCE_NAME'};
+  const expectedSize = Number(receipt.source_size || 0);
+  const expectedModified = receipt.source_modified ? new Date(receipt.source_modified).getTime() : 0;
+  const rootId = String(receipt.source_root_id || '');
+  if (rootId && CENTRAL_SKP_RAW_ROOT_IDS.indexOf(rootId) < 0) return {fileId:'', status:'UNAPPROVED_ROOT'};
+  const files = DriveApp.getFilesByName(name);
+  const candidates = [];
+  while (files.hasNext() && candidates.length < 10) {
+    const f = files.next();
+    if (expectedSize && Number(f.getSize()) !== expectedSize) continue;
+    if (expectedModified) {
+      const delta = Math.abs(f.getLastUpdated().getTime() - expectedModified);
+      if (delta > 5 * 60 * 1000) continue;
+    }
+    if (rootId && !skpFileIsUnderRoot_(f, rootId)) continue;
+    candidates.push(f);
+  }
+  if (candidates.length === 1) return {fileId:candidates[0].getId(), status:'RESOLVED_EXACT'};
+  return {fileId:'', status:candidates.length ? 'AMBIGUOUS_' + candidates.length : 'NOT_FOUND'};
+}
+
+function skpFileIsUnderRoot_(file, rootId) {
+  let frontier = [];
+  const parents = file.getParents();
+  while (parents.hasNext()) frontier.push(parents.next());
+  const seen = {};
+  let depth = 0;
+  while (frontier.length && depth < 32) {
+    const next = [];
+    for (let i = 0; i < frontier.length; i++) {
+      const folder = frontier[i];
+      const id = folder.getId();
+      if (id === rootId) return true;
+      if (seen[id]) continue;
+      seen[id] = true;
+      const p = folder.getParents();
+      while (p.hasNext()) next.push(p.next());
+    }
+    frontier = next;
+    depth++;
+  }
+  return false;
 }
 
 function findSkpFileInFolder_(folderId, fileName) {
