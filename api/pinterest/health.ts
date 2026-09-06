@@ -4,7 +4,7 @@ import {
   resolvePinterestUrl
 } from "./_core.js";
 
-export default async function handler(_req: any, res: any) {
+export default async function handler(req: any, res: any) {
   try {
     const canonical = canonicalizePinterestUrl("https://www.pinterest.com/pin/123/?utm_source=test#x");
     const regional = canonicalizePinterestUrl("https://kr.pinterest.com/pin/456/?utm_source=test");
@@ -35,13 +35,17 @@ export default async function handler(_req: any, res: any) {
       pipeline: ["RAW", "SEED_CANDIDATE", "QUEENS_CANDIDATE"].includes(sample.pipelineStage)
     };
     const ok = Object.values(checks).every(Boolean);
+    const resolveUrl = String(req.query?.resolveUrl || "").trim();
+    const liveResolution = resolveUrl ? await resolvePinterestUrl(resolveUrl) : null;
+
     res.status(ok ? 200 : 500).json({
       ok,
       bridge: "PINTEREST_CONTENT_HUB",
-      version: "1.1.0",
+      version: "1.1.1",
       mode: process.env.PINTEREST_ACCESS_TOKEN ? "API_READY" : "METADATA_ONLY",
       centralHub: process.env.CONTENT_OS_PINTEREST_INGEST_URL ? "CONFIGURED" : "NOT_CONFIGURED",
       shortlinkResolver: "PIN_IT_TO_API_REDIRECT_TO_CANONICAL_PIN",
+      liveResolution,
       checks
     });
   } catch (error: any) {
