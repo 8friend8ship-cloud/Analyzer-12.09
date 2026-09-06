@@ -1,4 +1,32 @@
-const PINTEREST_HOSTS = new Set(["pinterest.com", "www.pinterest.com", "pin.it"]);
+const PINTEREST_HOSTS = new Set([
+  "pinterest.com",
+  "www.pinterest.com",
+  "pin.it",
+  "pinterest.co.kr",
+  "www.pinterest.co.kr"
+]);
+
+function isSupportedPinterestHost(host: string): boolean {
+  return PINTEREST_HOSTS.has(host) || host.endsWith(".pinterest.com");
+}
+
+function extractPinIdFromUrl(input: string): string {
+  try {
+    return new URL(input).pathname.match(/\/pin\/(\d+)/)?.[1] || "";
+  } catch {
+    return "";
+  }
+}
+
+export type PinterestUrlResolution = {
+  sourceUrl: string;
+  resolverUrl: string;
+  resolvedUrl: string;
+  canonicalUrl: string;
+  pinId: string;
+  redirectStatus: number | null;
+  usedShortlinkResolver: boolean;
+};
 
 export type PinterestRecord = {
   platform: "PINTEREST";
@@ -22,13 +50,82 @@ export type PinterestRecord = {
 export function canonicalizePinterestUrl(input: string): string {
   const url = new URL(input);
   const host = url.hostname.toLowerCase();
-  if (!PINTEREST_HOSTS.has(host)) throw new Error("UNSUPPORTED_PINTEREST_HOST");
+  if (!isSupportedPinterestHost(host)) throw new Error("UNSUPPORTED_PINTEREST_HOST");
   url.protocol = "https:";
   url.hash = "";
   url.search = "";
   url.hostname = host === "pin.it" ? "pin.it" : "www.pinterest.com";
   url.pathname = url.pathname.replace(/\/{2,}/g, "/").replace(/\/$/, "") || "/";
   return url.toString();
+}
+
+export async function resolvePinterestUrl(
+  input: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<PinterestUrlResolution> {
+  const sourceUrl = String(input || "").trim();
+  if (!sourceUrl) throw new Error("SOURCE_URL_REQUIRED");
+  const parsed = new URL(sourceUrl);
+  const host = parsed.hostname.toLowerCase();
+  if (!isSupportedPinterestHost(host)) throw new Error("UNSUPPORTED_PINTEREST_HOST");
+
+  if (host !== "pin.it") {
+    const canonicalUrl = canonicalizePinterestUrl(sourceUrl);
+    return {
+      sourceUrl,
+      resolverUrl: "",
+      resolvedUrl: canonicalUrl,
+      canonicalUrl,
+      pinId: extractPinIdFromUrl(canonicalUrl),
+      redirectStatus: null,
+      usedShortlinkResolver: false
+    };
+  }
+
+  const shortCode = parsed.pathname.split("/").filter(Boolean)[0] || "";
+  if (!/^[A-Za-z0-9_-]+$/.test(shortCode)) throw new Error("INVALID_PINTEREST_SHORTLINK");
+  const resolverUrl = `https://api.pinterest.com/url_shortener/${encodeURIComponent(shortCode)}/redirect/`;
+  const requestRedirect = async (method: "HEAD" | "GET") => {
+    return fetchImpl(resolverUrl, {
+      method,
+      redirect: "manual",
+      headers: {
+        accept: "text/html,application/xhtml+xml,*/*;q=0.8",
+        "user-agent": "ContentOS-Pinterest-Resolver/1.1"
+      }
+    });
+  };
+
+  let response;
+  try {
+    response = await requestRedirect("HEAD");
+  } catch {
+    response = await requestRedirect("GET");
+  }
+
+  let location = response.headers.get("location");
+  if (!location) {
+    response = await requestRedirect("GET");
+    location = response.headers.get("location");
+  }
+  if (!location) throw new Error(`PINTEREST_SHORTLINK_RESOLVE_${response.status}`);
+
+  const resolvedUrl = new URL(location, resolverUrl).toString();
+  const resolvedHost = new URL(resolvedUrl).hostname.toLowerCase();
+  if (!isSupportedPinterestHost(resolvedHost)) throw new Error("PINTEREST_SHORTLINK_UNTRUSTED_REDIRECT");
+
+  const pinId = extractPinIdFromUrl(resolvedUrl);
+  if (!pinId) throw new Error("PINTEREST_SHORTLINK_NOT_PIN");
+  const canonicalUrl = `https://www.pinterest.com/pin/${pinId}`;
+  return {
+    sourceUrl,
+    resolverUrl,
+    resolvedUrl,
+    canonicalUrl,
+    pinId,
+    redirectStatus: response.status,
+    usedShortlinkResolver: true
+  };
 }
 
 export function scorePipeline(record: Pick<PinterestRecord, "title" | "description" | "keywords" | "rights">) {
@@ -44,8 +141,10 @@ export function scorePipeline(record: Pick<PinterestRecord, "title" | "descripti
 export function normalizePinterestRecord(body: any): PinterestRecord {
   const sourceUrl = String(body.sourceUrl || body.link || "").trim();
   if (!sourceUrl) throw new Error("SOURCE_URL_REQUIRED");
-  const canonicalUrl = canonicalizePinterestUrl(sourceUrl);
-  const pinId = String(body.pinId || body.id || canonicalUrl.match(/\/pin\/(\d+)/)?.[1] || "").trim();
+  const canonicalUrl = body.canonicalUrl
+    ? canonicalizePinterestUrl(String(body.canonicalUrl))
+    : canonicalizePinterestUrl(sourceUrl);
+  const pinId = String(body.pinId || body.id || extractPinIdFromUrl(canonicalUrl) || "").trim();
   const keywordValues: unknown[] = Array.isArray(body.keywords)
     ? body.keywords
     : String(body.keywords || "").split(",");
