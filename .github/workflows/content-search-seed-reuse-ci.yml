@@ -1,0 +1,38 @@
+name: Content Search Seed Reuse CI
+
+on:
+  push:
+    branches:
+      - fix/content-search-seed-reuse-prodline-20260830
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Verify Seed reuse contract
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const index = fs.readFileSync('api/verified-seed-reuse.ts', 'utf8');
+          const route = fs.readFileSync('api/content-search.ts', 'utf8');
+          for (const token of ['SEED_CONTENTOS_DUBAI_CHEWY_COOKIE_20260821_001','두바이 쫀득 쿠키','두바이쫀쿠티','두쫀쿠','FRONT_SCRIPT_FEATURE_PACKAGE_DUBAI_CHEWY_COOKIE_V1']) {
+            if (!index.includes(token)) throw new Error(`missing verified Seed token: ${token}`);
+          }
+          if (!route.includes("findVerifiedSeedReuse(normalized)")) throw new Error('Seed reuse check missing');
+          if (!route.includes("sourceMode:'VERIFIED_SEED_REUSE'")) throw new Error('Seed reuse source mode missing');
+          const reusePos = route.indexOf('findVerifiedSeedReuse(normalized)');
+          const upstreamPos = route.indexOf('const upstream=await callUpstream(params)');
+          if (reusePos < 0 || upstreamPos < 0 || reusePos > upstreamPos) throw new Error('Seed reuse must precede upstream/Queens');
+          if (!route.includes('Queens refresh is not required for this query.')) throw new Error('no-recollection contract missing');
+          console.log('production-lineage Seed reuse contract PASS');
+          NODE
+      - name: Install
+        run: npm install
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
