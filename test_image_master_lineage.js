@@ -1,0 +1,15 @@
+import fs from 'fs'; import assert from 'assert'; import crypto from 'crypto';
+const src=fs.readFileSync('./apps-script/Central_Image_Queens_Seed_AutoLearn_V2.gs','utf8');
+const m=src.match(/function normalizeImagePackMasterLineageV1_\(\)\{[\s\S]*?(?=\nfunction )/); assert(m,'function missing');
+const header=['IMAGE_PACK_ID','PACK_VERSION','STATUS','SOURCE_TYPE','USAGE_ROLE','LICENSE_STATUS','EDIT_MODE','VERIFIED','RUN_ID','RESULT_ID','ACK_ID','DEDUPE_KEY','PARENT_TEMPLATE_ID','FIX_SIGNATURE'];
+const rows=[header,['PACK_A','v1','ACTIVE_INTERNAL_TEMPLATE','OWNED','INTERNAL','OWNED','generate','Y','','','','','',''],['PACK_B','v1','HOLD_IMAGE_WORKER_RUNTIME_BIND','AI_GENERATED','EDITABLE','OWNED','edit','N','','','','','','']];
+const sheet={getDataRange:()=>({getValues:()=>rows}),getLastRow:()=>rows.length};
+globalThis.IMAGE_LEARNING_TABS={MASTER:'IMAGE_PACK_MASTER'}; globalThis.IMAGE_LEARNING_V2_VERSION='TEST_V412';
+globalThis.imgPackSheetV2_=()=>sheet; globalThis.imgIndexV2_=(h)=>Object.fromEntries(h.map((x,i)=>[x,i]));
+globalThis.imgSha256V2_=(s)=>crypto.createHash('sha256').update(s).digest('hex');
+globalThis.imgSetV2_=(_s,row,i,p)=>{for(const [k,v] of Object.entries(p)) rows[row-1][i[k]]=v;};
+const fn=eval('('+m[0]+')'); const a=fn(); const snapshot=JSON.stringify(rows); const b=fn();
+assert.equal(a.ok,true); assert.equal(a.schemaRealityChecked,true); assert.equal(a.activeCount,1); assert.equal(a.holdCount,1); assert.equal(a.dedupeStable,true);
+assert.equal(rows[1][6],'generate'); assert.equal(rows[1][7],'Y'); assert.equal(rows[2][6],'edit'); assert.equal(rows[2][7],'N');
+assert.equal(rows[2][13],'PACK_STATUS_HOLD_IMAGE_WORKER_RUNTIME_BIND'); assert.equal(snapshot,JSON.stringify(rows)); assert.equal(b.ok,true);
+console.log('IMAGE_MASTER_SCHEMA_REALITY_X2_PASS',JSON.stringify({a,b,editMode:rows[1][6],verified:rows[1][7],holdFix:rows[2][13]}));
