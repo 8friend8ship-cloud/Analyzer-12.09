@@ -62,6 +62,11 @@ function youtubeFrontAppTrend30dRun_(opt) {
 
     lanes.forEach(function(lane){
       var query = frontTrendQueryForLane_(lane);
+      var cached = opt.force ? null : frontTrendReadCachedLane_(trend,lane,query,now);
+      if (cached && cached.count >= 5) {
+        results.push({laneKey:lane.key,appId:lane.appId,frontName:lane.frontName,channel:lane.channelHandle||'',query:query,ok:true,count:cached.count,written:0,duplicates:cached.count,topStyles:cached.topStyles,videoIds:cached.videoIds,source:'CENTRAL_62_CACHE',searchQueryCalls:0,coreUnits:0});
+        return;
+      }
       var live = frontTrendSearchYouTube_(query,publishedAfter,YT_FRONT_TREND30D_RESULTS_PER_LANE,now);
       totalSearch += Number(live.searchQueryCalls||0);
       totalCore += Number(live.coreUnits||0);
@@ -83,7 +88,7 @@ function youtubeFrontAppTrend30dRun_(opt) {
       if (opt.write!==false && live.items.length) frontTrendAppendEvolutionCandidate_(evo,dateKey,lane,query,live,topStyles);
       results.push({laneKey:lane.key,appId:lane.appId,frontName:lane.frontName,channel:lane.channelHandle||'',query:query,ok:true,count:live.items.length,written:laneWritten,duplicates:laneDup,topStyles:topStyles,videoIds:ids.sort(),source:live.source,searchQueryCalls:live.searchQueryCalls||0,coreUnits:live.coreUnits||0});
     });
-    return {ok:results.some(function(r){return r.ok;}),runId:'RUN_YT_FRONT_TREND30D_'+Utilities.formatDate(now,'Asia/Seoul','yyyyMMdd_HHmmss'),publishedAfter:publishedAfter,laneCount:lanes.length,totalWritten:totalWritten,duplicates:totalDup,searchQueryCalls:totalSearch,coreUnits:totalCore,quotaTelemetry:'SEPARATE_SEARCH_QUERY_CALLS_AND_CORE_UNITS',rights:'REFERENCE_ONLY_METADATA_NO_SOURCE_MEDIA_COPY',metricGuard:'PUBLIC_VIEW_POST_20260824_ONLY_FOR_RAW_VELOCITY',results:results,physicalTriggerCreated:false,version:YT_FRONT_TREND30D_VERSION};
+    return {ok:results.length>0&&results.every(function(r){return r.ok;}),degraded:results.some(function(r){return !r.ok;}),runId:'RUN_YT_FRONT_TREND30D_'+Utilities.formatDate(now,'Asia/Seoul','yyyyMMdd_HHmmss'),publishedAfter:publishedAfter,laneCount:lanes.length,totalWritten:totalWritten,duplicates:totalDup,searchQueryCalls:totalSearch,coreUnits:totalCore,quotaTelemetry:'SEPARATE_SEARCH_QUERY_CALLS_AND_CORE_UNITS',rights:'REFERENCE_ONLY_METADATA_NO_SOURCE_MEDIA_COPY',metricGuard:'PUBLIC_VIEW_POST_20260824_ONLY_FOR_RAW_VELOCITY',results:results,physicalTriggerCreated:false,version:YT_FRONT_TREND30D_VERSION};
   } catch(err) {
     return {ok:false,error:String(err&&err.message||err),physicalTriggerCreated:false,version:YT_FRONT_TREND30D_VERSION};
   } finally {lock.releaseLock();}
@@ -146,21 +151,23 @@ function frontTrendQueryForLane_(lane) {
 
 function frontTrendSearchYouTube_(query,publishedAfter,limit,now) {
   var dateKey=Utilities.formatDate(now,'Asia/Seoul','yyyyMMdd'),props=PropertiesService.getScriptProperties();
-  var reserved=frontTrendReserveQuota_(props,dateKey,1,1);
+  var reserved=frontTrendReserveQuota_(props,dateKey,1,0);
   if(!reserved.ok) return {ok:false,error:reserved.error,searchQueryCalls:0,coreUnits:0,source:'QUOTA_GUARD'};
   try {
     if(typeof YouTube!=='undefined'&&YouTube.Search&&YouTube.Videos) {
       var s=YouTube.Search.list('id,snippet',{q:query,type:'video',order:'viewCount',maxResults:Number(limit||10),publishedAfter:publishedAfter,regionCode:'KR',relevanceLanguage:'ko'});
       var ids=(s.items||[]).map(function(x){return x&&x.id&&x.id.videoId;}).filter(String);
       if(!ids.length) return {ok:true,items:[],source:'YOUTUBE_ADVANCED_SERVICE',searchQueryCalls:1,coreUnits:0};
+      var core=frontTrendReserveQuota_(props,dateKey,0,1);
+      if(!core.ok) return {ok:false,error:core.error,source:'QUOTA_GUARD',searchQueryCalls:1,coreUnits:0};
       var d=YouTube.Videos.list('id,snippet,statistics,contentDetails,status',{id:ids.join(',')});
       return {ok:true,items:frontTrendNormalizeVideoItems_(d.items||[]),source:'YOUTUBE_ADVANCED_SERVICE',searchQueryCalls:1,coreUnits:1};
     }
-    return frontTrendServerProxySearch_(query,publishedAfter,limit);
+    return frontTrendServerProxySearch_(query,publishedAfter,limit,props,dateKey);
   } catch(err) {return {ok:false,error:'YT30D_EXCEPTION:'+String(err&&err.message||err),source:'YOUTUBE_ADVANCED_SERVICE',searchQueryCalls:1,coreUnits:0};}
 }
 
-function frontTrendServerProxySearch_(query,publishedAfter,limit) {
+function frontTrendServerProxySearch_(query,publishedAfter,limit,props,dateKey) {
   var base=(typeof CONTENTOS_API_AB_SERVER_PROXY_BASE!=='undefined'&&CONTENTOS_API_AB_SERVER_PROXY_BASE)?CONTENTOS_API_AB_SERVER_PROXY_BASE:'https://contents-os.com/api/youtube-proxy';
   try {
     var u=base+'?endpoint=search&part=id%2Csnippet&type=video&order=viewCount&maxResults='+encodeURIComponent(String(limit||10))+'&publishedAfter='+encodeURIComponent(publishedAfter)+'&regionCode=KR&relevanceLanguage=ko&q='+encodeURIComponent(query);
@@ -168,6 +175,8 @@ function frontTrendServerProxySearch_(query,publishedAfter,limit) {
     if(sr.getResponseCode()<200||sr.getResponseCode()>=300) return {ok:false,error:'YT30D_PROXY_SEARCH_HTTP_'+sr.getResponseCode(),source:'SERVER_YOUTUBE_PROXY',searchQueryCalls:1,coreUnits:0};
     var sj=JSON.parse(sr.getContentText()||'{}'),ids=(sj.items||[]).map(function(x){return x&&x.id&&x.id.videoId;}).filter(String);
     if(!ids.length) return {ok:true,items:[],source:'SERVER_YOUTUBE_PROXY',searchQueryCalls:1,coreUnits:0};
+    var core=frontTrendReserveQuota_(props,dateKey,0,1);
+    if(!core.ok) return {ok:false,error:core.error,source:'QUOTA_GUARD',searchQueryCalls:1,coreUnits:0};
     var du=base+'?endpoint=videos&part=id%2Csnippet%2Cstatistics%2CcontentDetails%2Cstatus&id='+encodeURIComponent(ids.join(','));
     var dr=UrlFetchApp.fetch(du,{muteHttpExceptions:true,followRedirects:true});
     if(dr.getResponseCode()<200||dr.getResponseCode()>=300) return {ok:false,error:'YT30D_PROXY_VIDEOS_HTTP_'+dr.getResponseCode(),source:'SERVER_YOUTUBE_PROXY',searchQueryCalls:1,coreUnits:1};
@@ -182,6 +191,21 @@ function frontTrendReserveQuota_(props,dateKey,searchCalls,coreUnits) {
   if(s+searchCalls>YT_FRONT_TREND30D_SEARCH_CALL_CAP) return {ok:false,error:'SEARCH_QUERY_DAILY_CAP_REACHED',searchCalls:s,coreUnits:c};
   props.setProperty(sk,String(s+searchCalls));props.setProperty(ck,String(c+coreUnits));
   return {ok:true,searchCalls:s+searchCalls,coreUnits:c+coreUnits};
+}
+
+function frontTrendReadCachedLane_(sh,lane,query,now) {
+  if(!sh||sh.getLastRow()<2) return null;
+  var last=sh.getLastRow(),start=Math.max(2,last-4999);
+  var rows=sh.getRange(start,1,last-start+1,30).getDisplayValues();
+  var cutoff=now.getTime()-24*3600*1000,ids=[],counts={};
+  for(var i=rows.length-1;i>=0;i--){
+    if(String(rows[i][2])!=='YOUTUBE_DATA_API_30D'||String(rows[i][3])!==lane.frontName||String(rows[i][4])!==query) continue;
+    var t=new Date(rows[i][1]).getTime(); if(!isFinite(t)||t<cutoff) continue;
+    var m=String(rows[i][23]||'').match(/STYLE=([^;]+)/); if(m) counts[m[1]]=(counts[m[1]]||0)+1;
+    var u=String(rows[i][10]||''); var vm=u.match(/[?&]v=([A-Za-z0-9_-]{11})/); if(vm) ids.push(vm[1]);
+    if(ids.length>=YT_FRONT_TREND30D_RESULTS_PER_LANE) break;
+  }
+  return ids.length?{count:ids.length,videoIds:ids.sort(),topStyles:frontTrendTopStyles_(counts,3)}:null;
 }
 
 function frontTrendNormalizeVideoItems_(items) {
