@@ -37,13 +37,23 @@ export default async function handler(req: any, res: any) {
     const ok = Object.values(checks).every(Boolean);
     const resolveUrl = String(req.query?.resolveUrl || "").trim();
     const liveResolution = resolveUrl ? await resolvePinterestUrl(resolveUrl) : null;
+    const apiReady = Boolean(process.env.PINTEREST_ACCESS_TOKEN);
+    const hubReady = Boolean(process.env.CONTENT_OS_PINTEREST_INGEST_URL);
 
     res.status(ok ? 200 : 500).json({
       ok,
       bridge: "PINTEREST_CONTENT_HUB",
-      version: "1.1.1",
-      mode: process.env.PINTEREST_ACCESS_TOKEN ? "API_READY" : "METADATA_ONLY",
-      centralHub: process.env.CONTENT_OS_PINTEREST_INGEST_URL ? "CONFIGURED" : "NOT_CONFIGURED",
+      version: "1.2.0",
+      mode: apiReady ? "API_READY" : "METADATA_ONLY",
+      centralHub: hubReady ? "CONFIGURED" : "NOT_CONFIGURED",
+      accountWideSupplier: {
+        endpoint: "/api/pinterest/pins",
+        ready: apiReady,
+        pageSizeMax: 250,
+        pagination: "BOOKMARK",
+        rightsDefault: "REFERENCE_ONLY",
+        activation: apiReady ? "READY" : "WAIT_EXISTING_PINTEREST_API_APPROVAL_OR_TOKEN_BIND"
+      },
       shortlinkResolver: "PIN_IT_TO_API_REDIRECT_TO_CANONICAL_PIN",
       liveResolution,
       checks
