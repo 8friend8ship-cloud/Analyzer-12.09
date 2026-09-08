@@ -1,4 +1,4 @@
-var YT_SEED_FACTORY_VERSION = 'YT_SEED_FACTORY_V3_20260903';
+var YT_SEED_FACTORY_VERSION = 'YT_SEED_FACTORY_V4_DIRECT_URL_INBOX_20260908';
 var YT_SEED_SOURCE_ID = '1o6Me_qcdrSEVNvufjD_EQWVGvxvGKR_9ZYWSSYMclgQ';
 var YT_SEED_FACTORY_ID = '1vhcZfPBR9rpv9JGEozMVZXfDoL-oyvJsDwutcKQHboM';
 var YT_VTUBE_FACTORY_ID = '1grF8sVLhb8LRZj08do2Cd2_x4Yp76XSFeNqrsG7ge5E';
@@ -36,12 +36,13 @@ function youtubeSeedFactoryRun_(healthOnly) {
     var seedSs = SpreadsheetApp.openById(YT_SEED_FACTORY_ID);
     var vtubeSs = SpreadsheetApp.openById(YT_VTUBE_FACTORY_ID);
     var source = sourceSs.getSheetByName('Video_Index');
+    var urlInbox = sourceSs.getSheetByName('URL_Inbox');
     var videoSeed = seedSs.getSheetByName('Video_Seed');
     var scriptSeed = seedSs.getSheetByName('Script_Seed');
     var runLog = seedSs.getSheetByName('Run_Log');
     var vtVideo = vtubeSs.getSheetByName('Video_Source');
     var vtStoryboard = vtubeSs.getSheetByName('Storyboard_Seed');
-    if (!source || !videoSeed || !scriptSeed || !runLog || !vtVideo || !vtStoryboard) {
+    if (!source || !urlInbox || !videoSeed || !scriptSeed || !runLog || !vtVideo || !vtStoryboard) {
       throw new Error('YT_SEED_REQUIRED_SHEET_MISSING');
     }
     var health = {
@@ -70,6 +71,14 @@ function youtubeSeedFactoryRun_(healthOnly) {
     var created = 0, duplicates = 0, rejected = 0, scriptCreated = 0, vtubeCreated = 0;
     var resultIds = [];
     var maxCreate = 50;
+
+    var inbox = ytSeedIngestUrlInboxV4_(urlInbox, videoSeed, scriptSeed, vtVideo, vtStoryboard, existing, vtExisting, now, maxCreate);
+    created += inbox.created;
+    duplicates += inbox.duplicates;
+    rejected += inbox.rejected;
+    scriptCreated += inbox.scriptCreated;
+    vtubeCreated += inbox.vtubeCreated;
+    resultIds = resultIds.concat(inbox.resultIds);
 
     for (var r = rows.length - 1; r >= 0 && created < maxCreate; r--) {
       var row = rows[r];
@@ -157,12 +166,42 @@ function youtubeSeedFactoryRun_(healthOnly) {
       created ? 'PASS_DRIVE_READBACK_PENDING_FRONT' : 'PASS_NOOP',createdAt,
       'Video_Index→Video_Seed→Script_Seed→VTube Video_Source/Storyboard_Seed; version=' + YT_SEED_FACTORY_VERSION
     ]);
-    return {ok:true,scanned:rows.length,created:created,scriptCreated:scriptCreated,vtubeCreated:vtubeCreated,duplicates:duplicates,rejected:rejected,result_ids:resultIds,run_id:runId,version:YT_SEED_FACTORY_VERSION};
+    return {ok:true,scanned:rows.length,urlInbox:inbox,created:created,scriptCreated:scriptCreated,vtubeCreated:vtubeCreated,duplicates:duplicates,rejected:rejected,result_ids:resultIds,run_id:runId,version:YT_SEED_FACTORY_VERSION};
   } catch (err) {
     return {ok:false,error:String(err && err.message || err),version:YT_SEED_FACTORY_VERSION};
   } finally {
     lock.releaseLock();
   }
+}
+
+function ytSeedIngestUrlInboxV4_(inbox, videoSeed, scriptSeed, vtVideo, vtStoryboard, existing, vtExisting, now, maxCreate) {
+  var out={ok:true,scanned:0,eligible:0,created:0,scriptCreated:0,vtubeCreated:0,duplicates:0,rejected:0,resultIds:[],metadataOnly:true,noTranscriptImport:true};
+  var last=inbox.getLastRow(); if(last<2)return out;
+  var headers=inbox.getRange(1,1,1,26).getDisplayValues()[0],hi=ytSeedHeaderIndex_(headers),scan=Math.min(300,last-1),rows=inbox.getRange(last-scan+1,1,scan,26).getDisplayValues();
+  out.scanned=rows.length;
+  for(var r=rows.length-1;r>=0 && out.created<Number(maxCreate||50);r--){
+    var row=rows[r], videoId=ytSeedCell_(row,hi,'VIDEO_ID'), url=ytSeedCell_(row,hi,'URL'), platform=ytSeedCell_(row,hi,'PLATFORM').toUpperCase(), status=ytSeedCell_(row,hi,'STATUS').toUpperCase();
+    if(!/^[A-Za-z0-9_-]{11}$/.test(videoId)||platform!=='YOUTUBE'||!/^https:\/\/(?:www\.)?youtube\.com\/watch\?v=/.test(url)){continue;}
+    if(!/DONE|ANALYZED|READY/.test(status)){out.rejected++;continue;}
+    out.eligible++;
+    if(existing[videoId]){out.duplicates++;continue;}
+    var rightsRaw=ytSeedCell_(row,hi,'RIGHTS_USAGE').toUpperCase();
+    if(rightsRaw.indexOf('REFERENCE_ONLY')!==0){out.rejected++;continue;}
+    var title=ytSeedCell_(row,hi,'TITLE'), query=ytSeedCell_(row,hi,'SUB_KEY')||ytSeedCell_(row,hi,'PRIMARY_CODE')||'youtube_direct', channelId=ytSeedCell_(row,hi,'CHANNEL_ID'), createdRaw=ytSeedCell_(row,hi,'CREATED_AT');
+    var note=ytSeedCell_(row,hi,'NOTES'), structured={}; try{if(note&&note.charAt(0)==='{')structured=JSON.parse(note);}catch(ignored){}
+    var thumb=String(structured.thumbnailUrl||('https://i.ytimg.com/vi/'+videoId+'/hqdefault.jpg')), views=structured.viewCount||'', likes=structured.likeCount||'', comments=structured.commentCount||'', duration=String(structured.durationIso8601||'');
+    var useCase=ytSeedCell_(row,hi,'USE_CASE'), keywords=ytSeedCell_(row,hi,'KEYWORDS'), brief=ytSeedBrief_([title,useCase,keywords].filter(String).join(' | '),700), createdAt=createdRaw||Utilities.formatDate(now,'Asia/Seoul',"yyyy-MM-dd'T'HH:mm:ssXXX");
+    var videoSeedId='VSEED_'+videoId+'_'+Utilities.formatDate(now,'Asia/Seoul','yyyyMMdd'), scriptSeedId='SSEED_'+videoId+'_'+Utilities.formatDate(now,'Asia/Seoul','yyyyMMdd');
+    videoSeed.appendRow([videoSeedId,YT_SEED_APP_ID,query,videoId,url,title,'', '',ytSeedNumberOrBlank_(views),'','PUBLIC_VIEW_V2_20260824',ytSeedCell_(row,hi,'PRIMARY_CODE')+'|'+ytSeedCell_(row,hi,'SUB_KEY'),brief,'URL_Inbox:'+videoId,'FRESH','REFERENCE_ONLY',0.8,'CANDIDATE',createdAt,thumb,ytSeedNumberOrBlank_(likes),ytSeedNumberOrBlank_(comments),duration,brief,scriptSeedId,createdAt]);
+    scriptSeed.appendRow([scriptSeedId,videoSeedId,YT_SEED_APP_ID,'URL_INBOX_METADATA_TO_CONTEXT','URL_Inbox metadata?new interpretation','Use verified reform seed','','Transcript is not imported by this bridge; source expressive text/assets are not copied', 'METADATA_ONLY',createdAt,'URL_INBOX_METADATA_ONLY',ytSeedCell_(row,hi,'LANGUAGE'),' ',brief,'[]','[]',0,'VERIFIED_METADATA','[]','[]','["NO_TRANSCRIPT_IMPORTED"]',JSON.stringify({mode:'REFORM_REMIX',videoId:videoId,videoUrl:url,thumbnailUrl:thumb,scriptSource:'none',sourceRowStatus:status}),'T1_YT_VTUBE_REFORM_V1','PENDING_RUNTIME_READBACK',createdAt,'Reference-only metadata; no source transcript/video asset copy']);
+    existing[videoId]=true; out.created++; out.scriptCreated++; out.resultIds.push(videoSeedId);
+    if(!vtExisting[videoId]){
+      vtVideo.appendRow(['VTY_'+videoId,url,'YOUTUBE',videoId,channelId,'','','REFERENCE_MOTION_ONLY','REFERENCE_CAMERA_ONLY','','','','YOUTUBE_REFORM_REMIX',brief,['YOUTUBE',query,videoId].join('|'),'REINTERPRET_ONLY_NO_SOURCE_ASSET_COPY','REFERENCE_ONLY','SEED_READY_FROM_URL_INBOX',createdAt]);
+      vtStoryboard.appendRow(['SB_YT_'+videoId+'_'+Utilities.formatDate(now,'Asia/Seoul','yyyyMMddHHmmss'),'YOUTUBE_SEED',scriptSeedId,url,'',title,title.slice(0,160),'????? ?? ? ???? ???','?????????? ?? ??','HOOK>CONTEXT>KEY_POINTS>NEW_INTERPRETATION>CTA','interest>clarity>new_value','??? ??/??? ?? ??','','NEW_CAMERA_GRAMMAR','VTUBE_DEFAULT','PLATFORM_SAFE','Y',brief,[query,'youtube','reform','remix'].join(','),['YT',videoId,query].join('|'),'CANDIDATE_REFORM_REMIX',createdAt]);
+      vtExisting[videoId]=true; out.vtubeCreated++;
+    }
+  }
+  return out;
 }
 
 function ytSeedHeaderIndex_(headers) {
