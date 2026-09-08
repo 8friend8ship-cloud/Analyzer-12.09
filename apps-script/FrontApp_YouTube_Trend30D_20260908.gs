@@ -45,7 +45,7 @@ function testYouTubeFrontTrend30dStaticV1() {
 function youtubeFrontAppTrend30dRun_(opt) {
   opt = opt || {};
   var now = new Date();
-  var lock = LockService.getScriptLock();
+  var lock = LockService.getDocumentLock() || LockService.getScriptLock();
   if (!lock.tryLock(5000)) return {ok:false,skipped:true,reason:'LOCK_BUSY',version:YT_FRONT_TREND30D_VERSION};
   try {
     var ss = SpreadsheetApp.openById(YT_FRONT_TREND30D_CENTRAL_ID);
