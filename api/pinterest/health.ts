@@ -43,15 +43,16 @@ export default async function handler(req: any, res: any) {
     res.status(ok ? 200 : 500).json({
       ok,
       bridge: "PINTEREST_CONTENT_HUB",
-      version: "1.2.0",
+      version: "1.2.1",
       mode: apiReady ? "API_READY" : "METADATA_ONLY",
       centralHub: hubReady ? "CONFIGURED" : "NOT_CONFIGURED",
       accountWideSupplier: {
-        endpoint: "/api/pinterest/pins",
+        endpoint: "/api/pinterest/pin?mode=list",
         ready: apiReady,
         pageSizeMax: 250,
         pagination: "BOOKMARK",
         rightsDefault: "REFERENCE_ONLY",
+        hobbySafe: "REUSES_EXISTING_PIN_FUNCTION",
         activation: apiReady ? "READY" : "WAIT_EXISTING_PINTEREST_API_APPROVAL_OR_TOKEN_BIND"
       },
       shortlinkResolver: "PIN_IT_TO_API_REDIRECT_TO_CANONICAL_PIN",
