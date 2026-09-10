@@ -175,8 +175,8 @@ export function normalizePinterestRecord(body: any): PinterestRecord {
 }
 
 export function assertBridgeSecret(headers: Record<string, any>) {
-  const configured = process.env.PINTEREST_BRIDGE_SECRET;
-  if (!configured) return;
+  const configured = String(process.env.PINTEREST_BRIDGE_SECRET || "").trim();
+  if (!configured) throw new Error("PINTEREST_BRIDGE_SECRET_NOT_CONFIGURED");
   const supplied = String(headers["x-pinterest-bridge-secret"] || "");
   if (supplied !== configured) throw new Error("UNAUTHORIZED");
 }
