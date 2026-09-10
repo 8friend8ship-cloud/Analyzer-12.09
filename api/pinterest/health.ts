@@ -39,21 +39,29 @@ export default async function handler(req: any, res: any) {
     const liveResolution = resolveUrl ? await resolvePinterestUrl(resolveUrl) : null;
     const apiReady = Boolean(process.env.PINTEREST_ACCESS_TOKEN);
     const hubReady = Boolean(process.env.CONTENT_OS_PINTEREST_INGEST_URL);
+    const bridgeReady = Boolean(process.env.PINTEREST_BRIDGE_SECRET);
+    const runtimeReady = apiReady && bridgeReady;
 
     res.status(ok ? 200 : 500).json({
       ok,
       bridge: "PINTEREST_CONTENT_HUB",
-      version: "1.2.1",
-      mode: apiReady ? "API_READY" : "METADATA_ONLY",
+      version: "1.3.0",
+      mode: runtimeReady ? "API_READY_PROTECTED" : "METADATA_ONLY",
       centralHub: hubReady ? "CONFIGURED" : "NOT_CONFIGURED",
+      bridgeProtection: bridgeReady ? "CONFIGURED" : "NOT_CONFIGURED",
       accountWideSupplier: {
         endpoint: "/api/pinterest/pin?mode=list",
-        ready: apiReady,
+        createEndpoint: "/api/pinterest/pin?mode=create",
+        ready: runtimeReady,
+        apiTokenReady: apiReady,
+        bridgeSecretReady: bridgeReady,
         pageSizeMax: 250,
         pagination: "BOOKMARK",
         rightsDefault: "REFERENCE_ONLY",
         hobbySafe: "REUSES_EXISTING_PIN_FUNCTION",
-        activation: apiReady ? "READY" : "WAIT_EXISTING_PINTEREST_API_APPROVAL_OR_TOKEN_BIND"
+        activation: runtimeReady
+          ? "READY"
+          : "CONFIGURE_PINTEREST_ACCESS_TOKEN_AND_PINTEREST_BRIDGE_SECRET"
       },
       shortlinkResolver: "PIN_IT_TO_API_REDIRECT_TO_CANONICAL_PIN",
       liveResolution,
