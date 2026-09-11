@@ -33,46 +33,12 @@ var CENTRAL_GITHUB_WORKFLOW_PACK_V2 = {
 };
 
 function runCentralGitHubWorkflowPackV2(input) {
-  input = input || {};
-  var started = new Date();
-  var runId = 'RUN_GH_WFPACK_' + Utilities.formatDate(started, CENTRAL_GITHUB_WORKFLOW_PACK_V2.tz, 'yyyyMMdd_HHmmss_SSS');
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(8000)) return {ok:true, skipped:true, reason:'LOCK_BUSY', runId:runId, version:CENTRAL_GITHUB_WORKFLOW_PACK_V2.version};
-  try {
-    var ss = SpreadsheetApp.openById(CENTRAL_GITHUB_WORKFLOW_PACK_V2.spreadsheetId);
-    var sheets = ghPackSheets_(ss);
-    var orderAudit = auditCentralTabOrderV2_(ss);
-    var triggerAudit = auditCentralTriggerRegistryV2_(sheets.trigger);
-    var signalAudit = auditTrendSignalPolicyV2_(sheets.trend);
-    var repoAudit = auditRegisteredRepoCoverageV2_(sheets.repo, sheets.lineage, sheets.workflow, sheets.template);
-
-    var requirement = input.requirement ? registerGitHubRequirementV2_(sheets, input.requirement, runId) : null;
-    var custom = materializeMissingRepoWorkflowCandidatesV2_(sheets, repoAudit, runId);
-
-    var ok = orderAudit.ok && triggerAudit.ok && signalAudit.ok && repoAudit.schemaOk;
-    writeGitHubWorkflowPackEvidenceV2_(sheets.evidence, {
-      runId:runId, ok:ok, orderAudit:orderAudit, triggerAudit:triggerAudit,
-      signalAudit:signalAudit, repoAudit:repoAudit, custom:custom, requirement:requirement,
-      at:new Date().toISOString()
-    });
-    return {
-      ok:ok,
-      degraded:!ok,
-      runId:runId,
-      tabOrder:orderAudit,
-      triggerContract:triggerAudit,
-      trendSignalPolicy:signalAudit,
-      repoCoverage:repoAudit,
-      customWorkflowCandidates:custom,
-      requirement:requirement,
-      nextAction: ok ? 'BOUND_RUNTIME_X2_THEN_USER_VERSION_APPROVAL' : 'FIRST_BROKEN_STAGE_SEARCH_LEARN_MIN_FIX_RETEST',
-      version:CENTRAL_GITHUB_WORKFLOW_PACK_V2.version
-    };
-  } catch (e) {
-    return {ok:false, runId:runId, error:String(e && e.stack || e), version:CENTRAL_GITHUB_WORKFLOW_PACK_V2.version};
-  } finally {
-    lock.releaseLock();
+  // Compatibility entry is intentionally fail-safe: all calls delegate to Safe Entry.
+  // No legacy bulk materialization is reachable through this public function.
+  if (typeof runCentralGitHubWorkflowPackV2Safe !== 'function') {
+    return {ok:false, hold:true, reason:'SAFE_ENTRY_REQUIRED', version:CENTRAL_GITHUB_WORKFLOW_PACK_V2.version};
   }
+  return runCentralGitHubWorkflowPackV2Safe(input || {});
 }
 
 function registerGitHubRequirementV2_(sheets, req, runId) {
@@ -256,4 +222,15 @@ function testCentralGitHubWorkflowPackV2X2() {
   Utilities.sleep(1100);
   var b=runCentralGitHubWorkflowPackV2({});
   return {ok:!!(a&&b&&a.runId&&b.runId&&a.runId!==b.runId&&a.ok!==false&&b.ok!==false),pass1:a,pass2:b,version:CENTRAL_GITHUB_WORKFLOW_PACK_V2.version};
+}
+
+function maybeRunRawEntryHardenX2OnceV16_() {
+  var p=PropertiesService.getScriptProperties(),k='GH_WFPACK_RAW_ENTRY_HARDEN_X2_V16_DONE';
+  if(p.getProperty(k)==='1') return {ok:true,skipped:true,reason:'RAW_ENTRY_HARDEN_X2_ALREADY_PASS'};
+  var ss=SpreadsheetApp.openById(CENTRAL_GITHUB_WORKFLOW_PACK_V2.spreadsheetId),wf=ss.getSheetByName(CENTRAL_GITHUB_WORKFLOW_PACK_V2.workflowTab),before=wf.getLastRow();
+  var a=runCentralGitHubWorkflowPackV2({}),mid=wf.getLastRow(),b=runCentralGitHubWorkflowPackV2({}),after=wf.getLastRow();
+  var ok=!!(a&&b&&a.ok&&b.ok&&a.mode==='AUDIT_ONLY'&&b.mode==='AUDIT_ONLY'&&before===mid&&mid===after);
+  var ev=ss.getSheetByName(CENTRAL_GITHUB_WORKFLOW_PACK_V2.evidenceTab),eid='EVID_GH_WFPACK_RAW_ENTRY_HARDEN_X2_V16_20260911';
+  if(ok){ghPackAppendObject_(ev,ghPackHeaders_(ev),{EVIDENCE_ID:eid,PROJECT_ID:'P00_AGENT_CORE',APP_ID:'ALL_REPOS',FUNCTION_OR_ROUTE:'runCentralGitHubWorkflowPackV2 raw compatibility entry x2',RUN_ID:String(a.runId)+'|'+String(b.runId),DRIVE_ACK:'75_ROWCOUNT_STABLE+SAFE_MODE_X2',PASS_1:'PASS',PASS_2:'PASS',LAST_GOOD:'APPS_SCRIPT_VERSION_15',STATUS:'PASS_X2_RAW_ENTRY_HARDENED',ROOT_CAUSE:'LEGACY_BULK_MATERIALIZATION_PATH',MIN_FIX:'RAW_ENTRY_DELEGATES_TO_SAFE_ENTRY',NEXT_RESUME_POINT:'GITHUB_SYNC_THEN_VERSION_SAVE',UPDATED_AT:ghPackNow_()});p.setProperty(k,'1');}
+  return {ok:ok,before:before,mid:mid,after:after,mode1:a&&a.mode,mode2:b&&b.mode,evidenceId:eid,physicalTriggerCreated:false};
 }

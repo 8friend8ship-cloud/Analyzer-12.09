@@ -53,11 +53,13 @@ function runCentralSidecarSliceV1() {
   try{govRepoBaseline=(typeof maybeInitializeGovRepoBaselineOnceV2_==='function')?maybeInitializeGovRepoBaselineOnceV2_():govRepoBaseline;}catch(govBaseErr){govRepoBaseline={ok:false,error:String(govBaseErr&&govBaseErr.message||govBaseErr)};}
   var govDiscoveryX2={ok:true,skipped:true,reason:'GOV_DISCOVERY_X2_HANDLER_ABSENT'};
   try{govDiscoveryX2=(typeof maybeRunGovDiscoveryX2OnceV2_==='function')?maybeRunGovDiscoveryX2OnceV2_():govDiscoveryX2;}catch(govX2Err){govDiscoveryX2={ok:false,error:String(govX2Err&&govX2Err.message||govX2Err)};}
+  var rawEntryHardeningX2={ok:true,skipped:true,reason:'RAW_ENTRY_HARDEN_X2_HANDLER_ABSENT'};
+  try{rawEntryHardeningX2=(typeof maybeRunRawEntryHardenX2OnceV16_==='function')?maybeRunRawEntryHardenX2OnceV16_():rawEntryHardeningX2;}catch(rawX2Err){rawEntryHardeningX2={ok:false,error:String(rawX2Err&&rawX2Err.message||rawX2Err)};}
   try{
     try{result=stage.run();}catch(e){result={ok:false,error:String(e&&e.message||e)};}
     p.setProperty(CENTRAL_SIDECAR_SLICE_V1.cursorKey,String((cur+1)%stages.length));
     centralSidecarLogV1_(lease.runId,stage.id,result&&result.ok===false?'FAILED':'INFO',Date.now()-started,result);
-    return {ok:!(result&&result.ok===false),version:CENTRAL_SIDECAR_SLICE_V1.version,runId:lease.runId,stage:stage.id,cursorBefore:cur,cursorAfter:(cur+1)%stages.length,elapsedMs:Date.now()-started,githubWorkflowPackX2:githubWorkflowPackX2,metaSignalLineageX2:metaSignalLineageX2,govRepoBaseline:govRepoBaseline,govDiscoveryX2:govDiscoveryX2,result:result,at:iso_()};
+    return {ok:!(result&&result.ok===false),version:CENTRAL_SIDECAR_SLICE_V1.version,runId:lease.runId,stage:stage.id,cursorBefore:cur,cursorAfter:(cur+1)%stages.length,elapsedMs:Date.now()-started,githubWorkflowPackX2:githubWorkflowPackX2,metaSignalLineageX2:metaSignalLineageX2,govRepoBaseline:govRepoBaseline,govDiscoveryX2:govDiscoveryX2,rawEntryHardeningX2:rawEntryHardeningX2,result:result,at:iso_()};
   }finally{releaseCentralSidecarLeaseV1_(lease.runId);}
 }
 

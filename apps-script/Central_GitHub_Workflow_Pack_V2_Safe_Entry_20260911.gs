@@ -135,8 +135,10 @@ function testCentralGitHubWorkflowPackV2SafeX2() {
 
 function maybeRunCentralGitHubWorkflowPackV2ApprovedX2Once_() {
   var p=PropertiesService.getScriptProperties(), key='GH_WFPACK_V2_META_CLASSIFIER_X2_20260911';
-  if(p.getProperty(key)==='PASS') return {ok:true,skipped:true,reason:'APPROVED_X2_ALREADY_PASS'};
-  var r=testCentralGitHubWorkflowPackV2SafeX2();
-  if(r.ok) p.setProperty(key,'PASS');
-  return r;
+  var base;
+  if(p.getProperty(key)==='PASS') base={ok:true,skipped:true,reason:'APPROVED_X2_ALREADY_PASS'};
+  else { base=testCentralGitHubWorkflowPackV2SafeX2(); if(base.ok) p.setProperty(key,'PASS'); }
+  var raw={ok:true,skipped:true,reason:'RAW_ENTRY_HARDEN_X2_HANDLER_ABSENT'};
+  try{raw=(typeof maybeRunRawEntryHardenX2OnceV16_==='function')?maybeRunRawEntryHardenX2OnceV16_():raw;}catch(e){raw={ok:false,error:String(e&&e.message||e)};}
+  return {ok:!!base.ok&&raw.ok!==false,base:base,rawEntryHardeningX2:raw};
 }
