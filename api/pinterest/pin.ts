@@ -189,7 +189,21 @@ export default async function handler(req: any, res: any) {
     });
   } catch (error: any) {
     const message = error?.message || "PIN_FETCH_FAILED";
-    const status = message === "UNAUTHORIZED" ? 401 : 500;
-    return res.status(status).json({ ok: false, error: message });
+    const status = message === "UNAUTHORIZED"
+      ? 401
+      : message === "PINTEREST_BRIDGE_SECRET_NOT_CONFIGURED"
+        ? 503
+        : message.startsWith("CENTRAL_HUB_")
+          ? 502
+          : 500;
+    const hold = status === 503;
+    return res.status(status).json({
+      ok: false,
+      hold,
+      error: message,
+      next: message === "PINTEREST_BRIDGE_SECRET_NOT_CONFIGURED"
+        ? "CONFIGURE_PINTEREST_BRIDGE_SECRET_BEFORE_PROTECTED_PIN_CALLS"
+        : undefined
+    });
   }
 }
