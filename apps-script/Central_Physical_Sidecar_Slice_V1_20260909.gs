@@ -57,11 +57,15 @@ function runCentralSidecarSliceV1() {
   try{rawEntryHardeningX2=(typeof maybeRunRawEntryHardenX2OnceV16_==='function')?maybeRunRawEntryHardenX2OnceV16_():rawEntryHardeningX2;}catch(rawX2Err){rawEntryHardeningX2={ok:false,error:String(rawX2Err&&rawX2Err.message||rawX2Err)};}
   var queensDailyReconcile={ok:true,skipped:true,reason:'QUEENS_DAILY_RECONCILE_HANDLER_ABSENT'};
   try{queensDailyReconcile=(typeof maybeRunQueensDailyDryWriteReconcileOnceV1_==='function')?maybeRunQueensDailyDryWriteReconcileOnceV1_():queensDailyReconcile;}catch(qdErr){queensDailyReconcile={ok:false,error:String(qdErr&&qdErr.message||qdErr)};}
+  var interiorKcaOfficial={ok:true,skipped:true,reason:'INTERIOR_KCA_OFFICIAL_HANDLER_ABSENT'};
+  try{interiorKcaOfficial=(typeof maybeRunInteriorQueensOfficialAdapterOnceV1_==='function')?maybeRunInteriorQueensOfficialAdapterOnceV1_():interiorKcaOfficial;}catch(ikErr){interiorKcaOfficial={ok:false,error:String(ikErr&&ikErr.message||ikErr)};}
+  var interiorT1Smoke={ok:true,skipped:true,reason:'INTERIOR_T1_SMOKE_HANDLER_ABSENT'};
+  try{interiorT1Smoke=(typeof maybeRunInteriorT1UseSmokeOnceV1_==='function')?maybeRunInteriorT1UseSmokeOnceV1_():interiorT1Smoke;}catch(itErr){interiorT1Smoke={ok:false,error:String(itErr&&itErr.message||itErr)};}
   try{
     try{result=stage.run();}catch(e){result={ok:false,error:String(e&&e.message||e)};}
     p.setProperty(CENTRAL_SIDECAR_SLICE_V1.cursorKey,String((cur+1)%stages.length));
     centralSidecarLogV1_(lease.runId,stage.id,result&&result.ok===false?'FAILED':'INFO',Date.now()-started,result);
-    return {ok:!(result&&result.ok===false),version:CENTRAL_SIDECAR_SLICE_V1.version,runId:lease.runId,stage:stage.id,cursorBefore:cur,cursorAfter:(cur+1)%stages.length,elapsedMs:Date.now()-started,githubWorkflowPackX2:githubWorkflowPackX2,metaSignalLineageX2:metaSignalLineageX2,govRepoBaseline:govRepoBaseline,govDiscoveryX2:govDiscoveryX2,rawEntryHardeningX2:rawEntryHardeningX2,queensDailyReconcile:queensDailyReconcile,result:result,at:iso_()};
+    return {ok:!(result&&result.ok===false),version:CENTRAL_SIDECAR_SLICE_V1.version,runId:lease.runId,stage:stage.id,cursorBefore:cur,cursorAfter:(cur+1)%stages.length,elapsedMs:Date.now()-started,githubWorkflowPackX2:githubWorkflowPackX2,metaSignalLineageX2:metaSignalLineageX2,govRepoBaseline:govRepoBaseline,govDiscoveryX2:govDiscoveryX2,rawEntryHardeningX2:rawEntryHardeningX2,queensDailyReconcile:queensDailyReconcile,interiorKcaOfficial:interiorKcaOfficial,interiorT1Smoke:interiorT1Smoke,result:result,at:iso_()};
   }finally{releaseCentralSidecarLeaseV1_(lease.runId);}
 }
 
