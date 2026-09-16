@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 
-$Version='P0_07_TASK203_CURRENT_FACTORY_V1_20260916'
+$Version='P0_07_TASK203_CURRENT_FACTORY_V1_1_20260916'
 $FactoryScriptId='1DzJwRMdmdxv2CUdizopRr5qt_IqxvNlrPq6COIDQ6coGRvZOS5cvdxeL'
 $ExistingTriggerUid='486210864358096896'
 $RequiredApproval='GRANTED_PHYSICAL_MOBILE_20260916'
@@ -51,7 +51,7 @@ function Get-GitBlobSha([string]$Path){
   if(!$git){ return '' }
   $out=& $git.Source hash-object -- $Path 2>$null
   if($LASTEXITCODE -ne 0){ return '' }
-  return String($out).Trim().ToLowerInvariant()
+  return ([string]$out).Trim().ToLowerInvariant()
 }
 function Get-FunctionOwners([string]$Root,[string]$Fn){
   $rx='(?m)^\s*function\s+'+[regex]::Escape($Fn)+'\s*\('
