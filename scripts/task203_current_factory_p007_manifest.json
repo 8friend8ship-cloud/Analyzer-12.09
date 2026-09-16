@@ -1,0 +1,41 @@
+{
+  "version": "P0_07_TASK203_CURRENT_FACTORY_MANIFEST_V1_20260916",
+  "taskId": "TASK-SYSTEM-CITY-ORDER-P0-20260915",
+  "nodeId": "NODE-EVENT-WATCH",
+  "factoryScriptId": "1DzJwRMdmdxv2CUdizopRr5qt_IqxvNlrPq6COIDQ6coGRvZOS5cvdxeL",
+  "existingProcessAllTaskQueuesTriggerUid": "486210864358096896",
+  "approvalReceipt": "GRANTED_PHYSICAL_MOBILE_20260916",
+  "sourceRepo": "8friend8ship-cloud/Analyzer-12.09",
+  "sourceBranch": "main",
+  "sourceFiles": [
+    {
+      "path": "apps-script/Central_Drive_All_File_Intake_V4_20260903.gs",
+      "gitBlobSha": "b6abed4c151992c5851fdad3ff6c961e43d3a7dd",
+      "requiredFunction": "runCentralDriveAllFileIntakeV4FromFactory",
+      "lineageCommit": "5cd69b2a5def5de2c49603bf5e448a6ba3ac86f6"
+    },
+    {
+      "path": "apps-script/ContentOS_Unified_Scheduler.gs",
+      "gitBlobSha": "1ae2ee458f865de01939de9c2588397564fbd019",
+      "requiredFunction": "contentOsUnifiedSchedulerTick"
+    },
+    {
+      "path": "apps-script/Central_Drive_All_File_Content_QA_Seed_Promoter_V1_20260903.gs",
+      "gitBlobSha": "e2472e394c80a043b2afe97fc55c6aa54237351e",
+      "requiredFunction": "runCentralDriveAllFileContentQaSeedFromFactory"
+    }
+  ],
+  "safety": {
+    "defaultMode": "ReadOnly",
+    "newOAuth": false,
+    "newTrigger": false,
+    "newProject": false,
+    "newDeployment": false,
+    "deleteTrigger": false,
+    "publicRelease": false,
+    "crossOwnerPush": false,
+    "applyRequiresExactBaseline": true,
+    "singleExecutionOwner": true
+  },
+  "doneGate": "current 1DzJw clone/readback -> exact baseline receipt -> source bundle verified -> same-owner sync -> pull/readback -> natural DRIVEINTAKE4 x2 -> 07/08/80/93 -> NODE/WORKFLOW/MAP/LEDGER consistency -> final receipt"
+}
