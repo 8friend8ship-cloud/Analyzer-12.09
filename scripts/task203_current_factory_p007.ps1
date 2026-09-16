@@ -7,15 +7,21 @@ param(
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 
-$Version='P0_07_TASK203_CURRENT_FACTORY_V1_1_20260916'
+$Version='P0_07_TASK203_CURRENT_FACTORY_V1_2_20260916'
 $FactoryScriptId='1DzJwRMdmdxv2CUdizopRr5qt_IqxvNlrPq6COIDQ6coGRvZOS5cvdxeL'
 $ExistingTriggerUid='486210864358096896'
 $RequiredApproval='GRANTED_PHYSICAL_MOBILE_20260916'
+$ExpectedRepo='8friend8ship-cloud/Analyzer-12.09'
+$ExpectedBranch='main'
 $RepoRoot=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $ManifestPath=Join-Path $PSScriptRoot 'task203_current_factory_p007_manifest.json'
 if(!(Test-Path $ManifestPath)){ throw 'MANIFEST_MISSING' }
 $Manifest=Get-Content -Raw -Encoding UTF8 $ManifestPath | ConvertFrom-Json
-if($Manifest.factoryScriptId -ne $FactoryScriptId){ throw 'MANIFEST_FACTORY_ID_MISMATCH' }
+if([string]$Manifest.factoryScriptId -ne $FactoryScriptId){ throw 'MANIFEST_FACTORY_ID_MISMATCH' }
+if([string]$Manifest.existingProcessAllTaskQueuesTriggerUid -ne $ExistingTriggerUid){ throw 'MANIFEST_TRIGGER_UID_MISMATCH' }
+if([string]$Manifest.approvalReceipt -ne $RequiredApproval){ throw 'MANIFEST_APPROVAL_RECEIPT_MISMATCH' }
+if([string]$Manifest.sourceRepo -ne $ExpectedRepo){ throw 'MANIFEST_SOURCE_REPO_MISMATCH' }
+if([string]$Manifest.sourceBranch -ne $ExpectedBranch){ throw 'MANIFEST_SOURCE_BRANCH_MISMATCH' }
 
 if([string]::IsNullOrWhiteSpace($ReceiptRoot)){
   $ReceiptRoot=Join-Path $env:USERPROFILE 'Documents\CentralSharedOwnerCanonical_1DzJw\Runtime_Readback'
@@ -48,10 +54,12 @@ function Get-AggregateSha([string]$Root){
 }
 function Get-GitBlobSha([string]$Path){
   $git=Get-Command git.exe -ErrorAction SilentlyContinue
-  if(!$git){ return '' }
+  if(!$git){ throw 'GIT_EXE_NOT_FOUND' }
   $out=& $git.Source hash-object -- $Path 2>$null
-  if($LASTEXITCODE -ne 0){ return '' }
-  return ([string]$out).Trim().ToLowerInvariant()
+  if($LASTEXITCODE -ne 0){ throw ('GIT_HASH_OBJECT_FAILED:'+ $Path) }
+  $blob=([string]$out).Trim().ToLowerInvariant()
+  if([string]::IsNullOrWhiteSpace($blob)){ throw ('GIT_BLOB_SHA_EMPTY:'+ $Path) }
+  return $blob
 }
 function Get-FunctionOwners([string]$Root,[string]$Fn){
   $rx='(?m)^\s*function\s+'+[regex]::Escape($Fn)+'\s*\('
@@ -73,7 +81,7 @@ function Write-Receipt($obj){
 
 $receipt=[ordered]@{
   ok=$false; action='P0_07_TASK203_CURRENT_FACTORY'; version=$Version; runId=$RunId; mode=$Mode;
-  factoryScriptId=$FactoryScriptId; expectedTriggerUid=$ExistingTriggerUid; sourceRepo='8friend8ship-cloud/Analyzer-12.09';
+  factoryScriptId=$FactoryScriptId; expectedTriggerUid=$ExistingTriggerUid; sourceRepo=$ExpectedRepo; sourceBranch=$ExpectedBranch;
   readOnly=($Mode -eq 'ReadOnly'); safeToPush=$false; pushPerformed=$false; newOAuth=$false; newProject=$false; newDeployment=$false; newTrigger=$false; triggerTouched=$false;
   startedAt=(Get-Date).ToString('o')
 }
@@ -101,7 +109,7 @@ try {
     $path=Join-Path $RepoRoot ([string]$sf.path).Replace('/','\')
     if(!(Test-Path $path)){ throw ('SOURCE_BUNDLE_MISSING:'+([string]$sf.path)) }
     $actualBlob=Get-GitBlobSha $path
-    if($actualBlob -and $actualBlob -ne ([string]$sf.gitBlobSha).ToLowerInvariant()){
+    if($actualBlob -ne ([string]$sf.gitBlobSha).ToLowerInvariant()){
       throw ('SOURCE_GIT_BLOB_MISMATCH:'+([string]$sf.path)+':'+$actualBlob)
     }
     $owners=Get-FunctionOwners $CloneRoot ([string]$sf.requiredFunction)
