@@ -1,0 +1,54 @@
+name: Content OS Shin Ramyun live E2E
+
+on:
+  push:
+    branches:
+      - codex/content-os-api-free-seed-pipeline
+  workflow_dispatch:
+
+jobs:
+  live-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Run API-free YouTube discovery and collector readback
+        shell: bash
+        run: |
+          node <<'NODE'
+          const collector = 'https://script.google.com/macros/s/AKfycbx5WTegTKUnyvFZC_qOaGBPlmKANLwXyNue19jLkFhdFwHnnp1E6_trZeVGdIg7B3GA/exec';
+          const query = '신라면';
+          async function call(payload){
+            const r = await fetch(collector,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload),redirect:'follow'});
+            const t = await r.text();
+            let j; try{j=JSON.parse(t)}catch{j={raw:t.slice(0,500)}}
+            return {status:r.status,ok:r.ok,json:j};
+          }
+          const before = await call({action:'search',asset_type:'TEXT',query,limit:50});
+          console.log('BEFORE', JSON.stringify({status:before.status,count:Array.isArray(before.json?.results)?before.json.results.length:null,scanned:before.json?.scanned_rows||0}));
+
+          const url = 'https://www.youtube.com/results?search_query='+encodeURIComponent(query)+'&hl=ko&gl=KR';
+          const yr = await fetch(url,{headers:{'user-agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36','accept-language':'ko-KR,ko;q=0.9,en;q=0.8'}});
+          const html = await yr.text();
+          console.log('YOUTUBE_HTTP', yr.status, 'HTML_BYTES', html.length);
+          const ids=[]; const seen=new Set();
+          for(const m of html.matchAll(/\"videoId\":\"([A-Za-z0-9_-]{11})\"/g)){
+            if(!seen.has(m[1])){seen.add(m[1]); ids.push(m[1]); if(ids.length>=10) break;}
+          }
+          console.log('DISCOVERED', JSON.stringify(ids));
+          if(!ids.length) throw new Error('NO_YOUTUBE_IDS_DISCOVERED');
+
+          let enqueued=0;
+          for(let i=0;i<Math.min(ids.length,5);i++){
+            const id=ids[i];
+            const videoUrl='https://www.youtube.com/watch?v='+id;
+            const result=await call({action:'enqueue',asset_type:'TEXT',url:videoUrl,source_page_url:videoUrl,platform:'YOUTUBE',title:`YouTube rank ${i+1}: ${query}`,primary_code:'CONTENT_OS_COVERAGE_GAP',keywords:`${query},youtube,coverage-gap,rank-${i+1}`,target_apps:'APP_CONTENT_OS,APP_ANALYZER',use_case:'QUEENS_CROSSCHECK_GAP_FILL',notes:JSON.stringify({query,external_rank:i+1,discovery_source:'GITHUB_ACTIONS_YOUTUBE_PUBLIC_HTML',reason:'MISSING_FROM_STORED_QUEENS',requested_at:new Date().toISOString()})});
+            console.log('ENQUEUE', i+1, id, JSON.stringify({status:result.status,ok:result.ok,response:result.json}));
+            if(result.ok) enqueued++;
+          }
+
+          await new Promise(r=>setTimeout(r,1500));
+          const after = await call({action:'search',asset_type:'TEXT',query,limit:50});
+          const rows = Array.isArray(after.json?.results)?after.json.results:[];
+          console.log('AFTER', JSON.stringify({status:after.status,count:rows.length,scanned:after.json?.scanned_rows||0,enqueued,titles:rows.slice(0,10).map(x=>x.TITLE||x.title||''),urls:rows.slice(0,10).map(x=>x.ARTICLE_URL||x.url||x.SOURCE_URL||'')}));
+          if(!rows.length) throw new Error('COLLECTOR_READBACK_ZERO_AFTER_ENQUEUE');
+          NODE
