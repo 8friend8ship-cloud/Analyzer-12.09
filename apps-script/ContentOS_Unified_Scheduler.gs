@@ -1,4 +1,4 @@
-const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V22_SKETCHUP_DRIVE_STAGING_PLATFORM_LINK_FAILOVER_20260903';
+const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V23_FRONTAPP_YT30D_STYLE_20260908';
 
 /**
  * Single logical entrypoint intended to be called by the already-installed
@@ -49,6 +49,7 @@ function contentOsUnifiedSchedulerTick() {
   out.stages.pipeline = runOptionalContentOsStage_('contentOsPipelineTick');
   out.stages.queensBridge = runOptionalContentOsStage_('contentOsQueensBridgeTick');
   out.stages.youtubeSeedFactory = runOptionalContentOsStage_('youtubeSeedFactoryTick');
+  out.stages.frontAppYoutubeTrend30d = runOptionalContentOsStage_('youtubeFrontAppTrend30dDailyTick');
   out.stages.seedQualification = runOptionalContentOsStage_('contentOsSeedQualification10mTick');
   out.stages.frontLineage = runOptionalContentOsStage_('contentOsFrontLineage10mTick');
   out.stages.virtualFront = runOptionalContentOsStage_('contentOsVirtualFront10mTick');
@@ -85,6 +86,7 @@ function runOptionalContentOsStage_(handlerName) {
     if (handlerName === 'contentOsPipelineTick' && typeof contentOsPipelineTick === 'function') return contentOsPipelineTick();
     if (handlerName === 'contentOsQueensBridgeTick' && typeof contentOsQueensBridgeTick === 'function') return contentOsQueensBridgeTick();
     if (handlerName === 'youtubeSeedFactoryTick' && typeof youtubeSeedFactoryTick === 'function') return youtubeSeedFactoryTick();
+    if (handlerName === 'youtubeFrontAppTrend30dDailyTick' && typeof youtubeFrontAppTrend30dDailyTick === 'function') return youtubeFrontAppTrend30dDailyTick();
     if (handlerName === 'contentOsSeedQualification10mTick' && typeof contentOsSeedQualification10mTick === 'function') return contentOsSeedQualification10mTick();
     if (handlerName === 'contentOsFrontLineage10mTick' && typeof contentOsFrontLineage10mTick === 'function') return contentOsFrontLineage10mTick();
     if (handlerName === 'contentOsVirtualFront10mTick' && typeof contentOsVirtualFront10mTick === 'function') return contentOsVirtualFront10mTick();
@@ -126,6 +128,7 @@ function auditContentOsTriggerContract() {
   }).length;
   const duplicateApiAudit = rows.filter(function(r) { return r.handler === 'runCentralApiCredentialUsageAuditHourly'; }).length;
   const duplicateYouTubeSeed = rows.filter(function(r) { return r.handler === 'youtubeSeedFactoryTick' || r.handler === 'runYouTubeSeedFactoryFromFactoryWake'; }).length;
+  const duplicateYoutubeTrend30d = rows.filter(function(r) { return r.handler === 'youtubeFrontAppTrend30dDailyTick' || r.handler === 'runYouTubeFrontTrend30dFromFactory'; }).length;
   const duplicateDriveAllFileSeed = rows.filter(function(r) {
     return r.handler === 'runCentralDriveAllFileSeedFactoryFromFactory' ||
       r.handler === 'runCentralDriveAllFileIntakeV4FromFactory' ||
@@ -145,14 +148,15 @@ function auditContentOsTriggerContract() {
   const dryWriterConfigPhysical = rows.filter(function(r) { return r.handler === 'runContentOsDryWriterRuntimeConfigAutoHealFromFactory_'; }).length;
   const platformLinkFailoverPhysical = rows.filter(function(r) { return r.handler === 'runPlatformLinkFailoverGuard' || r.handler === 'applyPlatformPointerSuccession'; }).length;
   return {
-    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && duplicateYouTubeSeed === 0 && duplicateDriveAllFileSeed === 0 && duplicateSketchupLearning === 0 && centralSheetAudit <= 1 && workflowBridgeCrosscheck === 0 && tabletRemotePhysical === 0 && openAi5Physical === 0 && daily800Physical === 0 && dryWriterConfigPhysical === 0 && platformLinkFailoverPhysical === 0,
-    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE_DRIVE_ALL_FILE_V4_CONTENT_QA_SKETCHUP_QUEUE_AND_RECEIPTS_DRYWRITER_CONFIG_YOUTUBE_SEED_DAILY800_CWBX_TABLET_REMOTE_OPENAI5_PLATFORM_LINK_FAILOVER;NO_SKETCHUP_OR_PLATFORM_FAILOVER_DEDICATED_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
+    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && duplicateYouTubeSeed === 0 && duplicateYoutubeTrend30d === 0 && duplicateDriveAllFileSeed === 0 && duplicateSketchupLearning === 0 && centralSheetAudit <= 1 && workflowBridgeCrosscheck === 0 && tabletRemotePhysical === 0 && openAi5Physical === 0 && daily800Physical === 0 && dryWriterConfigPhysical === 0 && platformLinkFailoverPhysical === 0,
+    physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE_DRIVE_ALL_FILE_V4_CONTENT_QA_SKETCHUP_QUEUE_AND_RECEIPTS_DRYWRITER_CONFIG_YOUTUBE_SEED_FRONTAPP_YT30D_DAILY800_CWBX_TABLET_REMOTE_OPENAI5_PLATFORM_LINK_FAILOVER;NO_SKETCHUP_OR_PLATFORM_FAILOVER_DEDICATED_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
     unifiedTriggerCount: duplicateOwn,
     allAppPhysicalTriggerCount: duplicateAllApp,
     imageLearningPhysicalTriggerCount: duplicateImage,
     imageSupplyPhysicalTriggerCount: duplicateImageSupply,
     apiCredentialAuditPhysicalTriggerCount: duplicateApiAudit,
     youtubeSeedPhysicalTriggerCount: duplicateYouTubeSeed,
+    frontAppYoutubeTrend30dPhysicalTriggerCount: duplicateYoutubeTrend30d,
     driveAllFilePhysicalTriggerCount: duplicateDriveAllFileSeed,
     sketchupLearningPhysicalTriggerCount: duplicateSketchupLearning,
     centralSheetAuditTriggerCount: centralSheetAudit,
@@ -168,6 +172,7 @@ function auditContentOsTriggerContract() {
     sketchupReceiptLogicalMinutes: 10,
     dryWriterConfigLogicalMinutes: 10,
     youtubeSeedLogicalMinutes: 10,
+    frontAppYoutubeTrend30dLogicalMinutes: 1440,
     imageLearningLogicalMinutes: 10,
     imageSupplyLogicalMinutes: 10,
     apiCredentialAuditLogicalMinutes: 60,
