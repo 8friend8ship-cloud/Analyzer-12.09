@@ -1,4 +1,4 @@
-const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V22_SKETCHUP_DRIVE_STAGING_PLATFORM_LINK_FAILOVER_20260903';
+const CONTENTOS_UNIFIED_SCHEDULER_VERSION = 'CONTENTOS_UNIFIED_SCHEDULER_V23_NOTEBOOK_CLOUD_DISPATCH_20260919';
 
 /**
  * Single logical entrypoint intended to be called by the already-installed
@@ -65,6 +65,7 @@ function contentOsUnifiedSchedulerTick() {
   out.stages.tabletRemoteDispatcher = runOptionalContentOsStage_('runCentralTabletRemoteDispatcherFromFactory');
   out.stages.openAi5Workers = runOptionalContentOsStage_('runOpenAi5WorkerControlCycleFromFactory');
   out.stages.platformLinkFailover = runOptionalContentOsStage_('runPlatformLinkFailoverGuard');
+  out.stages.notebookCloudQueueDispatch = runOptionalContentOsStage_('runNotebookCloudQueueDispatchFromFactory');
 
   out.ok = Object.keys(out.stages).every(function(k) {
     const r = out.stages[k];
@@ -102,6 +103,7 @@ function runOptionalContentOsStage_(handlerName) {
     if (handlerName === 'runCentralTabletRemoteDispatcherFromFactory' && typeof runCentralTabletRemoteDispatcherFromFactory === 'function') return runCentralTabletRemoteDispatcherFromFactory({source:'contentOsUnifiedSchedulerTick'});
     if (handlerName === 'runOpenAi5WorkerControlCycleFromFactory' && typeof runOpenAi5WorkerControlCycleFromFactory === 'function') return runOpenAi5WorkerControlCycleFromFactory();
     if (handlerName === 'runPlatformLinkFailoverGuard' && typeof runPlatformLinkFailoverGuard === 'function') return runPlatformLinkFailoverGuard();
+    if (handlerName === 'runNotebookCloudQueueDispatchFromFactory' && typeof runNotebookCloudQueueDispatchFromFactory === 'function') return runNotebookCloudQueueDispatchFromFactory({source:'contentOsUnifiedSchedulerTick'});
     return {ok:true, skipped:true, reason:'HANDLER_NOT_SYNCED', handler:handlerName};
   } catch (err) {
     return {ok:false, handler:handlerName, error:String(err && err.message || err)};
@@ -144,8 +146,9 @@ function auditContentOsTriggerContract() {
   const daily800Physical = rows.filter(function(r) { return r.handler === 'runCentralDaily800W1W5AuditFromFactory_' || r.handler === 'runCentralDaily800W1W5AuditNow'; }).length;
   const dryWriterConfigPhysical = rows.filter(function(r) { return r.handler === 'runContentOsDryWriterRuntimeConfigAutoHealFromFactory_'; }).length;
   const platformLinkFailoverPhysical = rows.filter(function(r) { return r.handler === 'runPlatformLinkFailoverGuard' || r.handler === 'applyPlatformPointerSuccession'; }).length;
+  const notebookCloudDispatchPhysical = rows.filter(function(r) { return r.handler === 'runNotebookCloudQueueDispatchFromFactory'; }).length;
   return {
-    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && duplicateYouTubeSeed === 0 && duplicateDriveAllFileSeed === 0 && duplicateSketchupLearning === 0 && centralSheetAudit <= 1 && workflowBridgeCrosscheck === 0 && tabletRemotePhysical === 0 && openAi5Physical === 0 && daily800Physical === 0 && dryWriterConfigPhysical === 0 && platformLinkFailoverPhysical === 0,
+    ok: duplicateOwn <= 1 && duplicateAllApp === 0 && duplicateImage === 0 && duplicateImageSupply === 0 && duplicateApiAudit === 0 && duplicateYouTubeSeed === 0 && duplicateDriveAllFileSeed === 0 && duplicateSketchupLearning === 0 && centralSheetAudit <= 1 && workflowBridgeCrosscheck === 0 && tabletRemotePhysical === 0 && openAi5Physical === 0 && daily800Physical === 0 && dryWriterConfigPhysical === 0 && platformLinkFailoverPhysical === 0 && notebookCloudDispatchPhysical === 0,
     physicalTriggerPolicy: 'REUSE_EXISTING_FACTORY_PROCESS_TASK_QUEUE_FOR_PIPELINE_DRIVE_ALL_FILE_V4_CONTENT_QA_SKETCHUP_QUEUE_AND_RECEIPTS_DRYWRITER_CONFIG_YOUTUBE_SEED_DAILY800_CWBX_TABLET_REMOTE_OPENAI5_PLATFORM_LINK_FAILOVER;NO_SKETCHUP_OR_PLATFORM_FAILOVER_DEDICATED_PHYSICAL_TRIGGER;ONE_DEDICATED_CENTRAL_SHEET_WATCHDOG_ALLOWED',
     unifiedTriggerCount: duplicateOwn,
     allAppPhysicalTriggerCount: duplicateAllApp,
@@ -162,6 +165,7 @@ function auditContentOsTriggerContract() {
     daily800W1W5PhysicalTriggerCount: daily800Physical,
     dryWriterConfigPhysicalTriggerCount: dryWriterConfigPhysical,
     platformLinkFailoverPhysicalTriggerCount: platformLinkFailoverPhysical,
+    notebookCloudDispatchPhysicalTriggerCount: notebookCloudDispatchPhysical,
     driveAllFileIntakeLogicalMinutes: 10,
     driveAllFileContentQaLogicalMinutes: 10,
     sketchupLearningLogicalMinutes: 10,
@@ -176,6 +180,7 @@ function auditContentOsTriggerContract() {
     tabletRemoteLogicalMinutes: 5,
     openAi5LogicalMinutes: 5,
     platformLinkFailoverLogicalMinutes: 5,
+    notebookCloudDispatchLogicalMinutes: 5,
     daily800W1W5LogicalMinutes: 1440,
     openAiWorkDependency: false,
     triggers: rows,
