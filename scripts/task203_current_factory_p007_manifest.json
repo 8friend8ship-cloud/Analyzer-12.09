@@ -23,6 +23,12 @@
       "path": "apps-script/Central_Drive_All_File_Content_QA_Seed_Promoter_V1_20260903.gs",
       "gitBlobSha": "e2472e394c80a043b2afe97fc55c6aa54237351e",
       "requiredFunction": "runCentralDriveAllFileContentQaSeedFromFactory"
+    },
+    {
+      "path": "apps-script/Notebook_Cloud_Queue_Dispatch_20260919.gs",
+      "gitBlobSha": "ab8fa1f3e3f5241fc21e3071992627bb7b2e6288",
+      "requiredFunction": "runNotebookCloudQueueDispatchFromFactory",
+      "lineageCommit": "d3197520cdedeff5788d04126b40a37c00f5f327"
     }
   ],
   "safety": {
@@ -37,5 +43,5 @@
     "applyRequiresExactBaseline": true,
     "singleExecutionOwner": true
   },
-  "doneGate": "current 1DzJw clone/readback -> exact baseline receipt -> source bundle verified -> same-owner sync -> pull/readback -> natural DRIVEINTAKE4 x2 -> 07/08/80/93 -> NODE/WORKFLOW/MAP/LEDGER consistency -> final receipt"
+  "doneGate": "current 1DzJw clone/readback -> exact baseline receipt -> source bundle verified including Notebook Cloud Dispatch -> same-owner sync -> pull/readback -> natural processAllTaskQueues x2 -> 07/94/93 consistency -> RemoteDC online/ping/real command/file RW x2 -> final receipt"
 }
