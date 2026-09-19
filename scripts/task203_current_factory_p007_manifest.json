@@ -1,5 +1,5 @@
 {
-  "version": "P0_07_TASK203_CURRENT_FACTORY_MANIFEST_V1_20260916",
+  "version": "P0_07_TASK203_CURRENT_FACTORY_MANIFEST_V2_20260919",
   "taskId": "TASK-SYSTEM-CITY-ORDER-P0-20260915",
   "nodeId": "NODE-EVENT-WATCH",
   "factoryScriptId": "1DzJwRMdmdxv2CUdizopRr5qt_IqxvNlrPq6COIDQ6coGRvZOS5cvdxeL",
@@ -16,7 +16,7 @@
     },
     {
       "path": "apps-script/ContentOS_Unified_Scheduler.gs",
-      "gitBlobSha": "1ae2ee458f865de01939de9c2588397564fbd019",
+      "gitBlobSha": "af38cc476c455a752f5c67b326147298f7127394",
       "requiredFunction": "contentOsUnifiedSchedulerTick"
     },
     {
@@ -26,7 +26,7 @@
     },
     {
       "path": "apps-script/Notebook_Cloud_Queue_Dispatch_20260919.gs",
-      "gitBlobSha": "ab8fa1f3e3f5241fc21e3071992627bb7b2e6288",
+      "gitBlobSha": "d994171ae0355085a777e2cfb23361e2d4916b33",
       "requiredFunction": "runNotebookCloudQueueDispatchFromFactory",
       "lineageCommit": "d3197520cdedeff5788d04126b40a37c00f5f327"
     }
@@ -43,5 +43,5 @@
     "applyRequiresExactBaseline": true,
     "singleExecutionOwner": true
   },
-  "doneGate": "current 1DzJw clone/readback -> exact baseline receipt -> source bundle verified including Notebook Cloud Dispatch -> same-owner sync -> pull/readback -> natural processAllTaskQueues x2 -> 07/94/93 consistency -> RemoteDC online/ping/real command/file RW x2 -> final receipt"
+  "doneGate": "current 1DzJw clone/readback -> exact baseline receipt -> updated source bundle verified including Scheduler V23 + Notebook Cloud Dispatch V2 -> same-owner sync -> pull/readback -> natural processAllTaskQueues x2 -> 07/94/93 consistency -> RemoteDC online/ping/real command/file RW x2 -> final receipt"
 }
