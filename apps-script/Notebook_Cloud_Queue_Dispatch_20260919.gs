@@ -1,8 +1,8 @@
 var NOTEBOOK_CLOUD_DISPATCH_V1={
-  v:'NOTEBOOK_CLOUD_DISPATCH_V1_20260919',
+  v:'NOTEBOOK_CLOUD_DISPATCH_V2_PERSISTENCE_FIRST_20260919',
   queueId:'1qTrJI_GSjxOQlSFzY3Dm-6MJ5PTVxdy6Eibke3PkVA4',
   queueTab:'07_EXECUTION_QUEUE',
-  targetTask:'TASK_PYTHON_DRIVE_API_WORKER_001',
+  targetTasks:['TASK_20260919_LOCAL_CONSUMER_PERSISTENCE_REPAIR_001','TASK_PYTHON_DRIVE_API_WORKER_001'],
   parentTask:'TASK_20260909_REMOTE_DC_DISPLAY_OFF_RECOVERY_001',
   tz:'Asia/Seoul'
 };
@@ -21,9 +21,16 @@ function runNotebookCloudQueueDispatchFromFactory(context){
     ['TASK_ID','STATUS','EXECUTION_METHOD','UPDATED_AT','NOTES','OWNER','LAST_REQUESTED_AT','REQUEST_COUNT','BLOCKED_TASK_ID'].forEach(function(k){
       if(h[k]===undefined) throw new Error('QUEUE_COLUMN_MISSING_'+k);
     });
-    var row=-1;
-    for(var i=1;i<d.length;i++) if(String(d[i][h.TASK_ID])===cfg.targetTask){row=i;break}
-    if(row<1) return {ok:false,hold:true,status:'TARGET_TASK_NOT_FOUND',version:cfg.v};
+    var row=-1, selectedTask='';
+    for(var t=0;t<cfg.targetTasks.length && row<1;t++){
+      for(var i=1;i<d.length;i++){
+        if(String(d[i][h.TASK_ID])===cfg.targetTasks[t]){
+          var cand=String(d[i][h.STATUS]||'').toUpperCase();
+          if(/^(RETRY|READY|OPEN_RETRYABLE|AUTO_RECOVERY_PENDING|READY_LOCAL_CONSUMER)$/.test(cand)){row=i;selectedTask=cfg.targetTasks[t];break}
+        }
+      }
+    }
+    if(row<1) return {ok:false,hold:true,status:'TARGET_TASK_NOT_FOUND_OR_NOT_CLAIMABLE',targets:cfg.targetTasks,version:cfg.v};
     var st=String(d[row][h.STATUS]||'').toUpperCase();
     var claimable=/^(RETRY|READY|OPEN_RETRYABLE|AUTO_RECOVERY_PENDING)$/.test(st);
     if(!claimable) return {ok:true,hold:true,status:'NO_CLAIMABLE_STATE',currentStatus:st,version:cfg.v};
@@ -46,7 +53,7 @@ function runNotebookCloudQueueDispatchFromFactory(context){
     SpreadsheetApp.flush();
 
     var rb=sh.getRange(row+1,1,1,sh.getLastColumn()).getDisplayValues()[0];
-    return {ok:true,status:'READY_LOCAL_CONSUMER',taskId:cfg.targetTask,parentTask:cfg.parentTask,source:String(context&&context.source||'factory'),readbackStatus:rb[h.STATUS],version:cfg.v};
+    return {ok:true,status:'READY_LOCAL_CONSUMER',taskId:selectedTask,parentTask:cfg.parentTask,source:String(context&&context.source||'factory'),readbackStatus:rb[h.STATUS],version:cfg.v};
   }catch(e){
     return {ok:false,hold:true,status:'DISPATCH_ERROR',error:String(e&&e.message||e),version:cfg.v};
   }finally{lock.releaseLock()}
