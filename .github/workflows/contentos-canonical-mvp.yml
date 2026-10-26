@@ -20,6 +20,8 @@ jobs:
         run: npm run lint
       - name: Build
         run: npm run build
+      - name: Threads Queens Seed regression
+        run: node --test scripts/threads-radar.test.mjs
       - name: Canonical feature regression gate
         shell: bash
         run: |
