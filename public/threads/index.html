@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ContentOS · 스레드팩 | QUEENS → SEED</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif;background:#0b1020;color:#eaf0ff;font-synthesis:none}
+*{box-sizing:border-box}body{margin:0}a{color:#8cd0ff}button,input,textarea,select{font:inherit}button{cursor:pointer}
+header{padding:20px max(16px,calc((100vw - 1120px)/2));border-bottom:1px solid #283650;background:#101a2e}
+h1{margin:5px 0 8px;font-size:clamp(26px,5vw,40px);letter-spacing:-.04em}h2{font-size:19px;margin:0 0 13px}
+p{color:#b9c7df;line-height:1.65}.sub{margin:0;color:#8f9fb8;font-size:13px}
+main{max-width:1120px;margin:auto;padding:20px 16px 70px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.panel{border:1px solid #273a56;border-radius:16px;padding:17px;background:#131f35;margin-bottom:15px}
+.kpi{background:#1c2d48;border-radius:12px;padding:14px}.kpi b{display:block;font-size:28px;margin:5px 0}.kpi span{font-size:12px;color:#aebfd9}
+.flex{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.field{display:flex;gap:6px;flex-direction:column;flex:1;min-width:150px}
+label{color:#c6d6ee;font-size:13px;font-weight:600}
+input,select,textarea{color:#eff6ff;background:#0c1527;border:1px solid #3b4d68;border-radius:9px;padding:12px;width:100%}
+textarea{min-height:125px;resize:vertical}
+button{border:1px solid #426e9a;border-radius:10px;padding:11px 14px;color:#fff;background:#244669;font-weight:700}
+button.primary{background:#117de9;border-color:#2991fc}button.danger{background:#3a2837;border-color:#6e3548}
+button:disabled{opacity:.45;cursor:not-allowed}.status{padding:10px;background:#101a2c;border-radius:8px;color:#b2cbe6;font-size:13px;min-height:38px}
+.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.card{border:1px solid #334768;padding:16px;border-radius:12px;background:#152440}
+.card h3{font-size:17px;line-height:1.5;margin:8px 0;overflow-wrap:anywhere}
+.tag{font-size:11px;display:inline-block;padding:5px 8px;border-radius:8px;color:#bedaff;background:#26456d}
+.score{color:#81edc7;font-size:22px;font-weight:900}.muted{color:#a7bad0;font-size:12px}
+small{color:#a1afc5}.empty{padding:32px 8px;color:#9facc3;text-align:center}
+footer{font-size:12px;color:#7f96b4;padding:20px;text-align:center}
+@media(max-width:700px){.grid,.cards{grid-template-columns:repeat(2,1fr)}.panel{padding:13px}.kpi b{font-size:23px}}
+@media(max-width:440px){.cards{grid-template-columns:1fr}h1{font-size:27px}}
+</style></head><body>
+<header><p class="sub">CONTENTOS / DUAL_EYE_MULTI_BRAIN_BRIDGE_V1</p><h1>스레드팩 · QUEENS → SEED</h1><p class="sub">실제 자료 기반 급상승 탐지 · 씨드 생성 · 중앙 큐 연결 · 코드형 영상 기획</p></header>
+<main>
+<section class="grid" aria-label="수집 상태"><div class="kpi"><span>수집 게시물</span><b id="kTotal">0</b></div>
+<div class="kpi"><span>계산 성공</span><b id="kVerified">0</b></div>
+<div class="kpi"><span>10배 이상</span><b id="kOutliers">0</b></div>
+<div class="kpi"><span>근거 부족</span><b id="kMissing">0</b></div></section>
+<section class="panel" style="margin-top:15px"><h2>① 공개 게시글 찾기</h2>
+<div class="flex"><div class="field"><label for="keyword">검색할 키워드</label><input id="keyword" value="인테리어" maxlength="100"/></div>
+<div class="field"><label for="mode">비교 기준</label><select id="mode"><option value="engagement">반응 합계(좋아요+답글+리포스트+인용)</option><option value="views">조회수</option></select></div></div>
+<div class="flex" style="margin-top:12px"><button class="primary" id="searchBtn">Meta 공식 API 검색</button><button id="fixtureBtn">연습 데이터로 기능 시험</button><a href="https://www.youtube.com/@d_guide07/videos" target="_blank" rel="noopener">디가이드 채널 자료</a></div>
+<p class="muted">공식 검색은 서버의 THREADS_ACCESS_TOKEN 및 Meta 앱 공개 검색 권한이 필요합니다. 검색 응답에 반응 지표가 없으면 실제 배율은 계산되지 않습니다. 연습 데이터는 인공 데이터이며 실측값이 아닙니다.</p>
+<div id="status" class="status" aria-live="polite">대기 중 · 아직 실제 Threads API를 실행하지 않았습니다.</div></section>
+<section class="panel"><h2>② 퀸즈 원천 자료 가져오기</h2><p class="muted">Threads API 결과(JSON), 공개 글의 메타데이터를 입력할 수 있습니다. <b>원본 글 3개 이상의 계정별 비교자료가 있어야</b> 급상승을 계산합니다.</p>
+<label for="rawJson">JSON 배열 붙여넣기</label><textarea id="rawJson" spellcheck="false" placeholder='[{"id":"...","username":"...","text":"...","permalink":"https://www.threads.com/...","likeCount":12,"replyCount":2,"repostCount":1,"quoteCount":0}]'></textarea>
+<div class="flex" style="margin-top:10px"><button id="importBtn">자료 불러오기</button><button id="exportBtn">퀸즈·씨드 JSON 내보내기</button><button class="danger" id="clearBtn">로컬 자료 지우기</button></div>
+<div style="margin-top:12px"><label for="fileInput">또는 JSON 파일 선택</label><input id="fileInput" type="file" accept=".json,application/json"/></div></section>
+<section class="panel"><h2>③ 분석 결과와 제작 큐</h2><div class="flex" style="margin-bottom:15px">
+<label><input id="tenOnly" type="checkbox" style="width:auto"/> 10배 이상만 보기</label>
+<select id="sort"><option value="score">급상승 배율순</option><option value="new">최신순</option></select>
+<button id="sendBtn">선택한 씨드 중앙 큐 전송</button></div>
+<div class="muted" style="margin-bottom:10px">중앙 전송은 체크한 실제 URL 자료만 전송하며 백엔드가 성공을 응답한 경우에만 성공으로 셉니다. 연습 데이터 전송 금지.</div>
+<div class="cards" id="results"><div class="empty">검색하거나 자료를 가져오면 여기에 카드가 표시됩니다.</div></div>
+</section>
+<section class="panel"><h2>④ 영상 제작 함수계약</h2><p>원천 → <strong>04_QUEENS</strong> → <strong>05_SEED</strong> → <strong>06_FUNCTION_CONTRACT</strong> → 기존 영상 제작 큐. 원본 문구 복제가 아닌, 고유한 사례와 데이터로 재구성합니다.</p><p class="muted">기존 ContentOS 저장소에 연결되는 보조 화면이며 별도의 프로젝트·트리거를 만들지 않습니다. 영상 스토리보드 4장면은 각 씨드 JSON의 shotPlan에서 생성됩니다.</p></section>
+</main><footer>CONTENTOS_THREADS_QUEENS_SEED_V1 · 실제 성공은 결과 데이터와 서버 readback으로 판정합니다.</footer>
+<script type="module">
+import {rankPosts,toQueensSeed,summarize,CONTRACT,MAX_IMPORT} from './radar-core.mjs';
+const $ = id => document.getElementById(id);
+const escapeHtml = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cacheKey='contentos:threads:manual:v1';
+let posts=[],ranked=[];
+try{const p=JSON.parse(localStorage.getItem(cacheKey)||'[]');if(Array.isArray(p))posts=p.slice(0,MAX_IMPORT)}catch{}
+const say=s=>{$('status').textContent=s;};
+function repaint(){
+ ranked=rankPosts(posts,{mode:$('mode').value});
+ const k=summarize(ranked);$('kTotal').textContent=k.rows;$('kVerified').textContent=k.verifiedOutliers;
+ $('kOutliers').textContent=k.qualified;$('kMissing').textContent=k.insufficient;
+ const keyword=$('keyword').value.trim().toLowerCase();
+ let shown=ranked.filter(x=>(!$('tenOnly').checked||x.score!==null&&x.score>=10)&&
+ (!keyword||[x.text,x.user].some(t=>String(t).toLowerCase().includes(keyword))));
+ if($('sort').value==='new')shown.sort((a,b)=>String(b.timestamp).localeCompare(String(a.timestamp)));
+ $('results').innerHTML=shown.length?'':'<div class="empty">조건에 맞는 게시물이 없습니다. 필터 또는 수집자료를 확인하세요.</div>';
+ shown.forEach(p=>{
+  const el=document.createElement('article');el.className='card';
+  const usable=!!p.url&&/^https:\/\/(www\.)?threads\.(net|com)\//.test(p.url)&&p.provenance!=='SYNTHETIC_TEST';
+  el.innerHTML='<div class="flex"><span class="tag">@'+escapeHtml(p.user)+'</span><span class="tag">'+escapeHtml(p.provenance)+'</span></div>'+
+   '<h3>'+escapeHtml(p.text.slice(0,170)||'(본문 없음)')+'</h3>'+
+   '<div class="score">'+(p.score===null?'계산 불가':p.score+'배')+'</div>'+
+   '<p class="muted">비교 원천: '+p.historyCount+'개 · 중간값: '+(p.baseline??'미확인')+
+   ' · 현재 '+p.metricMode+': '+(p[p.metricMode]??'미확인')+'</p>'+
+   '<p class="muted">'+escapeHtml(p.verification)+'</p>'+
+   (p.url?'<a target="_blank" rel="noopener" href="'+escapeHtml(p.url)+'">원문 확인</a>':'<span class="muted">연습 전용 원문 없음</span>')+
+   '<div class="flex" style="margin-top:10px"><label><input type="checkbox" class="selectSeed" data-id="'+escapeHtml(p.id)+'" style="width:auto" '+(!usable?'disabled':'')+'/> 중앙 저장 선택</label><button class="seedBtn" data-id="'+escapeHtml(p.id)+'">4장면 기획 보기</button></div>';
+  $('results').appendChild(el);
+ });
+}
+function persist(){try{localStorage.setItem(cacheKey,JSON.stringify(posts));}catch{}repaint();}
+function addRows(arr,provenance){
+ let added=0;const prior=new Set(posts.map(x=>String(x.id||x.permalink||x.url||'')));
+ for(const raw of arr.slice(0,MAX_IMPORT)){
+  if(!raw||typeof raw!=='object')continue;
+  const x={...raw,provenance:raw.provenance||provenance};
+  const id=String(x.id||x.permalink||x.url||'');
+  if(!id||prior.has(id))continue;
+  if(!x.username&&!x.user)continue;
+  prior.add(id);posts.push(x);added++;
+ }
+ posts=posts.slice(-MAX_IMPORT);persist();say('자료 '+added+'건 추가, 중복 건너뜀. 전체 '+posts.length+'건.');
+}
+$('importBtn').onclick=()=>{
+ try{const j=JSON.parse($('rawJson').value);const a=Array.isArray(j)?j:Array.isArray(j.data)?j.data:Array.isArray(j.posts)?j.posts:[];
+  if(!a.length)throw Error('JSON 배열 또는 data/posts 배열 필요');
+  addRows(a,'MANUAL_IMPORT');
+ }catch(e){say('JSON 형식 오류: '+e.message);}
+};
+$('fileInput').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{const j=JSON.parse(await f.text());addRows(Array.isArray(j)?j:j.data||j.posts||[],'JSON_FILE');}catch(err){say('파일 오류: '+err.message);}};
+$('mode').onchange=repaint;$('keyword').oninput=repaint;$('tenOnly').onchange=repaint;$('sort').onchange=repaint;
+$('fixtureBtn').onclick=()=>{
+ const times=['2026-10-18T12:00:00Z','2026-10-19T12:00:00Z','2026-10-20T12:00:00Z','2026-10-21T12:00:00Z'];
+ const likes=[9,8,11,220],replies=[1,1,1,30],reposts=[0,0,0,10],quotes=[0,0,0,0];
+ const demo=times.map((timestamp,i)=>({id:'synthetic_'+i,username:'practice_example',timestamp,text:['연습용 게시물: 공사 전 점검','연습용 게시물: 색상 선택','연습용 게시물: 수납 사례','연습용 게시물: 수납 실패와 개선'][i],likeCount:likes[i],replyCount:replies[i],repostCount:reposts[i],quoteCount:quotes[i],provenance:'SYNTHETIC_TEST'}));
+ $('keyword').value='';addRows(demo,'SYNTHETIC_TEST');
+};
+$('searchBtn').onclick=async()=>{
+ const q=$('keyword').value.trim();if(!q)return say('검색 키워드를 넣으세요.');
+ say('Meta 공식 키워드 검색 요청 중...');
+ $('searchBtn').disabled=true;
+ try{const r=await fetch('/api/threads-radar?q='+encodeURIComponent(q)+'&limit=25');const j=await r.json();
+  if(!r.ok)throw Error(j.error||'HTTP_'+r.status);
+  addRows(j.posts||[],'META_OFFICIAL_KEYWORD_SEARCH');
+  say('공식 검색 '+(j.posts?.length||0)+'건 · 반응·조회수 값은 원본 API에 없으면 미확인으로 표시됩니다.');
+ }catch(e){say('공식 검색 보류: '+e.message+' (Meta 권한/서버 환경 확인 필요)');}finally{$('searchBtn').disabled=false;}
+};
+$('clearBtn').onclick=()=>{if(!confirm('이 브라우저의 스레드 수집자료만 지웁니다. 계속합니까?'))return;posts=[];persist();say('브라우저 수집자료 초기화 완료');};
+$('exportBtn').onclick=()=>{const records=ranked.map(x=>toQueensSeed(x,$('keyword').value));const b=new Blob([JSON.stringify({contractVersion:CONTRACT,createdAt:new Date().toISOString(),records},null,2)],{type:'application/json'});
+ const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='CONTENTOS_THREADS_QUEENS_SEED.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);say(records.length+'건 JSON 내보내기 완료 · 중앙 기록과는 별개');};
+$('results').onclick=e=>{const btn=e.target.closest('.seedBtn');if(!btn)return;const p=ranked.find(x=>x.id===btn.dataset.id);if(!p)return;const seed=toQueensSeed(p,$('keyword').value);
+ alert('씨드: '+seed.seed.idea+'\n\n4장면:\n'+seed.seed.shotPlan.map((s,i)=>(i+1)+'. '+s).join('\n')+'\n\n원문 확인: '+(p.url||'연습 데이터'));};
+$('sendBtn').onclick=async()=>{
+ const ids=Array.from(document.querySelectorAll('.selectSeed:checked')).map(x=>x.dataset.id);
+ if(!ids.length)return say('전송할 실제 Threads 자료를 체크하세요.');
+ let accepted=0;const failures=[];
+ for(const id of ids){
+  const row=ranked.find(x=>x.id===id);if(!row||!row.url||row.provenance==='SYNTHETIC_TEST')continue;
+  const seed=toQueensSeed(row,$('keyword').value);
+  const body={action:'enqueue',asset_type:'TEXT',url:row.url,source_page_url:row.url,
+   platform:'THREADS',title:row.text.slice(0,120)||'Threads post',
+   primary_code:'CONTENTOS_THREADS_QUEENS_SEED',keywords:$('keyword').value,
+   target_apps:'APP_CONTENT_OS',use_case:'THREADS_QUEENS_SEED',
+   official_source:row.provenance,rights_usage:'REFERENCE_ONLY',
+   notes:JSON.stringify(seed).slice(0,3300)};
+  try{const r=await fetch('/api/backend',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+   const j=await r.json();if(r.ok&&j.ok!==false&&j.mirrored!==false)accepted++;else failures.push(id+': backend not accepted');
+  }catch(err){failures.push(id+': '+err.message);}
+ }
+ say('중앙 전송 응답: 승인 '+accepted+'/'+ids.length+' · 실패 '+failures.length+
+  (failures.length?' · '+failures.slice(0,2).join('; '):'')+'. 시트 readback은 별도 검증 필요.');
+};
+repaint();
+</script></body></html>
