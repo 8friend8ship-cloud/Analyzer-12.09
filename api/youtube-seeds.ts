@@ -175,12 +175,15 @@ export default async function handler(req:any,res:any) {
     }
 
     let quotaUnits = 0;
+    let searchQuotaCalls = 0;
     let targetIds = ids;
     let nextPageToken:string|undefined;
     if (!targetIds.length) {
       if (!query) return res.status(400).json({error:'QUERY_OR_VIDEO_IDS_REQUIRED'});
       const s = await youtubeGet('search',{part:'snippet',type:'video',q:query,maxResults:String(Math.min(limit,50))});
-      quotaUnits += 100;
+      // 2026 YouTube API: search.list = 1 unit in separate Search Queries bucket (100 calls/day).
+      quotaUnits += 1;
+      searchQuotaCalls += 1;
       targetIds = (s.items || []).map((x:any)=>text(x.id?.videoId)).filter(Boolean);
       nextPageToken = text(s.nextPageToken) || undefined;
     }
@@ -199,6 +202,8 @@ export default async function handler(req:any,res:any) {
     const usage = {
       source:'SERVER_API_GAP_FILL',
       quotaUnits,
+      searchQuotaCalls,
+      coreQuotaUnits:quotaUnits - searchQuotaCalls,
       itemCount:items.length,
       requestedVideoIds:targetIds.length,
       writebackAttempted:writebackResults.length,
@@ -207,6 +212,7 @@ export default async function handler(req:any,res:any) {
     };
     logUsage(usage);
     res.setHeader('X-Content-OS-Quota-Units',String(quotaUnits));
+    res.setHeader('X-Content-OS-Search-Quota-Calls',String(searchQuotaCalls));
     return res.status(200).json({contractVersion:CONTRACT_VERSION,source:'SERVER_API_GAP_FILL',quotaUnits,usage,writeback:{attempted:writebackResults.length,accepted,results:writebackResults},items:items.slice(0,limit),...(nextPageToken?{nextPageToken}:{})});
   } catch (error:any) {
     logUsage({source:'ERROR',quotaUnits:0,itemCount:0,writebackAttempted:0,writebackAccepted:0,error:text(error?.message || error)});
