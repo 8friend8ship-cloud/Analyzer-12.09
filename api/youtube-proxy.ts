@@ -85,7 +85,7 @@ export default async function handler(req:any,res:any) {
   res.setHeader('Cache-Control','private, no-store');
   const gate=preflightYoutubeProxy(req,process.env);
   if (gate.status!==200 || !('params' in gate))
-    return res.status(gate.status).json({ok:false,error:gate.error,api_calls:0});
+    return res.status(gate.status).json({ok:false,error:('error' in gate ? gate.error : 'HOLD_POLICY'),api_calls:0});
   const url=new URL(API+'/'+gate.endpoint);
   for (const [k,v] of Object.entries(gate.params)) url.searchParams.set(k,v);
   url.searchParams.set('key',gate.apiKey);
