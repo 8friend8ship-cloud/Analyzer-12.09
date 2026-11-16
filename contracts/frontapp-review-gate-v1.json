@@ -2,14 +2,32 @@
   "contractId": "FRONTAPP_REVIEW_GATE_V1_20260828",
   "status": "ACTIVE_SPEC_SHEETS_INSTALLED_RUNTIME_PROVIDER_PENDING",
   "sourceOfTruth": "01_MASTER_REGISTRY",
-  "purpose": "Fail-closed review gate for DryWriter text and all derived front-app assets before template promotion or publishing.",
+  "purpose": "Fail-closed review gate for GOODWAY WRITE (legacy DryWriter) text and all derived front-app assets before template promotion or publishing.",
   "apps": {
-    "APP_ANALYZER": {"sheet": "WEBAPP_TEMPLATE_05"},
-    "APP_INTERIOR": {"sheet": "WEBAPP_TEMPLATE_06"},
-    "APP_TRAVEL": {"sheet": "WEBAPP_TEMPLATE_07"},
-    "APP_SECURITIES_FRONT": {"sheet": "WEBAPP_TEMPLATE_08"},
-    "APP_KFOOD": {"sheet": "WEBAPP_TEMPLATE_09"},
-    "APP_DRYWRITE": {"sheet": "J365_AI_작가에이전트_V2_운영시트"}
+    "APP_ANALYZER": {
+      "sheet": "WEBAPP_TEMPLATE_05"
+    },
+    "APP_INTERIOR": {
+      "sheet": "WEBAPP_TEMPLATE_06"
+    },
+    "APP_TRAVEL": {
+      "sheet": "WEBAPP_TEMPLATE_07"
+    },
+    "APP_SECURITIES_FRONT": {
+      "sheet": "WEBAPP_TEMPLATE_08"
+    },
+    "APP_KFOOD": {
+      "sheet": "WEBAPP_TEMPLATE_09"
+    },
+    "APP_DRYWRITE": {
+      "sheet": "J365_AI_작가에이전트_V2_운영시트",
+      "displayNameKo": "굳웨이 라이트",
+      "displayNameEn": "GOODWAY WRITE",
+      "legacyAppId": "APP_DRYWRITE",
+      "brandFamily": "GOODWHY",
+      "purposeGate": "GLOBAL_WRITE_RIGHT_RELATIONSHIP_GATE_V1_20261116",
+      "preWriteRuntimeStatus": "HOLD_NOT_WIRED"
+    }
   },
   "requiredTabs": [
     "GEMINI_REVIEW",
@@ -64,7 +82,20 @@
   "learningWriteback": {
     "success": "Seed/Template/Asset Pack",
     "failure": "Queens/DO_NOT_REPEAT/PREVENTION",
-    "centralTabs": ["18_AGENT_INSTRUCTION","34_CHAT_COMMAND_HISTORY","56_FRONTAPP_WORKFLOW_MAP","63_EVOLUTION_CHANGELOG","69_MULTIMODAL_EXECUTION_ROUTER","70_MULTIMODAL_TEMPLATE_LIBRARY","71_MULTIMODAL_QA_HISTORY","75_ORCHESTRA_WORKFLOW_MAP","76_ASSET_PACK_FACTORY","77_TEMPLATE_EVOLUTION_FACTORY","79_FUNCTION_DATA_USAGE_MAP","80_DATA_RUNTIME_QA_LOG"]
+    "centralTabs": [
+      "18_AGENT_INSTRUCTION",
+      "34_CHAT_COMMAND_HISTORY",
+      "56_FRONTAPP_WORKFLOW_MAP",
+      "63_EVOLUTION_CHANGELOG",
+      "69_MULTIMODAL_EXECUTION_ROUTER",
+      "70_MULTIMODAL_TEMPLATE_LIBRARY",
+      "71_MULTIMODAL_QA_HISTORY",
+      "75_ORCHESTRA_WORKFLOW_MAP",
+      "76_ASSET_PACK_FACTORY",
+      "77_TEMPLATE_EVOLUTION_FACTORY",
+      "79_FUNCTION_DATA_USAGE_MAP",
+      "80_DATA_RUNTIME_QA_LOG"
+    ]
   },
   "approvalBoundary": "New OAuth, new cost, public publishing, destructive operations, secrets, payments or other irreversible actions remain human-gated."
 }
