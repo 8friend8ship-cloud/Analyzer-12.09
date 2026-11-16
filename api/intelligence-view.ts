@@ -10,7 +10,7 @@ body{margin:0;background:#0b1020;color:#e5e7eb;font-family:system-ui,-apple-syst
 <div class="top"><div><h1>Central Intelligence Hub</h1><div class="muted">중앙에이전트 관할 · Queens / Seed / T1 / T2 / Trend / Platform 공유 버스</div></div><button onclick="loadAll()">새로고침</button></div>
 <div class="grid" style="margin-top:18px">
 <div class="card"><h2>Backend Health</h2><div id="health" class="muted">확인 중...</div></div>
-<div class="card"><h2>App Data Feed</h2><div class="row"><select id="app"><option>ALL_APPS</option><option>APP_DRYWRITE</option><option>APP_TRAVEL</option><option>APP_INTERIOR</option><option>APP_BIBLE365</option><option>APP_KFOOD</option><option>APP_ANIMATION</option><option>APP_BOTS</option></select><button onclick="loadEvents()">불러오기</button></div><div class="muted">각 앱은 자기 APP_ID로 같은 데이터 버스를 조회합니다.</div></div>
+<div class="card"><h2>App Data Feed</h2><div class="row"><select id="app"><option>ALL_APPS</option><option value="APP_DRYWRITE">굳웨이 라이트 (GOODWAY WRITE)</option><option>APP_TRAVEL</option><option>APP_INTERIOR</option><option>APP_BIBLE365</option><option>APP_KFOOD</option><option>APP_ANIMATION</option><option>APP_BOTS</option></select><button onclick="loadEvents()">불러오기</button></div><div class="muted">각 앱은 자기 APP_ID로 같은 데이터 버스를 조회합니다.</div></div>
 <div class="card"><h2>Evolution Rule</h2><span class="tag">QUEENS_EXPAND</span><span class="tag">SEED_UPDATE</span><span class="tag">T1_UPDATE</span><span class="tag">T2_RULE_UPDATE</span><span class="tag">FUNCTION_CHANGE</span><span class="tag">FRONT_UI_CHANGE</span><span class="tag">PLATFORM_EXPERIMENT</span></div>
 </div>
 <div class="card" style="margin-top:14px"><h2>Shared Intelligence Events</h2><pre id="events">Loading...</pre></div>
