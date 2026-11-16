@@ -115,5 +115,28 @@
     "publishApprovalRequired": true,
     "noNewPhysicalTrigger": true,
     "noNewPackOrNode": true
+  },
+  "branding": {
+    "canonicalDisplayNameKo": "굳웨이 라이트",
+    "canonicalDisplayNameEn": "GOODWAY WRITE",
+    "brandFamily": "GOODWHY",
+    "previousDisplayName": "DryWriter",
+    "legacyDisplayAliases": [
+      "DryWriter",
+      "Dry Writer",
+      "GOODWHY WRITE"
+    ],
+    "canonicalAppId": "APP_WRITE",
+    "legacyAppIds": [
+      "APP_WRITE",
+      "APP_DRYWRITE"
+    ],
+    "displayRenameOnly": true,
+    "renameExistingIds": false,
+    "renameScriptPropertyKeys": false,
+    "renameDeploymentUrls": false,
+    "productionUiDeployed": false,
+    "referenceControlSheetId": "1SI-MQC7drEsxug5_mveiH7iXE2Yw1PzYRQlES8Az7nk",
+    "referenceRange": "00_CONTROL!A36:E39"
   }
 }
