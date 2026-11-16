@@ -115,4 +115,21 @@ assert.equal(two.precheckReceiptId, 'MOCK_RECEIPT_STORYBOARD_FACTORY');
 assert.equal(appended.length, 2, 'only valid scene fixtures may append');
 assert.equal(typeof sandbox.runPersonaLearningCycle10mIfDue_, 'function', 'existing learning source preserved');
 
+
+// Name-only migration: DO NOT rename old API IDs, script properties, or trigger keys.
+const personaContract = JSON.parse(fs.readFileSync('contracts/persona-orchestration-v1.json', 'utf8'));
+const frontappContract = JSON.parse(fs.readFileSync('contracts/frontapp-review-gate-v1.json', 'utf8'));
+const hubUi = fs.readFileSync('api/intelligence-view.ts', 'utf8');
+assert.equal(personaContract.branding.canonicalDisplayNameKo, '굳웨이 라이트');
+assert.equal(personaContract.branding.canonicalDisplayNameEn, 'GOODWAY WRITE');
+assert.equal(personaContract.branding.brandFamily, 'GOODWHY');
+assert.equal(personaContract.branding.renameExistingIds, false);
+assert.ok(personaContract.branding.legacyAppIds.includes('APP_DRYWRITE'));
+assert.ok(personaContract.stages.includes('DRYWRITER_TEXT_PASS'),
+  'Historical stage names must remain unchanged');
+assert.equal(frontappContract.apps.APP_DRYWRITE.displayNameKo, '굳웨이 라이트');
+assert.ok(frontappContract.flow.includes('DRYWRITER_QUEUE'), 'Legacy queue route is stable');
+assert.ok(hubUi.includes('<option value="APP_DRYWRITE">굳웨이 라이트 (GOODWAY WRITE)</option>'),
+  'Central UI shows new name and submits the original APP_ID');
+
 console.log('GOODWHY WRITE_PRECHECK PASS: 5 domains, 10 invalid fixtures, 2 blocked write paths, 2 allowed mock storyboard paths; no providers, no triggers, no public publication');
