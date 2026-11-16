@@ -1,6 +1,6 @@
 {
   "contractId": "PERSONA_ORCHESTRATION_V1",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "canonicalGateSource": "apps-script/personaOrchestrationGate.gs",
   "factorySource": "apps-script/personaOrchestrator.gs",
   "learningSource": "apps-script/personaLearning10m.gs",
@@ -90,5 +90,53 @@
     "Docs export crosscheck PASS",
     "same fixture readback x2",
     "10-minute learning candidate lineage when promoted"
-  ]
+  ],
+  "writePrecheck": {
+    "contractId": "GLOBAL_WRITE_RIGHT_RELATIONSHIP_GATE_V1_20261116",
+    "purposeDirectiveId": "GOODWHY_SION_RIGHT_RELATIONSHIP_PURPOSE_V1_20261116",
+    "charterDocumentId": "1N6B96SpMM7l990EbzR9Md5RmHdC5wGSRxu3ClxnKZog",
+    "canonicalFunction": "assertWritePrecheckAllowed_",
+    "wiredEntryPoints": [
+      "buildPersonaStoryboard_",
+      "buildStoryboardPersonaRows_"
+    ],
+    "dryWriterTextGenerationWired": false,
+    "dryWriterStatus": "HOLD_NOT_WIRED",
+    "appScriptRuntimeDeployed": false,
+    "sourceEvidenceRequired": true,
+    "readbackRevisionRequired": true,
+    "bonSeomgimGate0AndEight": true,
+    "harmonyCircleSixBeats": true,
+    "fivePrinciples": true,
+    "reviewReceiptAndInputSha256Required": true,
+    "reviewIsAttestationNotIndependentVerification": true,
+    "denyWhenMissing": "HOLD_PRECHECK_MISSING",
+    "denyWhenInvalid": "HOLD_PRECHECK_INVALID",
+    "publishApprovalRequired": true,
+    "noNewPhysicalTrigger": true,
+    "noNewPackOrNode": true
+  },
+  "branding": {
+    "canonicalDisplayNameKo": "굳웨이 라이트",
+    "canonicalDisplayNameEn": "GOODWAY WRITE",
+    "brandFamily": "GOODWHY",
+    "previousDisplayName": "DryWriter",
+    "legacyDisplayAliases": [
+      "DryWriter",
+      "Dry Writer",
+      "GOODWHY WRITE"
+    ],
+    "canonicalAppId": "APP_WRITE",
+    "legacyAppIds": [
+      "APP_WRITE",
+      "APP_DRYWRITE"
+    ],
+    "displayRenameOnly": true,
+    "renameExistingIds": false,
+    "renameScriptPropertyKeys": false,
+    "renameDeploymentUrls": false,
+    "productionUiDeployed": false,
+    "referenceControlSheetId": "1SI-MQC7drEsxug5_mveiH7iXE2Yw1PzYRQlES8Az7nk",
+    "referenceRange": "00_CONTROL!A36:E39"
+  }
 }

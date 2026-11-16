@@ -159,6 +159,8 @@ function assertPersonaMatchAllowed_(ss, payload) {
 function buildStoryboardPersonaRows_(ss, payload) {
   ss = ss || SpreadsheetApp.getActiveSpreadsheet();
   payload = payload || {};
+  pfRequireCanonicalGate_();
+  var precheck = assertWritePrecheckAllowed_(payload);
   var match = assertPersonaMatchAllowed_(ss, payload);
   var scenes = Array.isArray(payload.scenes) ? payload.scenes : [];
   if (!scenes.length) throw new Error('STORYBOARD_SCENES_REQUIRED');
@@ -190,7 +192,8 @@ function buildStoryboardPersonaRows_(ss, payload) {
     };
     written.push({ row: pfAppend_(sh, obj), boardId: boardId, at: now.toISOString() });
   });
-  return { ok: true, written: written, truncated: scenes.length > PERSONA_FACTORY_V1.runtime.batchSize };
+  return { ok: true, written: written, truncated: scenes.length > PERSONA_FACTORY_V1.runtime.batchSize,
+    precheckReceiptId: precheck.receiptId, purposeDirectiveId: precheck.purposeDirectiveId };
 }
 
 function buildBotPersonaKnowledgePack_(ss, payload) {

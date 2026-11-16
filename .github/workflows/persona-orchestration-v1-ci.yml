@@ -8,6 +8,7 @@ on:
       - 'apps-script/personaOrchestrator.gs'
       - 'apps-script/personaLearning10m.gs'
       - 'contracts/persona-orchestration-v1.json'
+      - 'tests/goodwhy-write-precheck.test.cjs'
       - '.github/workflows/persona-orchestration-v1-ci.yml'
   pull_request:
     paths:
@@ -15,6 +16,7 @@ on:
       - 'apps-script/personaOrchestrator.gs'
       - 'apps-script/personaLearning10m.gs'
       - 'contracts/persona-orchestration-v1.json'
+      - 'tests/goodwhy-write-precheck.test.cjs'
       - '.github/workflows/persona-orchestration-v1-ci.yml'
 
 jobs:
@@ -32,7 +34,7 @@ jobs:
           const fs=require('fs');
           const x=JSON.parse(fs.readFileSync('contracts/persona-orchestration-v1.json','utf8'));
           if(x.contractId!=='PERSONA_ORCHESTRATION_V1') process.exit(1);
-          if(x.version!=='1.2.0') process.exit(1);
+          if(x.version!=='1.3.0') process.exit(1);
           if(x.rules.failClosed!==true) process.exit(1);
           if(x.rules.promotionTruthOnlyInCanonicalGate!==true) process.exit(1);
           if(x.rules.providerInvocationInFactorySource!==false) process.exit(1);
@@ -42,6 +44,8 @@ jobs:
           if(x.runtimeLimits.schedulerMode!=='EXISTING_5M_FACTORY_WAKE_WITH_10M_DUE_GUARD') process.exit(1);
           if(x.runtimeLimits.learningEveryMinutes!==10) process.exit(1);
           NODE
+      - name: WRITE_PRECHECK fixture regression
+        run: node tests/goodwhy-write-precheck.test.cjs
       - name: Enforce canonical delegation learning and no duplicate clock
         shell: bash
         run: |
