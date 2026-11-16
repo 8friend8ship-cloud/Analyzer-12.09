@@ -109,12 +109,107 @@ function resolvePersonaMatch_(ss, request) {
   };
 }
 
+
+/*
+ * GOODWHY WRITE_PRECHECK V1 (2026-11-16): a deterministic, API-free
+ * evidence-presence gate, not an AI ethical/factual accuracy verdict.
+ * Reuses the canonical persona gate; installs no trigger or new pack.
+ */
+var GOODWHY_WRITE_PRECHECK_V1 = Object.freeze({
+  purposeDirectiveId: 'GOODWHY_SION_RIGHT_RELATIONSHIP_PURPOSE_V1_20261116',
+  charterDocumentId: '1N6B96SpMM7l990EbzR9Md5RmHdC5wGSRxu3ClxnKZog',
+  principles: ['LOVE_PEACE', 'ADMONISH_ENCOURAGE_PATIENCE', 'GOOD_NOT_REVENGE',
+    'JOY_PRAYER_GRATITUDE', 'DISCERN_KEEP_GOOD'],
+  bonEight: ['BON', 'AUTHORITY', 'GIFT', 'PROGRESS', 'CONSISTENCY',
+    'CAUSALITY', 'GODLINESS', 'SERVICE'],
+  harmonyBeats: ['PROBLEM', 'NEED', 'CHANGE_EVIDENCE', 'ACTION_COMPARE',
+    'RESULT', 'RETURN']
+});
+
+function personaWritePrecheckState_(payload) {
+  payload = payload || {};
+  var p = payload.writePrecheck || payload.WRITE_PRECHECK;
+  var contentId = personaNormalize_(payload.contentId || payload.CONTENT_ID);
+  var appId = personaNormalize_(payload.appId || payload.APP_ID || payload.SOURCE_APP_ID);
+  if (!p || typeof p !== 'object' || Array.isArray(p)) {
+    return { ok: false, decision: 'HOLD_PRECHECK_MISSING', contentId: contentId,
+      issues: ['writePrecheck'] };
+  }
+  var issues = [];
+  function need(value, path) {
+    if (!personaNormalize_(value)) issues.push(path);
+  }
+  function pass(v, path) {
+    if (!v || personaUpper_(v.decision) !== 'PASS') issues.push(path + '.decision');
+    need(v && v.evidence, path + '.evidence');
+  }
+  if (!contentId || personaNormalize_(p.contentId) !== contentId) issues.push('contentId');
+  if (!appId || personaNormalize_(p.appId) !== appId) issues.push('appId');
+  if (personaNormalize_(p.purposeDirectiveId) !== GOODWHY_WRITE_PRECHECK_V1.purposeDirectiveId)
+    issues.push('purposeDirectiveId');
+  need(p.audienceQuestion, 'audienceQuestion');
+  need(p.recipientBenefit, 'recipientBenefit');
+  need(p.factOpinionBoundary, 'factOpinionBoundary');
+  var readback = p.charterReadback || {};
+  if (personaNormalize_(readback.documentId) !== GOODWHY_WRITE_PRECHECK_V1.charterDocumentId)
+    issues.push('charterReadback.documentId');
+  need(readback.revisionId, 'charterReadback.revisionId');
+  need(readback.readbackAtKst, 'charterReadback.readbackAtKst');
+  var sources = p.sourceEvidence;
+  if (!Array.isArray(sources) || !sources.length) issues.push('sourceEvidence');
+  else sources.forEach(function(s, index) {
+    s = s || {};
+    need(s.sourceId, 'sourceEvidence[' + index + '].sourceId');
+    need(s.sourceRef, 'sourceEvidence[' + index + '].sourceRef');
+    need(s.checkedAtKst, 'sourceEvidence[' + index + '].checkedAtKst');
+    if (personaUpper_(s.rightsDecision) !== 'PASS')
+      issues.push('sourceEvidence[' + index + '].rightsDecision');
+    if (personaUpper_(s.verificationDecision) !== 'PASS')
+      issues.push('sourceEvidence[' + index + '].verificationDecision');
+    if (['FACT', 'OPINION', 'MIXED'].indexOf(personaUpper_(s.factOpinionTag)) < 0)
+      issues.push('sourceEvidence[' + index + '].factOpinionTag');
+  });
+  var bon = p.bonSeomgim || {};
+  pass(bon.gate0, 'bonSeomgim.gate0');
+  GOODWHY_WRITE_PRECHECK_V1.bonEight.forEach(function(key) {
+    pass((bon.eightGates || {})[key], 'bonSeomgim.eightGates.' + key);
+  });
+  GOODWHY_WRITE_PRECHECK_V1.principles.forEach(function(key) {
+    pass((p.principles || {})[key], 'principles.' + key);
+  });
+  GOODWHY_WRITE_PRECHECK_V1.harmonyBeats.forEach(function(key) {
+    need((p.harmonyCircle || {})[key], 'harmonyCircle.' + key);
+  });
+  var review = p.review || {};
+  if (personaUpper_(review.decision) !== 'PASS') issues.push('review.decision');
+  need(review.reviewer, 'review.reviewer');
+  need(review.receiptId, 'review.receiptId');
+  need(review.reviewedAtKst, 'review.reviewedAtKst');
+  if (!/^[a-f0-9]{64}$/i.test(personaNormalize_(review.inputSha256)))
+    issues.push('review.inputSha256');
+  return {
+    ok: issues.length === 0,
+    decision: issues.length ? 'HOLD_PRECHECK_INVALID' : 'PASS',
+    contentId: contentId,
+    purposeDirectiveId: GOODWHY_WRITE_PRECHECK_V1.purposeDirectiveId,
+    receiptId: personaNormalize_(review.receiptId),
+    issues: issues
+  };
+}
+function assertWritePrecheckAllowed_(payload) {
+  var state = personaWritePrecheckState_(payload);
+  if (!state.ok) throw new Error('WRITE_PRECHECK_BLOCKED:' + state.decision + ':' +
+    state.issues.join('|'));
+  return state;
+}
+
 function buildPersonaStoryboard_(ss, payload) {
   ensurePersonaOrchestrationTabs_(ss);
   payload = payload || {};
   var contentId = personaNormalize_(payload.contentId || payload.CONTENT_ID);
   var appId = personaNormalize_(payload.appId || payload.APP_ID || payload.SOURCE_APP_ID);
   var scenes = payload.scenes || [];
+  var precheck = assertWritePrecheckAllowed_(payload);
   var persona = resolvePersonaMatch_(ss, payload);
   if (!persona.ok && persona.decision !== 'NOT_REQUIRED') throw new Error('PERSONA_MATCH_BLOCKED:' + persona.decision + ':' + (persona.geminiQa || ''));
   if (!Array.isArray(scenes) || !scenes.length) throw new Error('STORYBOARD_SCENES_REQUIRED');
@@ -142,7 +237,8 @@ function buildPersonaStoryboard_(ss, payload) {
       QA_DECISION: 'BLOCK_UNTIL_ASSET_QA'
     });
   });
-  return { ok: true, contentId: contentId, sceneCount: scenes.length };
+  return { ok: true, contentId: contentId, sceneCount: scenes.length,
+    precheckReceiptId: precheck.receiptId, purposeDirectiveId: precheck.purposeDirectiveId };
 }
 
 function queueVTubePersonaAssetRequirement_(ss, payload) {
